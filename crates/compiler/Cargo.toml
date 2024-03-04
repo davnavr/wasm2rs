@@ -1,5 +1,6 @@
 [package]
 name = "wasm2rs"
+description = "Compiler library for translating WebAssembly to Rust"
 version.workspace = true
 edition.workspace = true
 
