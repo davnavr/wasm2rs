@@ -1,0 +1,2 @@
+
+pub trait Memory32 {}

@@ -7,4 +7,5 @@ rust-version = "1.76"
 resolver = "2"
 members = [
     "crates/compiler",
+    "crates/rt",
 ]
