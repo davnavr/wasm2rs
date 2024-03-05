@@ -7,6 +7,6 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(clippy::exhaustive_enums)]
 
-mod compilation;
+mod translation;
 
-pub use compilation::Compilation;
+pub use translation::Translation;
