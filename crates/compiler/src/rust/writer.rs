@@ -6,6 +6,7 @@ use std::io::{Result, Write};
 pub struct Writer<O: Write> {
     output: O,
     closing_brackets: u32,
+    needs_space: bool,
 }
 
 #[allow(missing_docs)]
@@ -15,7 +16,16 @@ impl<O: Write> Writer<O> {
         Self {
             output,
             closing_brackets: 0,
+            needs_space: false,
         }
+    }
+
+    fn write_separator_space(&mut self) -> Result<()> {
+        if std::mem::replace(&mut self.needs_space, false) {
+            self.output.write_all(b" ")?;
+        }
+
+        Ok(())
     }
 
     pub fn open_bracket(&mut self) -> Result<()> {
@@ -31,7 +41,17 @@ impl<O: Write> Writer<O> {
     }
 
     pub fn ident(&mut self, ident: crate::rust::Ident) -> Result<()> {
-        write!(&mut self.output, "{ident}")
+        self.write_separator_space()?;
+        write!(&mut self.output, "{ident}")?;
+        self.needs_space = true;
+        Ok(())
+    }
+
+    pub fn keyword(&mut self, keyword: crate::rust::Keyword) -> Result<()> {
+        self.write_separator_space()?;
+        write!(&mut self.output, "{keyword}")?;
+        self.needs_space = true;
+        Ok(())
     }
 
     /// Writes any remaining closing brackets, then flushes the output stream.
@@ -40,7 +60,6 @@ impl<O: Write> Writer<O> {
             self.output.write_all(b"}")?;
         }
 
-        self.closing_brackets = 0;
         self.output.flush()?;
         Ok(self.output)
     }
