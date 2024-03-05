@@ -49,7 +49,6 @@ macro_rules! keywords {
 
 keywords! {
     Mod
-    // TODO: How will primtive types like i32 be modelled, Ident isn't appropriate
 }
 
 impl std::fmt::Display for Keyword {

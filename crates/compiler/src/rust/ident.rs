@@ -41,6 +41,21 @@ impl<'a> Ident<'a> {
     pub fn is_escaped(&self) -> bool {
         self.escaped
     }
+
+    const fn unescaped(name: &'a str) -> Self {
+        Self {
+            name,
+            escaped: false,
+        }
+    }
+}
+
+impl Ident<'static> {
+    /// Identifier for the [`i32`] primitive type.
+    pub const PRIM_I32: Self = Self::unescaped("i32");
+
+    /// Identifier for the [`i64`] primitive type.
+    pub const PRIM_I64: Self = Self::unescaped("i64");
 }
 
 impl std::fmt::Display for Ident<'_> {
