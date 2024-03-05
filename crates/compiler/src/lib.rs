@@ -9,4 +9,6 @@
 
 mod translation;
 
+pub mod rust;
+
 pub use translation::Translation;
