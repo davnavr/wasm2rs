@@ -7,8 +7,13 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(clippy::exhaustive_enums)]
 
+mod error;
 mod translation;
 
 pub mod rust;
 
+pub use error::Error;
 pub use translation::Translation;
+
+/// Result type used for translation operations.
+pub type Result<T> = std::result::Result<T, Error>;
