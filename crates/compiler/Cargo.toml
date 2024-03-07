@@ -5,3 +5,4 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+wasmparser = "0.201.0"
