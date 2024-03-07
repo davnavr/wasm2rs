@@ -7,6 +7,7 @@ pub struct Error {
 enum ErrorInner {
     Parser(wasmparser::BinaryReaderError),
     IO(std::io::Error),
+    Translation(crate::translation::Error),
 }
 
 impl From<std::io::Error> for Error {
@@ -25,11 +26,40 @@ impl From<wasmparser::BinaryReaderError> for Error {
     }
 }
 
+impl From<crate::translation::Error> for Error {
+    fn from(error: crate::translation::Error) -> Self {
+        Self {
+            inner: ErrorInner::Translation(error).into(),
+        }
+    }
+}
+
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &*self.inner {
             ErrorInner::Parser(e) => std::fmt::Debug::fmt(e, f),
             ErrorInner::IO(e) => std::fmt::Debug::fmt(e, f),
+            ErrorInner::Translation(e) => std::fmt::Debug::fmt(e, f),
         }
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &*self.inner {
+            ErrorInner::Parser(e) => std::fmt::Display::fmt(e, f),
+            ErrorInner::IO(e) => std::fmt::Display::fmt(e, f),
+            ErrorInner::Translation(e) => std::fmt::Display::fmt(e, f),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match &*self.inner {
+            ErrorInner::Parser(e) => e,
+            ErrorInner::IO(e) => e,
+            ErrorInner::Translation(e) => e,
+        })
     }
 }
