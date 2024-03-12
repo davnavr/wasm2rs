@@ -1,3 +1,5 @@
+use wasmparser::WasmModuleResources;
+
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
@@ -7,6 +9,7 @@ pub struct Translation {
     //buffers: dyn Fn() -> Vec<u8>,
     //thread_pool: Option<rayon::ThreadPool>,
     //runtime_crate_path: CratePath,
+    //visibility: Public|Crate(Option<Path>),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -63,6 +66,75 @@ impl Translation {
         Self {}
     }
 
+    fn compile_function(
+        &self,
+        body: &wasmparser::FunctionBody,
+        validator: &mut wasmparser::FuncValidator<wasmparser::ValidatorResources>,
+    ) -> crate::Result<String> {
+        // Note that write operations on a `String` currently always return `Ok`
+        use std::fmt::Write as _;
+
+        let mut s = String::new();
+        let _ = write!(&mut s, "fn f{}(&self", validator.index());
+
+        let func_type = validator
+            .resources()
+            .type_of_function(validator.index())
+            .unwrap();
+
+        // TODO: Move this to the `rust` module, have function that returns rust identifier/path impl Display for a Wasm ValType
+        struct ValType(wasmparser::ValType);
+
+        impl std::fmt::Display for ValType {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self.0 {
+                    wasmparser::ValType::I32 => f.write_str("i32"),
+                    wasmparser::ValType::I64 => f.write_str("f64"),
+                    other => todo!("how to write {other}?"),
+                }
+            }
+        }
+
+        // Write the parameter types
+        for (i, ty) in func_type.params().iter().enumerate() {
+            let _ = write!(&mut s, ", l{i}: {}", ValType(*ty));
+        }
+
+        let _ = s.write_str(") -> (");
+
+        // Write the result types
+        for (i, ty) in func_type.results().iter().enumerate() {
+            if i > 0 {
+                let _ = s.write_str(", ");
+            }
+
+            let _ = write!(&mut s, "{}", ValType(*ty));
+        }
+
+        let _ = writeln!(&mut s, ") {{");
+
+        // Write local variables
+        let mut local_index = u32::try_from(func_type.params().len()).unwrap_or(u32::MAX);
+        let mut locals_reader = body.get_locals_reader()?;
+        let locals_count = locals_reader.get_count();
+        for _ in 0..locals_count {
+            let (count, ty) = locals_reader.read()?;
+            validator.define_locals(locals_reader.original_position(), count, ty)?;
+
+            for _ in 0..count {
+                let _ = writeln!(
+                    &mut s,
+                    "let mut l{local_index}: {} = Default::default();",
+                    ValType(ty)
+                );
+                local_index += 1;
+            }
+        }
+
+        let _ = writeln!(&mut s, "}}");
+        Ok(s)
+    }
+
     /// [`Read`]s a WebAssembly binary module, translates it, and [`Write`]s the resulting Rust
     /// source code.
     ///
@@ -89,10 +161,11 @@ impl Translation {
         let validated_types;
 
         let mut code_section_contents = Vec::new();
+        // indicating the portion of the code section initially written to `code_section_contents`, as offsets into the binary
         let mut code_section_contents_saved = 0usize..0usize;
 
         let mut functions_to_validate = Vec::new();
-        let mut functions_to_process = Vec::<std::ops::Range<u32>>::new();
+        let mut functions_to_process = Vec::<(usize, std::ops::Range<u32>)>::new();
         let mut start_func_idx = None;
 
         loop {
@@ -202,7 +275,7 @@ impl Translation {
                             let code_end =
                                 u32::try_from(code_range.end).expect("code end overflow");
 
-                            functions_to_process.push(code_start..code_end);
+                            functions_to_process.push((original_range.start, code_start..code_end));
                         }
                         Payload::CustomSection(_) => {
                             // At the moment, `wasm2rs` ignores custom sections.
@@ -267,7 +340,29 @@ impl Translation {
             }
         }
 
+        let code_section_contents = code_section_contents;
         let start_func_idx = start_func_idx;
+
+        let function_body = |(offset, range): (_, std::ops::Range<u32>)| {
+            wasmparser::FunctionBody::new(
+                offset,
+                &code_section_contents[range.start as usize..range.end as usize],
+            )
+        };
+
+        let mut function_bodies = Vec::<String>::with_capacity(functions_to_validate.len());
+
+        // TODO: Process with rayon
+        let mut allocs = wasmparser::FuncValidatorAllocations::default();
+        functions_to_validate
+            .into_iter()
+            .zip(functions_to_process.into_iter().map(function_body))
+            .try_for_each(|(func, body)| {
+                let mut validator = func.into_validator(core::mem::take(&mut allocs));
+                function_bodies.push(self.compile_function(&body, &mut validator)?);
+                allocs = validator.into_allocations();
+                crate::Result::Ok(())
+            })?;
 
         Ok(read_len)
     }
