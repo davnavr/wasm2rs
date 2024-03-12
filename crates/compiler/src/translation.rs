@@ -81,18 +81,23 @@ impl Translation {
         O: std::io::Write,
     {
         let mut validator = wasmparser::Validator::new_with_features(Self::SUPPORTED_FEATURES);
-        let mut parser = wasmparser::Parser::new(0);
+        let mut parse_buffer_offset = 0usize;
+        let mut parser = wasmparser::Parser::new(parse_buffer_offset as u64);
         let mut parse_buffer = vec![0u8; input_len.unwrap_or(0x1000)];
 
         let read_len;
         let validated_types;
+
+        let mut code_section_contents = Vec::new();
+        let mut code_section_contents_saved = 0usize..0usize;
+
+        let mut functions_to_validate = Vec::new();
+        let mut functions_to_process = Vec::<std::ops::Range<u32>>::new();
         let mut start_func_idx = None;
 
         loop {
-            let contents_len = input.read(&mut parse_buffer)?;
-            let eof = contents_len < parse_buffer.len();
-
-            match parser.parse(&parse_buffer[..contents_len], eof)? {
+            let eof = input.read(&mut parse_buffer)? < parse_buffer.len();
+            match parser.parse(&parse_buffer, eof)? {
                 wasmparser::Chunk::NeedMoreData(amount) => {
                     parse_buffer.reserve(amount.try_into().unwrap_or(usize::MAX));
                     continue;
@@ -149,11 +154,56 @@ impl Translation {
                         }
                         Payload::CodeSectionStart { count, range, size } => {
                             validator.code_section_start(count, &range)?;
+                            let function_count = usize::try_from(count).unwrap_or_default();
 
-                            // TODO: Allocate code section buffer
-                            //parser.skip_section();
+                            functions_to_validate.reserve_exact(function_count);
+                            functions_to_process.reserve_exact(function_count);
+
+                            let code_section_size = usize::try_from(size).unwrap_or_default();
+                            code_section_contents_saved.start = range.start;
+                            code_section_contents.reserve_exact(code_section_size);
+
+                            // Copy existing section contents from `parse_buffer`.
+                            let remaining_buffer =
+                                &parse_buffer[range.start - parse_buffer_offset..];
+
+                            let copied = code_section_size.min(remaining_buffer.len());
+                            code_section_contents_saved.end =
+                                code_section_contents_saved.start + copied;
+                            code_section_contents.extend_from_slice(&remaining_buffer[..copied]);
                         }
-                        //Payload::CodeSectionEntry
+                        Payload::CodeSectionEntry(body) => {
+                            functions_to_validate.push(validator.code_section_entry(&body)?);
+
+                            let original_range = body.range();
+
+                            // Calculate offsets into the `code_section_contents` buffer where the body is/will be stored.
+                            let code_range = if code_section_contents_saved
+                                .contains(&original_range.start)
+                                && code_section_contents_saved.contains(&original_range.end)
+                            {
+                                (original_range.start - code_section_contents_saved.start)
+                                    ..(original_range.end - code_section_contents_saved.start)
+                            } else {
+                                let start = code_section_contents.len();
+
+                                // Copy the function body, since it was not already copied to the buffer.
+                                code_section_contents.extend_from_slice(
+                                    &parse_buffer[original_range.start - parse_buffer_offset..]
+                                        [..original_range.len()],
+                                );
+
+                                start..code_section_contents.len()
+                            };
+
+                            let code_start =
+                                u32::try_from(code_range.start).expect("code start overflow");
+
+                            let code_end =
+                                u32::try_from(code_range.end).expect("code end overflow");
+
+                            functions_to_process.push(code_start..code_end);
+                        }
                         Payload::CustomSection(_) => {
                             // At the moment, `wasm2rs` ignores custom sections.
 
@@ -210,8 +260,9 @@ impl Translation {
                     }
 
                     // Remove the bytes that were read by the parser.
-                    parse_buffer.copy_within(contents_len.., 0);
-                    parse_buffer.truncate(parse_buffer.len() - contents_len);
+                    parse_buffer.copy_within(consumed.., 0);
+                    parse_buffer.truncate(parse_buffer.len() - consumed);
+                    parse_buffer_offset += consumed;
                 }
             }
         }
