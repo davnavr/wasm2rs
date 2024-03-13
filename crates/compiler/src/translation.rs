@@ -95,6 +95,8 @@ impl Translation {
 
         let _ = writeln!(&mut s, ") {{");
 
+        let result_count = u32::try_from(func_type.results().len()).expect("too many results");
+
         // Write local variables
         let mut local_index = u32::try_from(func_type.params().len()).unwrap_or(u32::MAX);
         let mut locals_reader = body.get_locals_reader()?;
@@ -147,22 +149,47 @@ impl Translation {
                     let _ = writeln!(
                         &mut s,
                         "let {} = {value}i32;",
-                        validator.operand_stack_height(),
+                        StackValue(validator.operand_stack_height()),
                     );
                 }
                 Operator::I32Add => {
                     let result_value = pop_value(1);
                     let _ = writeln!(
                         &mut s,
-                        "let s{} = i32::wrapping_add(s{}, s{})",
+                        "let {} = i32::wrapping_add({}, {})",
                         result_value,
                         result_value,
                         pop_value(0)
                     );
                 }
-                Operator::Return => {
-                    todo!("return")
-                }
+                Operator::Return => match result_count {
+                    0 => {
+                        let _ = writeln!(&mut s, "return;");
+                    }
+                    1 => {
+                        let _ = writeln!(&mut s, "return {};", pop_value(0));
+                    }
+                    _ => {
+                        for i in 0..result_count {
+                            let _ = writeln!(
+                                &mut s,
+                                "let r{} = {};",
+                                StackValue(result_count - i - 1),
+                                pop_value(i),
+                            );
+                        }
+
+                        let _ = s.write_str("return (");
+                        for i in 0..result_count {
+                            if i > 0 {
+                                let _ = s.write_str(", ");
+                            }
+
+                            let _ = write!(&mut s, "r{i}");
+                        }
+                        let _ = writeln!(&mut s, ");");
+                    }
+                },
                 _ => todo!("translate {op:?}"),
             }
 
