@@ -113,6 +113,62 @@ impl Translation {
             }
         }
 
+        let mut operators_reader = body.get_operators_reader()?;
+        while !operators_reader.eof() {
+            let (op, op_offset) = operators_reader.read_with_offset()?;
+
+            #[derive(Clone)]
+            #[repr(transparent)]
+            struct StackValue(u32);
+
+            impl std::fmt::Display for StackValue {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "_s{}", self.0)
+                }
+            }
+
+            let pop_value = |depth: u32| {
+                if validator
+                    .get_operand_type(depth as usize)
+                    .expect("operand stack underflow")
+                    .is_some()
+                {
+                    let height = validator.operand_stack_height() - depth - 1;
+                    StackValue(height)
+                } else {
+                    todo!("generate code for unreachable value");
+                }
+            };
+
+            use wasmparser::Operator;
+
+            match op {
+                Operator::I32Const { value } => {
+                    let _ = writeln!(
+                        &mut s,
+                        "let {} = {value}i32;",
+                        validator.operand_stack_height(),
+                    );
+                }
+                Operator::I32Add => {
+                    let result_value = pop_value(1);
+                    let _ = writeln!(
+                        &mut s,
+                        "let s{} = i32::wrapping_add(s{}, s{})",
+                        result_value,
+                        result_value,
+                        pop_value(0)
+                    );
+                }
+                Operator::Return => {
+                    todo!("return")
+                }
+                _ => todo!("translate {op:?}"),
+            }
+
+            validator.op(op_offset, &op)?;
+        }
+
         let _ = writeln!(&mut s, "}}");
         Ok(s)
     }
