@@ -17,3 +17,5 @@ extern crate std;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+
+pub mod trap;
