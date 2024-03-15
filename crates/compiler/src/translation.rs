@@ -518,16 +518,31 @@ impl Translation {
         writeln!(output, "pub mod wasm {{")?;
 
         // TODO: Type parameter for imports
-        write!(output, "pub struct Instance<RT> where RT: Runtime,")?;
+        write!(
+            output,
+            "pub struct Instance<RT = StdRuntime> where RT: Runtime,"
+        )?;
 
         // TODO: Insert global variables in struct as public fields
         writeln!(output, "{{")?;
         writeln!(output, "_rt: RT,")?;
         writeln!(output, "}}")?;
 
-        writeln!(output, "pub trait Runtime: {RT_CRATE_PATH}::trap::Trap {{}}")?;
+        writeln!(
+            output,
+            "pub trait Runtime: {RT_CRATE_PATH}::trap::Trap {{}}"
+        )?;
 
-        // TODO: Only emit this Runtime impl if it makes sense
+        writeln!(
+            output,
+            "#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]\npub struct StdRuntime;"
+        )?;
+        writeln!(output, "impl {RT_CRATE_PATH}::trap::Trap for StdRuntime {{")?;
+        writeln!(output, "type Repr = ::core::convert::Infallible;")?;
+        write!(output, "#[cold]\n#[inline(never)]\nfn trap(&self, code: {RT_CRATE_PATH}::trap::TrapCode) -> Self::Repr {{ ")?;
+        writeln!(output, "::core::panic!(\"{{code}}\") }}")?;
+        writeln!(output, "}}")?;
+        writeln!(output, "impl Runtime for StdRuntime {{}}")?;
 
         writeln!(output, "impl<RT: Runtime> Instance<RT> {{")?;
 

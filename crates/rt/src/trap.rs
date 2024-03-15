@@ -110,17 +110,3 @@ pub trait Trap {
     /// trap.
     fn trap(&self, code: TrapCode) -> Self::Repr;
 }
-
-/// A [`Trap`] implementation that panics.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct PanicOnTrap;
-
-impl Trap for PanicOnTrap {
-    type Repr = core::convert::Infallible; // never "!" is still unstable
-
-    #[cold]
-    #[inline(never)]
-    fn trap(&self, code: TrapCode) -> Self::Repr {
-        panic!("{code}")
-    }
-}
