@@ -246,7 +246,7 @@ impl Translation {
                 Operator::LocalGet { local_index } => {
                     let _ = writeln!(
                         &mut b,
-                        "let {} = {}",
+                        "let {} = {};",
                         StackValue(validator.operand_stack_height()),
                         LocalVar(local_index)
                     );
@@ -262,7 +262,7 @@ impl Translation {
                     let result_value = pop_value(1);
                     let _ = writeln!(
                         &mut b,
-                        "let {} = i32::wrapping_add({}, {})",
+                        "let {} = i32::wrapping_add({}, {});",
                         result_value,
                         result_value,
                         pop_value(0)
