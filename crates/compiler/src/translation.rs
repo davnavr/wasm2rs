@@ -396,6 +396,7 @@ impl Translation {
         }
 
         writeln!(output, "}}")?;
+        output.flush()?;
         Ok(())
     }
 }
