@@ -1,3 +1,4 @@
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use wasmparser::WasmModuleResources;
 
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
@@ -52,12 +53,12 @@ impl Translation {
         &self,
         body: &wasmparser::FunctionBody,
         validator: &mut wasmparser::FuncValidator<wasmparser::ValidatorResources>,
-    ) -> crate::Result<String> {
-        // Note that write operations on a `String` currently always return `Ok`
-        use std::fmt::Write as _;
+    ) -> crate::Result<Vec<u8>> {
+        // Note that write operations on a `Vec` currently always return `Ok`
+        use std::io::Write as _;
 
-        let mut s = String::new();
-        let _ = write!(&mut s, "fn f{}(&self", validator.index());
+        let mut b = Vec::new();
+        let _ = write!(&mut b, "fn f{}(&self", validator.index());
 
         let func_type = validator
             .resources()
@@ -79,21 +80,21 @@ impl Translation {
 
         // Write the parameter types
         for (i, ty) in func_type.params().iter().enumerate() {
-            let _ = write!(&mut s, ", l{i}: {}", ValType(*ty));
+            let _ = write!(&mut b, ", l{i}: {}", ValType(*ty));
         }
 
-        let _ = s.write_str(") -> (");
+        let _ = write!(&mut b, ") -> (");
 
         // Write the result types
         for (i, ty) in func_type.results().iter().enumerate() {
             if i > 0 {
-                let _ = s.write_str(", ");
+                let _ = write!(&mut b, ", ");
             }
 
-            let _ = write!(&mut s, "{}", ValType(*ty));
+            let _ = write!(&mut b, "{}", ValType(*ty));
         }
 
-        let _ = writeln!(&mut s, ") {{");
+        let _ = writeln!(&mut b, ") {{");
 
         let result_count = u32::try_from(func_type.results().len()).expect("too many results");
 
@@ -107,7 +108,7 @@ impl Translation {
 
             for _ in 0..count {
                 let _ = writeln!(
-                    &mut s,
+                    &mut b,
                     "let mut l{local_index}: {} = Default::default();",
                     ValType(ty)
                 );
@@ -147,7 +148,7 @@ impl Translation {
             match op {
                 Operator::I32Const { value } => {
                     let _ = writeln!(
-                        &mut s,
+                        &mut b,
                         "let {} = {value}i32;",
                         StackValue(validator.operand_stack_height()),
                     );
@@ -155,7 +156,7 @@ impl Translation {
                 Operator::I32Add => {
                     let result_value = pop_value(1);
                     let _ = writeln!(
-                        &mut s,
+                        &mut b,
                         "let {} = i32::wrapping_add({}, {})",
                         result_value,
                         result_value,
@@ -164,30 +165,30 @@ impl Translation {
                 }
                 Operator::Return => match result_count {
                     0 => {
-                        let _ = writeln!(&mut s, "return;");
+                        let _ = writeln!(&mut b, "return;");
                     }
                     1 => {
-                        let _ = writeln!(&mut s, "return {};", pop_value(0));
+                        let _ = writeln!(&mut b, "return {};", pop_value(0));
                     }
                     _ => {
                         for i in 0..result_count {
                             let _ = writeln!(
-                                &mut s,
+                                &mut b,
                                 "let r{} = {};",
                                 StackValue(result_count - i - 1),
                                 pop_value(i),
                             );
                         }
 
-                        let _ = s.write_str("return (");
+                        let _ = write!(&mut b, "return (");
                         for i in 0..result_count {
                             if i > 0 {
-                                let _ = s.write_str(", ");
+                                let _ = write!(&mut b, ", ");
                             }
 
-                            let _ = write!(&mut s, "r{i}");
+                            let _ = write!(&mut b, "r{i}");
                         }
-                        let _ = writeln!(&mut s, ");");
+                        let _ = writeln!(&mut b, ");");
                     }
                 },
                 _ => todo!("translate {op:?}"),
@@ -196,250 +197,151 @@ impl Translation {
             validator.op(op_offset, &op)?;
         }
 
-        let _ = writeln!(&mut s, "}}");
-        Ok(s)
+        validator.finish(operators_reader.get_binary_reader().current_position())?;
+
+        let _ = writeln!(&mut b, "}}");
+        Ok(b)
     }
 
-    /// [`Read`]s a WebAssembly binary module, translates it, and [`Write`]s the resulting Rust
-    /// source code.
+    /// Translates an in-memory WebAssembly binary module, and [`Write`]s the resulting Rust source
+    /// code to the given output.
     ///
-    /// Returns the number of bytes read from the `input`.
-    ///
-    /// [`Read`]: std::io::Read
-    /// [`Write`]: std::io::Write
-    pub fn compile<I, O>(
+    /// If the `rayon` feature is enabled, portions of the parsing, validation, and translation
+    /// process may be run in parallel.
+    pub fn compile_from_buffer(
         self,
-        input: &mut I,
-        input_len: Option<usize>,
-        output: &mut O,
-    ) -> crate::Result<usize>
-    where
-        I: std::io::Read,
-        O: std::io::Write,
-    {
+        wasm: &[u8],
+        output: &mut dyn std::io::Write,
+    ) -> crate::Result<()> {
         let mut validator = wasmparser::Validator::new_with_features(Self::SUPPORTED_FEATURES);
-        let mut parse_buffer_offset = 0usize;
-        let mut parser = wasmparser::Parser::new(parse_buffer_offset as u64);
-        let mut parse_buffer = vec![0u8; input_len.unwrap_or(0x1000)];
+        let payloads = wasmparser::Parser::new(0)
+            .parse_all(wasm)
+            .collect::<wasmparser::Result<Vec<_>>>()?;
 
-        let read_len;
-        let validated_types;
+        let payloads_ref = payloads.as_slice();
+        let validate_payloads = move || -> wasmparser::Result<_> {
+            let mut functions = Vec::new();
 
-        let mut code_section_contents = Vec::new();
-        // indicating the portion of the code section initially written to `code_section_contents`, as offsets into the binary
-        let mut code_section_contents_saved = 0usize..0usize;
+            for payload in payloads_ref {
+                use wasmparser::ValidPayload;
 
-        let mut functions_to_validate = Vec::new();
-        let mut functions_to_process = Vec::<(usize, std::ops::Range<u32>)>::new();
-        let mut start_func_idx = None;
-
-        loop {
-            let eof = input.read(&mut parse_buffer)? < parse_buffer.len();
-            match parser.parse(&parse_buffer, eof)? {
-                wasmparser::Chunk::NeedMoreData(amount) => {
-                    parse_buffer.reserve(amount.try_into().unwrap_or(usize::MAX));
-                    continue;
+                if let wasmparser::Payload::FunctionSection(funcs) = payload {
+                    functions.reserve_exact(funcs.count() as usize);
                 }
-                wasmparser::Chunk::Parsed { consumed, payload } => {
-                    use wasmparser::Payload;
 
-                    match payload {
-                        Payload::Version {
-                            num,
-                            encoding,
-                            range,
-                        } => {
-                            validator.version(num, encoding, &range)?;
-                        }
-                        Payload::TypeSection(section) => {
-                            validator.type_section(&section)?;
-                        }
-                        Payload::ImportSection(section) => {
-                            validator.import_section(&section)?;
-                            // TODO: Need to collect import info here, process imports later.
-                        }
-                        Payload::FunctionSection(section) => {
-                            validator.function_section(&section)?;
-                        }
-                        Payload::TableSection(section) => {
-                            validator.table_section(&section)?;
-                        }
-                        Payload::MemorySection(section) => {
-                            validator.memory_section(&section)?;
-                        }
-                        Payload::TagSection(section) => {
-                            validator.tag_section(&section)?;
-                        }
-                        Payload::GlobalSection(section) => {
-                            validator.global_section(&section)?;
-                        }
-                        Payload::ExportSection(section) => {
-                            validator.export_section(&section)?;
-                            // TODO: Need to collect export info here, process export later.
-                        }
-                        Payload::StartSection { func, range } => {
-                            validator.start_section(func, &range)?;
-                            start_func_idx = Some(func);
-                        }
-                        Payload::ElementSection(section) => {
-                            validator.element_section(&section)?;
-                        }
-                        Payload::DataCountSection { count, range } => {
-                            validator.data_count_section(count, &range)?;
-                        }
-                        Payload::DataSection(section) => {
-                            validator.data_section(&section)?;
-                        }
-                        Payload::CodeSectionStart { count, range, size } => {
-                            validator.code_section_start(count, &range)?;
-                            let function_count = usize::try_from(count).unwrap_or_default();
-
-                            functions_to_validate.reserve_exact(function_count);
-                            functions_to_process.reserve_exact(function_count);
-
-                            let code_section_size = usize::try_from(size).unwrap_or_default();
-                            code_section_contents_saved.start = range.start;
-                            code_section_contents.reserve_exact(code_section_size);
-
-                            // Copy existing section contents from `parse_buffer`.
-                            let remaining_buffer =
-                                &parse_buffer[range.start - parse_buffer_offset..];
-
-                            let copied = code_section_size.min(remaining_buffer.len());
-                            code_section_contents_saved.end =
-                                code_section_contents_saved.start + copied;
-                            code_section_contents.extend_from_slice(&remaining_buffer[..copied]);
-                        }
-                        Payload::CodeSectionEntry(body) => {
-                            functions_to_validate.push(validator.code_section_entry(&body)?);
-
-                            let original_range = body.range();
-
-                            // Calculate offsets into the `code_section_contents` buffer where the body is/will be stored.
-                            let code_range = if code_section_contents_saved
-                                .contains(&original_range.start)
-                                && code_section_contents_saved.contains(&original_range.end)
-                            {
-                                (original_range.start - code_section_contents_saved.start)
-                                    ..(original_range.end - code_section_contents_saved.start)
-                            } else {
-                                let start = code_section_contents.len();
-
-                                // Copy the function body, since it was not already copied to the buffer.
-                                code_section_contents.extend_from_slice(
-                                    &parse_buffer[original_range.start - parse_buffer_offset..]
-                                        [..original_range.len()],
-                                );
-
-                                start..code_section_contents.len()
-                            };
-
-                            let code_start =
-                                u32::try_from(code_range.start).expect("code start overflow");
-
-                            let code_end =
-                                u32::try_from(code_range.end).expect("code end overflow");
-
-                            functions_to_process.push((original_range.start, code_start..code_end));
-                        }
-                        Payload::CustomSection(_) => {
-                            // At the moment, `wasm2rs` ignores custom sections.
-
-                            // In the future, the `name` custom section and DWARF debug info sections will be parsed.
-                        }
-                        Payload::UnknownSection { id, range, .. } => {
-                            // Defer to `Validator` to handle unrecognized sections.
-                            validator.unknown_section(id, &range)?;
-                        }
-                        Payload::End(offset) => {
-                            read_len = offset;
-                            validated_types = validator.end(offset)?;
-
-                            // Free the buffer
-                            std::mem::take(&mut parse_buffer);
-
-                            break;
-                        }
-                        // Component Model Sections, the `Validator` will return an error for these
-                        // since `wasm2rs` does not support this feature.
-                        Payload::ModuleSection { range, .. } => {
-                            validator.module_section(&range)?;
-                        }
-                        Payload::InstanceSection(section) => {
-                            validator.instance_section(&section)?;
-                        }
-                        Payload::CoreTypeSection(section) => {
-                            validator.core_type_section(&section)?;
-                        }
-                        Payload::ComponentSection { range, .. } => {
-                            validator.component_section(&range)?;
-                        }
-                        Payload::ComponentInstanceSection(section) => {
-                            validator.component_instance_section(&section)?
-                        }
-                        Payload::ComponentAliasSection(section) => {
-                            validator.component_alias_section(&section)?
-                        }
-                        Payload::ComponentTypeSection(section) => {
-                            validator.component_type_section(&section)?
-                        }
-                        Payload::ComponentCanonicalSection(section) => {
-                            validator.component_canonical_section(&section)?
-                        }
-                        Payload::ComponentStartSection { range, .. } => {
-                            validator.component_section(&range)?
-                        }
-                        Payload::ComponentImportSection(section) => {
-                            validator.component_import_section(&section)?
-                        }
-                        Payload::ComponentExportSection(section) => {
-                            validator.component_export_section(&section)?
-                        }
-                    }
-
-                    // Remove the bytes that were read by the parser.
-                    parse_buffer.copy_within(consumed.., 0);
-                    parse_buffer.truncate(parse_buffer.len() - consumed);
-                    parse_buffer_offset += consumed;
+                match validator.payload(payload)? {
+                    ValidPayload::Ok | ValidPayload::Parser(_) => (),
+                    ValidPayload::Func(func, body) => functions.push((func, body)),
+                    ValidPayload::End(types) => return Ok((functions, types)),
                 }
             }
-        }
 
-        let code_section_contents = code_section_contents;
-        let start_func_idx = start_func_idx;
-
-        let function_body = |(offset, range): (_, std::ops::Range<u32>)| {
-            wasmparser::FunctionBody::new(
-                offset,
-                &code_section_contents[range.start as usize..range.end as usize],
-            )
+            unreachable!("missing end payload");
         };
 
-        let mut function_decls = Vec::<String>::with_capacity(functions_to_validate.len());
+        #[derive(Default)]
+        struct Definitions<'a> {
+            imports: Box<[wasmparser::Import<'a>]>,
+            exports: Box<[wasmparser::Export<'a>]>,
+        }
 
-        // TODO: Process with rayon
-        let mut allocs = wasmparser::FuncValidatorAllocations::default();
-        functions_to_validate
-            .into_iter()
-            .zip(functions_to_process.into_iter().map(function_body))
-            .try_for_each(|(func, body)| {
-                let mut validator = func.into_validator(core::mem::take(&mut allocs));
-                function_decls.push(self.compile_function(&body, &mut validator)?);
-                allocs = validator.into_allocations();
-                crate::Result::Ok(())
-            })?;
+        let parse_definitions = move || -> wasmparser::Result<_> {
+            use wasmparser::Payload;
+
+            let mut definitions = Definitions::default();
+
+            for payload in payloads_ref {
+                match payload {
+                    Payload::ImportSection(import_sec) => {
+                        definitions.imports = import_sec
+                            .clone()
+                            .into_iter()
+                            .collect::<wasmparser::Result<_>>()?
+                    }
+                    Payload::ExportSection(export_sec) => {
+                        definitions.exports = export_sec
+                            .clone()
+                            .into_iter()
+                            .collect::<wasmparser::Result<_>>()?
+                    }
+                    _ => (),
+                }
+            }
+
+            Ok(definitions)
+        };
+
+        let types;
+        let functions;
+        let definitions;
+
+        #[cfg(feature = "rayon")]
+        {
+            let (validation_result, parse_result) =
+                rayon::join(validate_payloads, parse_definitions);
+
+            (functions, types) = validation_result?;
+            definitions = parse_result?;
+        }
+
+        #[cfg(not(feature = "rayon"))]
+        {
+            (functions, types) = validate_payloads()?;
+            definitions = validate_definitions()?;
+        }
+
+        #[cfg(feature = "rayon")]
+        let function_decls: Vec<_> = {
+            use rayon::iter::{IntoParallelIterator as _, ParallelIterator as _};
+
+            let mut function_decls_unsorted = vec![(0, Vec::new()); functions.len()];
+
+            // TODO: Create a pool of FuncValidatorAllocations
+            functions
+                .into_par_iter()
+                .zip_eq(function_decls_unsorted.par_iter_mut())
+                .try_for_each(|((func, body), dst)| {
+                    let mut validator = func.into_validator(Default::default());
+                    *dst = (
+                        validator.index(),
+                        self.compile_function(&body, &mut validator)?,
+                    );
+                    crate::Result::Ok(())
+                })?;
+
+            function_decls_unsorted
+                .into_iter()
+                .map(|(_, b)| b)
+                .collect()
+        };
+
+        #[cfg(not(feature = "rayon"))]
+        let function_decls: Vec<_> = {
+            let mut allocs = wasmparser::FuncValidatorAllocations::default();
+            functions
+                .into_iter()
+                .map(|(func, body)| {
+                    let mut validator = func.into_validator(core::mem::take(&mut allocs));
+                    function_decls.push(self.compile_function(&body, &mut validator)?);
+                    allocs = validator.into_allocations();
+                    crate::Result::Ok(())
+                })
+                .collect::<crate::Result<_>>()?;
+        };
 
         writeln!(output, "/* automatically generated by wasm2rs */")?;
+
         writeln!(output, "pub struct Instance {{}}")?; // TODO: Insert global variables in struct as public fields
+        let _ = (types, definitions);
 
         writeln!(output, "impl Instance {{")?;
 
-        for decl in function_decls {
-            writeln!(output, "{decl}")?;
+        // TODO: output.write_vectored(bufs)?;
+        for buf in function_decls {
+            output.write_all(&buf)?;
         }
 
         writeln!(output, "}}")?;
-
-        Ok(read_len)
+        Ok(())
     }
 }
