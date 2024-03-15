@@ -8,4 +8,5 @@ resolver = "2"
 members = [
     "crates/compiler",
     "crates/rt",
+    "tests/compiler",
 ]
