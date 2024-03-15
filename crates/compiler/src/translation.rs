@@ -1,3 +1,25 @@
+// TODO: Move this to the `rust` module, have function that returns rust identifier/path impl Display for a Wasm ValType
+struct ValType(wasmparser::ValType);
+
+impl std::fmt::Display for ValType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            wasmparser::ValType::I32 => f.write_str("i32"),
+            wasmparser::ValType::I64 => f.write_str("f64"),
+            other => todo!("how to write {other}?"),
+        }
+    }
+}
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+struct LocalVar(u32);
+
+impl std::fmt::Display for LocalVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_l{}", self.0)
+    }
+}
+
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
@@ -46,6 +68,53 @@ impl Translation {
         Self {}
     }
 
+    fn write_function_signature(
+        &self,
+        sig: &wasmparser::FuncType,
+        b: &mut Vec<u8>,
+    ) -> crate::Result<()> {
+        use std::io::Write as _;
+
+        // Write the parameter types
+        for (i, ty) in sig.params().iter().enumerate() {
+            if i > 0 {
+                let _ = write!(b, ", ");
+            }
+
+            let _ = write!(
+                b,
+                "{}: {}",
+                LocalVar(u32::try_from(i).expect("too many parameters")),
+                ValType(*ty)
+            );
+        }
+
+        let _ = write!(b, ") ");
+
+        let results = sig.results();
+        if !results.is_empty() {
+            let _ = write!(b, "-> ");
+            if results.len() > 1 {
+                let _ = write!(b, "(");
+            }
+        }
+
+        // Write the result types
+        for (i, ty) in results.iter().enumerate() {
+            if i > 0 {
+                let _ = write!(b, ", ");
+            }
+
+            let _ = write!(b, "{}", ValType(*ty));
+        }
+
+        if results.len() > 1 {
+            let _ = write!(b, ")");
+        }
+
+        Ok(())
+    }
+
     fn compile_function(
         &self,
         body: &wasmparser::FunctionBody,
@@ -57,71 +126,20 @@ impl Translation {
         use std::io::Write as _;
 
         let mut b = Vec::new();
-        let _ = write!(&mut b, "fn f{}(&self", validator.index());
+        let _ = write!(&mut b, "fn _f{}(&self, ", validator.index());
 
         let func_type = validator
             .resources()
             .type_of_function(validator.index())
             .unwrap();
 
-        // TODO: Move this to the `rust` module, have function that returns rust identifier/path impl Display for a Wasm ValType
-        struct ValType(wasmparser::ValType);
-
-        impl std::fmt::Display for ValType {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self.0 {
-                    wasmparser::ValType::I32 => f.write_str("i32"),
-                    wasmparser::ValType::I64 => f.write_str("f64"),
-                    other => todo!("how to write {other}?"),
-                }
-            }
-        }
-
-        {
-            // Write the parameter types
-            for (i, ty) in func_type.params().iter().enumerate() {
-                let _ = write!(&mut b, ", l{i}: {}", ValType(*ty));
-            }
-
-            let _ = write!(&mut b, ") ");
-
-            let results = func_type.results();
-            if !results.is_empty() {
-                let _ = write!(&mut b, "-> ");
-                if results.len() > 1 {
-                    let _ = write!(&mut b, "(");
-                }
-            }
-
-            // Write the result types
-            for (i, ty) in results.iter().enumerate() {
-                if i > 0 {
-                    let _ = write!(&mut b, ", ");
-                }
-
-                let _ = write!(&mut b, "{}", ValType(*ty));
-            }
-
-            if results.len() > 1 {
-                let _ = write!(&mut b, ")");
-            }
-        }
+        self.write_function_signature(func_type, &mut b)?;
 
         let _ = writeln!(&mut b, " {{");
 
         let result_count = u32::try_from(func_type.results().len()).expect("too many results");
 
         // Write local variables
-        #[derive(Clone, Copy)]
-        #[repr(transparent)]
-        struct LocalVar(u32);
-
-        impl std::fmt::Display for LocalVar {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "_l{}", self.0)
-            }
-        }
-
         {
             let mut local_index = u32::try_from(func_type.params().len()).unwrap_or(u32::MAX);
             let mut locals_reader = body.get_locals_reader()?;
@@ -264,6 +282,47 @@ impl Translation {
         Ok(b)
     }
 
+    fn write_function_export(
+        &self,
+        name: &str,
+        index: u32,
+        types: &wasmparser::types::Types,
+        buf: &mut Vec<u8>,
+    ) -> crate::Result<()> {
+        use std::io::Write as _;
+
+        let _ = write!(
+            buf,
+            "pub fn {}(&self, ",
+            crate::rust::Ident::new(name).expect("TODO: implement name mangling")
+        );
+
+        let func_type = match types.get(types.core_function_at(index)) {
+            Some(wasmparser::SubType {
+                is_final: true,
+                supertype_idx: None,
+                composite_type: wasmparser::CompositeType::Func(sig),
+            }) => sig,
+            unknown => {
+                unimplemented!("expected function type, but got unsupported type: {unknown:?}")
+            }
+        };
+
+        self.write_function_signature(func_type, buf)?;
+        let _ = write!(buf, " {{ self._f{index}(");
+
+        for i in 0..u32::try_from(func_type.params().len()).expect("too many parameters") {
+            if i > 0 {
+                let _ = write!(buf, ", ");
+            }
+
+            let _ = write!(buf, "{}", LocalVar(i));
+        }
+
+        let _ = writeln!(buf, ") }}");
+        Ok(())
+    }
+
     /// Translates an in-memory WebAssembly binary module, and [`Write`]s the resulting Rust source
     /// code to the given output.
     ///
@@ -300,10 +359,17 @@ impl Translation {
             unreachable!("missing end payload");
         };
 
-        #[derive(Default)]
+        #[derive(Clone, Copy, Debug)]
+        struct ExportEntry {
+            name: u32,
+            index: u32,
+        }
+
+        #[derive(Default, Debug)]
         struct Definitions<'a> {
             imports: Box<[wasmparser::Import<'a>]>,
-            exports: Box<[wasmparser::Export<'a>]>,
+            export_names: Box<[&'a str]>,
+            function_exports: Box<[ExportEntry]>,
         }
 
         // TODO: parse sections in parallel with rayon
@@ -321,10 +387,27 @@ impl Translation {
                             .collect::<wasmparser::Result<_>>()?
                     }
                     Payload::ExportSection(export_sec) => {
-                        definitions.exports = export_sec
-                            .clone()
-                            .into_iter()
-                            .collect::<wasmparser::Result<_>>()?
+                        let mut export_names = Vec::with_capacity(export_sec.count() as usize);
+                        let mut function_exports = Vec::with_capacity(export_names.capacity());
+                        for result in export_sec.clone() {
+                            use wasmparser::ExternalKind;
+
+                            let export = result?;
+                            let name = u32::try_from(export_names.len()).expect("too many exports");
+                            export_names.push(export.name);
+                            match export.kind {
+                                ExternalKind::Func => {
+                                    function_exports.push(ExportEntry {
+                                        name,
+                                        index: export.index,
+                                    });
+                                }
+                                _ => todo!("unsupported export: {export:?}"),
+                            }
+                        }
+
+                        definitions.export_names = export_names.into_boxed_slice();
+                        definitions.function_exports = function_exports.into_boxed_slice();
                     }
                     _ => (),
                 }
@@ -359,6 +442,7 @@ impl Translation {
 
             let mut function_decls_unsorted = vec![(0, Vec::new()); functions.len()];
 
+            // TODO: Zip keeps order of items, remove the extra Vec
             // TODO: Create a pool of FuncValidatorAllocations
             functions
                 .into_par_iter()
@@ -395,7 +479,31 @@ impl Translation {
                 .collect::<crate::Result<_>>()?;
         };
 
-        // Generate function exports
+        // Generate function exports, no conflict since export names are unique in WebAssembly.
+        #[cfg(feature = "rayon")]
+        let function_exports: Vec<_> = {
+            use rayon::prelude::*;
+
+            let export_names = definitions.export_names.as_ref();
+            let mut translations = vec![Vec::new(); definitions.function_exports.len()];
+
+            Vec::from(definitions.function_exports)
+                .into_par_iter()
+                .zip_eq(translations.par_iter_mut())
+                .try_for_each(|(export, buf)| {
+                    self.write_function_export(
+                        export_names[export.name as usize],
+                        export.index,
+                        &types,
+                        buf,
+                    )
+                })?;
+
+            translations
+        };
+
+        #[cfg(not(feature = "rayon"))]
+        todo!("compilation without rayon currently unsupported");
 
         writeln!(output, "/* automatically generated by wasm2rs */")?;
 
@@ -406,12 +514,14 @@ impl Translation {
         writeln!(output, "#[allow(unreachable_code)]")?;
 
         writeln!(output, "pub struct Instance {{}}")?; // TODO: Insert global variables in struct as public fields
-        let _ = (types, definitions);
-
         writeln!(output, "impl Instance {{")?;
 
         // TODO: output.write_vectored(bufs)?;
         for buf in function_decls {
+            output.write_all(&buf)?;
+        }
+
+        for buf in function_exports {
             output.write_all(&buf)?;
         }
 
