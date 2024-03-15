@@ -245,7 +245,7 @@ impl Translation {
 
         // Implicit return generated when last `end` is handled.
 
-        validator.finish(operators_reader.get_binary_reader().current_position())?;
+        validator.finish(operators_reader.original_position())?;
 
         let _ = writeln!(&mut b, "}}");
         Ok(b)
