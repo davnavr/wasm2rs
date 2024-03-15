@@ -78,23 +78,37 @@ impl Translation {
             }
         }
 
-        // Write the parameter types
-        for (i, ty) in func_type.params().iter().enumerate() {
-            let _ = write!(&mut b, ", l{i}: {}", ValType(*ty));
-        }
-
-        let _ = write!(&mut b, ") -> (");
-
-        // Write the result types
-        for (i, ty) in func_type.results().iter().enumerate() {
-            if i > 0 {
-                let _ = write!(&mut b, ", ");
+        {
+            // Write the parameter types
+            for (i, ty) in func_type.params().iter().enumerate() {
+                let _ = write!(&mut b, ", l{i}: {}", ValType(*ty));
             }
 
-            let _ = write!(&mut b, "{}", ValType(*ty));
+            let _ = write!(&mut b, ") ");
+
+            let results = func_type.results();
+            if !results.is_empty() {
+                let _ = write!(&mut b, "-> ");
+                if results.len() > 1 {
+                    let _ = write!(&mut b, "(");
+                }
+            }
+
+            // Write the result types
+            for (i, ty) in results.iter().enumerate() {
+                if i > 0 {
+                    let _ = write!(&mut b, ", ");
+                }
+
+                let _ = write!(&mut b, "{}", ValType(*ty));
+            }
+
+            if results.len() > 1 {
+                let _ = write!(&mut b, ")");
+            }
         }
 
-        let _ = writeln!(&mut b, ") {{");
+        let _ = writeln!(&mut b, " {{");
 
         let result_count = u32::try_from(func_type.results().len()).expect("too many results");
 
