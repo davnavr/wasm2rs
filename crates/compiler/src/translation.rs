@@ -184,7 +184,7 @@ impl Translation {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::Pop(v) => std::fmt::Display::fmt(&v, f),
-                        Self::Underflow => f.write_str("(::core::unimplemented!(\"code generation bug, operand stack underflow occured\"))"),
+                        Self::Underflow => f.write_str("::core::unimplemented!(\"code generation bug, operand stack underflow occured\")"),
                     }
                 }
             }
@@ -513,6 +513,7 @@ impl Translation {
         // Code generator isn't smart (TODO: Is validator.get_control_frame() enough to skip unreachable code)
         writeln!(output, "#[allow(unreachable_code)]")?;
 
+        writeln!(output, "pub mod wasm {{")?;
         writeln!(output, "pub struct Instance {{}}")?; // TODO: Insert global variables in struct as public fields
         writeln!(output, "impl Instance {{")?;
 
@@ -525,7 +526,7 @@ impl Translation {
             output.write_all(&buf)?;
         }
 
-        writeln!(output, "}}")?;
+        writeln!(output, "}}}}")?;
         output.flush()?;
         Ok(())
     }
