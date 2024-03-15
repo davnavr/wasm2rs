@@ -20,6 +20,8 @@ impl std::fmt::Display for LocalVar {
     }
 }
 
+const RT_CRATE_PATH: &str = "::wasm2rs_rt";
+
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
@@ -514,13 +516,31 @@ impl Translation {
         writeln!(output, "#[allow(unreachable_code)]")?;
 
         writeln!(output, "pub mod wasm {{")?;
-        writeln!(output, "pub struct Instance {{}}")?; // TODO: Insert global variables in struct as public fields
-        writeln!(output, "impl Instance {{")?;
+
+        // TODO: Type parameter for imports
+        write!(output, "pub struct Instance<RT> where RT: Runtime,")?;
+
+        // TODO: Insert global variables in struct as public fields
+        writeln!(output, "{{")?;
+        writeln!(output, "_rt: RT,")?;
+        writeln!(output, "}}")?;
+
+        writeln!(output, "pub trait Runtime: {RT_CRATE_PATH}::trap::Trap {{}}")?;
+
+        // TODO: Only emit this Runtime impl if it makes sense
+
+        writeln!(output, "impl<RT: Runtime> Instance<RT> {{")?;
 
         // TODO: output.write_vectored(bufs)?;
         for buf in function_decls {
             output.write_all(&buf)?;
         }
+
+        // TODO: Parameter for imports
+        writeln!(output, "pub fn instantiate(runtime: RT) -> ::core::result::Result<Self, <RT as {RT_CRATE_PATH}::trap::Trap>::Repr> {{")?;
+        // TODO: Call start function
+        writeln!(output, "Ok(Self {{ _rt: runtime }})")?;
+        writeln!(output, "}}")?;
 
         for buf in function_exports {
             output.write_all(&buf)?;
