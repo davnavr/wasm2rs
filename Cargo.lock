@@ -133,6 +133,7 @@ name = "wasm2rs-compiler-tests"
 version = "0.0.0"
 dependencies = [
  "wasm2rs",
+ "wasm2rs-rt",
  "wat",
 ]
 

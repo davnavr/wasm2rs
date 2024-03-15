@@ -10,3 +10,6 @@ members = [
     "crates/rt",
     "tests/compiler",
 ]
+
+[workspace.dependencies]
+wasm2rs-rt = { path = "crates/rt" }

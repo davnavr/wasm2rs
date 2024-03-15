@@ -3,6 +3,9 @@ name = "wasm2rs-compiler-tests"
 edition.workspace = true
 publish = false
 
+[dependencies]
+wasm2rs-rt = { workspace = true }
+
 [build-dependencies]
 wat = "1.201.0"
 wasm2rs = { path = "../../crates/compiler/" }
