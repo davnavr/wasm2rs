@@ -120,7 +120,7 @@ impl Translation {
         while !operators_reader.eof() {
             let (op, op_offset) = operators_reader.read_with_offset()?;
 
-            #[derive(Clone)]
+            #[derive(Clone, Copy)]
             #[repr(transparent)]
             struct StackValue(u32);
 
@@ -130,16 +130,33 @@ impl Translation {
                 }
             }
 
+            #[derive(Clone, Copy)]
+            enum PoppedValue {
+                Pop(StackValue),
+                Underflow,
+            }
+
+            impl std::fmt::Display for PoppedValue {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    match self {
+                        Self::Pop(v) => std::fmt::Display::fmt(&v, f),
+                        Self::Underflow => f.write_str("(::core::unimplemented!(\"code generation bug, operand stack underflow occured\"))"),
+                    }
+                }
+            }
+
             let pop_value = |depth: u32| {
-                if validator
-                    .get_operand_type(depth as usize)
-                    .expect("operand stack underflow")
-                    .is_some()
-                {
-                    let height = validator.operand_stack_height() - depth - 1;
-                    StackValue(height)
-                } else {
-                    todo!("generate code for unreachable value");
+                match validator.get_operand_type(depth as usize) {
+                    Some(Some(_)) => {
+                        // TODO: Basic copying only good for numtype and vectype, have to call Runtime::clone for funcref + externref
+                        let height = validator.operand_stack_height() - depth - 1;
+                        PoppedValue::Pop(StackValue(height))
+                    }
+                    Some(None) => todo!("generate code for unreachable value, call Runtime::trap"),
+                    None => {
+                        // A stack underflow should be caught later by the validator
+                        PoppedValue::Underflow
+                    }
                 }
             };
 
@@ -196,6 +213,8 @@ impl Translation {
 
             validator.op(op_offset, &op)?;
         }
+
+        // TODO: Generate implicit return code
 
         validator.finish(operators_reader.get_binary_reader().current_position())?;
 
