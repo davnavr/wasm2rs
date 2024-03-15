@@ -99,20 +99,33 @@ impl Translation {
         let result_count = u32::try_from(func_type.results().len()).expect("too many results");
 
         // Write local variables
-        let mut local_index = u32::try_from(func_type.params().len()).unwrap_or(u32::MAX);
-        let mut locals_reader = body.get_locals_reader()?;
-        let locals_count = locals_reader.get_count();
-        for _ in 0..locals_count {
-            let (count, ty) = locals_reader.read()?;
-            validator.define_locals(locals_reader.original_position(), count, ty)?;
+        #[derive(Clone, Copy)]
+        #[repr(transparent)]
+        struct LocalVar(u32);
 
-            for _ in 0..count {
-                let _ = writeln!(
-                    &mut b,
-                    "let mut l{local_index}: {} = Default::default();",
-                    ValType(ty)
-                );
-                local_index += 1;
+        impl std::fmt::Display for LocalVar {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "_l{}", self.0)
+            }
+        }
+
+        {
+            let mut local_index = u32::try_from(func_type.params().len()).unwrap_or(u32::MAX);
+            let mut locals_reader = body.get_locals_reader()?;
+            let locals_count = locals_reader.get_count();
+            for _ in 0..locals_count {
+                let (count, ty) = locals_reader.read()?;
+                validator.define_locals(locals_reader.original_position(), count, ty)?;
+
+                for _ in 0..count {
+                    let _ = writeln!(
+                        &mut b,
+                        "let mut {}: {} = Default::default();",
+                        LocalVar(local_index),
+                        ValType(ty)
+                    );
+                    local_index += 1;
+                }
             }
         }
 
@@ -163,6 +176,14 @@ impl Translation {
             use wasmparser::Operator;
 
             match op {
+                Operator::LocalGet { local_index } => {
+                    let _ = writeln!(
+                        &mut b,
+                        "let {} = {}",
+                        StackValue(validator.operand_stack_height()),
+                        LocalVar(local_index)
+                    );
+                }
                 Operator::I32Const { value } => {
                     let _ = writeln!(
                         &mut b,
