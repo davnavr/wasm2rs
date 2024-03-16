@@ -22,6 +22,36 @@ impl std::fmt::Display for LocalVar {
 
 const RT_CRATE_PATH: &str = "::wasm2rs_rt";
 
+fn get_function_type(ty: &wasmparser::SubType) -> &wasmparser::FuncType {
+    if let wasmparser::SubType {
+        is_final: true,
+        supertype_idx: None,
+        composite_type: wasmparser::CompositeType::Func(sig),
+    } = ty
+    {
+        sig
+    } else {
+        unimplemented!("expected function type, but got unsupported type: {ty:?}")
+    }
+}
+
+fn get_block_type<'a>(
+    types: &'a wasmparser::types::Types,
+    ty: &'a wasmparser::BlockType,
+) -> (&'a [wasmparser::ValType], &'a [wasmparser::ValType]) {
+    use wasmparser::BlockType;
+
+    match ty {
+        BlockType::Empty => (&[], &[]),
+        BlockType::Type(result) => (&[], std::slice::from_ref(result)),
+        BlockType::FuncType(sig) => {
+            let func_type =
+                get_function_type(types.get(types.core_type_at(*sig).unwrap_sub()).unwrap());
+            (func_type.params(), func_type.results())
+        }
+    }
+}
+
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
@@ -46,7 +76,7 @@ impl Translation {
         saturating_float_to_int: false,
         sign_extension: false,
         reference_types: false,
-        multi_value: false,
+        multi_value: true,
         bulk_memory: false,
         simd: false,
         relaxed_simd: false,
@@ -74,7 +104,7 @@ impl Translation {
         &self,
         sig: &wasmparser::FuncType,
         b: &mut Vec<u8>,
-    ) -> crate::Result<()> {
+    ) -> wasmparser::Result<()> {
         use std::io::Write as _;
 
         // Write the parameter types
@@ -121,7 +151,8 @@ impl Translation {
         &self,
         body: &wasmparser::FunctionBody,
         validator: &mut wasmparser::FuncValidator<wasmparser::ValidatorResources>,
-    ) -> crate::Result<Vec<u8>> {
+        types: &wasmparser::types::Types,
+    ) -> wasmparser::Result<Vec<u8>> {
         use wasmparser::WasmModuleResources as _;
 
         // Note that write operations on a `Vec` currently always return `Ok`
@@ -139,7 +170,8 @@ impl Translation {
 
         let _ = writeln!(&mut b, " {{");
 
-        let result_count = u32::try_from(func_type.results().len()).expect("too many results");
+        let func_result_count =
+            u32::try_from(func_type.results().len()).expect("too many function results");
 
         // Write local variables
         {
@@ -162,89 +194,196 @@ impl Translation {
             }
         }
 
-        let mut operators_reader = body.get_operators_reader()?;
-        while !operators_reader.eof() {
-            let (op, op_offset) = operators_reader.read_with_offset()?;
+        #[derive(Clone, Copy)]
+        #[repr(transparent)]
+        struct StackValue(u32);
 
-            #[derive(Clone, Copy)]
-            #[repr(transparent)]
-            struct StackValue(u32);
+        impl std::fmt::Display for StackValue {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "_s{}", self.0)
+            }
+        }
 
-            impl std::fmt::Display for StackValue {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "_s{}", self.0)
+        #[derive(Clone, Copy)]
+        enum PoppedValue {
+            Pop(StackValue),
+            Underflow,
+        }
+
+        impl std::fmt::Display for PoppedValue {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    Self::Pop(v) => std::fmt::Display::fmt(&v, f),
+                    Self::Underflow => f.write_str("::core::unimplemented!(\"code generation bug, operand stack underflow occured\")"),
                 }
             }
+        }
 
-            #[derive(Clone, Copy)]
-            enum PoppedValue {
-                Pop(StackValue),
-                Underflow,
-            }
-
-            impl std::fmt::Display for PoppedValue {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    match self {
-                        Self::Pop(v) => std::fmt::Display::fmt(&v, f),
-                        Self::Underflow => f.write_str("::core::unimplemented!(\"code generation bug, operand stack underflow occured\")"),
-                    }
+        let pop_value = |validator: &wasmparser::FuncValidator<_>, depth: u32| {
+            match validator.get_operand_type(depth as usize) {
+                Some(Some(_)) => {
+                    // TODO: Basic copying only good for numtype and vectype, have to call Runtime::clone for funcref + externref
+                    let height = validator.operand_stack_height() - depth - 1;
+                    PoppedValue::Pop(StackValue(height))
+                }
+                Some(None) => todo!("generate code for unreachable value, call Runtime::trap"),
+                None => {
+                    // A stack underflow should be caught later by the validator
+                    PoppedValue::Underflow
                 }
             }
+        };
 
-            let pop_value = |depth: u32| {
-                match validator.get_operand_type(depth as usize) {
-                    Some(Some(_)) => {
-                        // TODO: Basic copying only good for numtype and vectype, have to call Runtime::clone for funcref + externref
-                        let height = validator.operand_stack_height() - depth - 1;
-                        PoppedValue::Pop(StackValue(height))
-                    }
-                    Some(None) => todo!("generate code for unreachable value, call Runtime::trap"),
-                    None => {
-                        // A stack underflow should be caught later by the validator
-                        PoppedValue::Underflow
-                    }
+        struct Label(u32);
+
+        impl std::fmt::Display for Label {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "'l{}", self.0)
+            }
+        }
+
+        let write_block_start = |b: &mut Vec<u8>, label: Label, operand_height, ty| {
+            let result_count =
+                u32::try_from(get_block_type(types, &ty).1.len()).expect("too many results");
+
+            if result_count > 0 {
+                let _ = write!(b, "let ");
+
+                if result_count > 1 {
+                    let _ = write!(b, "(");
                 }
-            };
 
-            // For `return` and `end` instructions
-            let write_return = |b: &mut Vec<u8>| match result_count {
-                0 => {
-                    let _ = writeln!(b, "return;");
+                for i in 0..result_count {
+                    if i > 0 {
+                        let _ = write!(b, ", ");
+                    }
+
+                    let _ = write!(
+                        b,
+                        "{}",
+                        StackValue(i.checked_add(operand_height).expect("too many results"))
+                    );
+                }
+
+                if result_count > 1 {
+                    let _ = write!(b, ")");
+                }
+
+                let _ = write!(b, " = ");
+            }
+
+            let _ = write!(b, " {label}: ");
+        };
+
+        enum EndKind {
+            ExplicitReturn,
+            //ImplicitReturn,
+            //Branch(Label)
+            Block,
+        }
+
+        impl std::fmt::Display for EndKind {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    Self::ExplicitReturn => f.write_str("return"),
+                    //Self::Branch(label) => write!(f, "break {label}"),
+                    Self::Block => Ok(()),
+                }
+            }
+        }
+
+        // For `return` and `end` instructions
+        let write_end = |validator: &_, b: &mut Vec<u8>, kind: EndKind, result_count| {
+            match result_count {
+                0u32 => {
+                    let _ = write!(b, "{kind}");
                 }
                 1 => {
-                    let _ = writeln!(b, "return {};", pop_value(0));
+                    let result = pop_value(validator, 0);
+                    if matches!(kind, EndKind::ExplicitReturn) {
+                        let _ = write!(b, "{kind} ");
+                    }
+                    let _ = write!(b, "{result}");
                 }
                 _ => {
                     for i in 0..result_count {
                         let _ = writeln!(
                             b,
-                            "let r{} = {};",
-                            StackValue(result_count - i - 1),
-                            pop_value(i),
+                            "let _r{} = {};",
+                            result_count - i - 1,
+                            pop_value(validator, i),
                         );
                     }
 
-                    let _ = write!(b, "return (");
+                    let _ = write!(b, "{kind} (");
                     for i in 0..result_count {
                         if i > 0 {
                             let _ = write!(b, ", ");
                         }
 
-                        let _ = write!(b, "r{i}");
+                        let _ = write!(b, "_r{i}");
                     }
-                    let _ = writeln!(b, ");");
+                    let _ = write!(b, ")");
                 }
-            };
+            }
 
+            let _ = if matches!(kind, EndKind::ExplicitReturn) {
+                writeln!(b, ";")
+            } else {
+                writeln!(b)
+            };
+        };
+
+        let mut operators_reader = body.get_operators_reader()?;
+        while !operators_reader.eof() {
             use wasmparser::Operator;
 
+            let (op, op_offset) = operators_reader.read_with_offset()?;
             match op {
+                Operator::Nop => (),
+                Operator::Block { blockty } => {
+                    write_block_start(
+                        &mut b,
+                        Label(validator.control_stack_height() + 1),
+                        validator.operand_stack_height(),
+                        blockty,
+                    );
+                    let _ = writeln!(b, "{{");
+                }
                 Operator::End => match validator.control_stack_height() {
                     0 => unreachable!("control frame stack was unexpectedly empty"),
-                    1 => write_return(&mut b),
-                    _ => todo!("end of blocks not yet supported"),
+                    1 => write_end(
+                        validator,
+                        &mut b,
+                        EndKind::ExplicitReturn,
+                        func_result_count,
+                    ),
+                    _ => {
+                        let result_count = get_block_type(
+                            types,
+                            &validator.get_control_frame(0).unwrap().block_type,
+                        )
+                        .1
+                        .len()
+                        .try_into()
+                        .expect("too many block results");
+
+                        write_end(validator, &mut b, EndKind::Block, result_count);
+                        let _ = write!(b, "}}");
+
+                        let _ = if result_count > 0 {
+                            writeln!(b, ";")
+                        } else {
+                            writeln!(b)
+                        };
+                    }
                 },
-                Operator::Return => write_return(&mut b),
+                Operator::Return => write_end(
+                    validator,
+                    &mut b,
+                    EndKind::ExplicitReturn,
+                    func_result_count,
+                ),
                 Operator::LocalGet { local_index } => {
                     let _ = writeln!(
                         &mut b,
@@ -261,13 +400,13 @@ impl Translation {
                     );
                 }
                 Operator::I32Add => {
-                    let result_value = pop_value(1);
+                    let result_value = pop_value(validator, 1);
                     let _ = writeln!(
                         &mut b,
                         "let {} = i32::wrapping_add({}, {});",
                         result_value,
                         result_value,
-                        pop_value(0)
+                        pop_value(validator, 0)
                     );
                 }
                 _ => todo!("translate {op:?}"),
@@ -299,17 +438,7 @@ impl Translation {
             crate::rust::Ident::new(name).expect("TODO: implement name mangling")
         );
 
-        let func_type = match types.get(types.core_function_at(index)) {
-            Some(wasmparser::SubType {
-                is_final: true,
-                supertype_idx: None,
-                composite_type: wasmparser::CompositeType::Func(sig),
-            }) => sig,
-            unknown => {
-                unimplemented!("expected function type, but got unsupported type: {unknown:?}")
-            }
-        };
-
+        let func_type = get_function_type(types.get(types.core_function_at(index)).unwrap());
         self.write_function_signature(func_type, buf)?;
         let _ = write!(buf, " {{ self._f{index}(");
 
@@ -442,6 +571,7 @@ impl Translation {
         let function_decls: Vec<_> = {
             use rayon::prelude::*;
 
+            let types = &types;
             let mut function_decls_unsorted = vec![(0, Vec::new()); functions.len()];
 
             // TODO: Zip keeps order of items, remove the extra Vec
@@ -453,7 +583,7 @@ impl Translation {
                     let mut validator = func.into_validator(Default::default());
                     *dst = (
                         validator.index(),
-                        self.compile_function(&body, &mut validator)?,
+                        self.compile_function(&body, &mut validator, types)?,
                     );
                     crate::Result::Ok(())
                 })?;
@@ -514,6 +644,7 @@ impl Translation {
 
         // Code generator isn't smart (TODO: Is validator.get_control_frame() enough to skip unreachable code)
         writeln!(output, "#[allow(unreachable_code)]")?;
+        writeln!(output, "#[allow(unused_labels)]")?;
 
         writeln!(output, "pub mod wasm {{")?;
 
