@@ -571,10 +571,11 @@ impl Translation {
                     );
                 }
                 Operator::I32Load { memarg } => {
-                    let address = pop_value(validator, 1);
+                    let address = pop_value(validator, 0);
                     let _ = writeln!(
                         &mut b,
-                        "{RT_CRATE_PATH}::memory::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._rt)?;",
+                        "let {} = {RT_CRATE_PATH}::memory::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._rt)?;",
+                        StackValue(validator.operand_stack_height() - 1),
                         memarg.align,
                         memarg.memory,
                         MemId(memarg.memory),
