@@ -1,5 +1,14 @@
 //! Implementation for WebAssembly linear memory.
 
+#[cfg(feature = "alloc")]
+mod allocation;
+
+#[cfg(feature = "alloc")]
+mod heap;
+
+#[cfg(feature = "alloc")]
+pub use heap::HeapMemory32;
+
 /// The size, in bytes, of a WebAssembly linear memory [page].
 ///
 /// [page]: https://webassembly.github.io/spec/core/exec/runtime.html#page-size
@@ -9,6 +18,22 @@ pub const PAGE_SIZE: u32 = 65536;
 ///
 /// [`memory.grow`]: Memory32::grow()
 pub const MEMORY_GROW_FAILED: i32 = -1;
+
+/// Error type used when the minimum required number of pages for a linear memory could not be
+/// allocated.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct AllocationError {
+    size: u32,
+}
+
+impl core::fmt::Display for AllocationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "could not allocate {} pages for memory", self.size)
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for AllocationError {}
 
 /// Describes what kind of value was being read or written in a [`MemoryAccess`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -93,6 +118,9 @@ pub trait Memory32 {
     /// [`memory.size`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
     fn size(&self) -> i32;
 
+    /// Gets the maximum number of pages that this linear memory can have.
+    fn limit(&self) -> u32;
+
     /// Increases the size of the linear memory by the specified number of [pages], and returns the old number of pages.
     ///
     /// This implements the [`memory.grow`] instruction.
@@ -119,16 +147,59 @@ pub trait Memory32 {
     /// # Errors
     ///
     /// Returns an error if the range of addresses `addr..(addr + dst.len())` is not in bounds.
-    fn copy_from_slice(&self, addr: u32, dst: &mut [u8]) -> AccessResult<()>;
+    fn copy_to_slice(&self, addr: u32, dst: &mut [u8]) -> AccessResult<()>;
 
     /// Copies bytes from the given slice into linear memory starting at the specified address.
     ///
     /// # Errors
     ///
     /// Returns an error if the range of addresses `addr..(addr + dst.len())` is not in bounds.
-    fn copy_to_slice(&self, addr: u32, src: &[u8]) -> AccessResult<()>;
+    fn copy_from_slice(&self, addr: u32, src: &[u8]) -> AccessResult<()>;
+
+    /// Allocates a new boxed slice, and copies the contents of this linear memory at the range of addresses into it.
+    ///
+    /// # Errors
+    ///
+    /// If the range of address is out-of-bounds, an error is returned.
+    #[cfg(feature = "alloc")]
+    fn to_boxed_slice<R>(&self, range: R) -> AccessResult<alloc::boxed::Box<[u8]>>
+    where
+        R: core::ops::RangeBounds<u32>,
+        Self: Sized,
+    {
+        use core::ops::Bound;
+
+        let start_addr = match range.start_bound() {
+            Bound::Included(bound) => *bound,
+            Bound::Excluded(bound) => bound.wrapping_add(1),
+            Bound::Unbounded => 0,
+        };
+
+        let end_addr = match range.end_bound() {
+            Bound::Included(bound) => *bound,
+            Bound::Excluded(bound) => bound.wrapping_sub(1),
+            Bound::Unbounded => ((self.size() as u32) * PAGE_SIZE).wrapping_sub(1),
+        };
+
+        if start_addr > end_addr {
+            return Ok(Default::default());
+        }
+
+        let mut slice =
+            alloc::vec![0u8; usize::try_from(end_addr - start_addr + 1).unwrap_or(usize::MAX)];
+        self.copy_to_slice(start_addr, &mut slice)?;
+        Ok(slice.into_boxed_slice())
+    }
 }
 
 //pub trait UnsharedMemory32: Memory32 + core::ops::Deref<Target = [u8]> + core::ops::DerefMut8 where Self: !Sync {}
 
 //fn i32_load
+
+struct DisplaySize(u32);
+
+impl core::fmt::Debug for DisplaySize {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{} * {}", PAGE_SIZE, self.0)
+    }
+}
