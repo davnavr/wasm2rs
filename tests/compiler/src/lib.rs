@@ -44,6 +44,12 @@ fn factorial() {
 }
 
 #[test]
+fn halting() {
+    let inst = wasm::Instance::instantiate(wasm::StdRuntime::default()).unwrap();
+    let _ = inst.halt_on_even(6);
+}
+
+#[test]
 #[should_panic]
 fn unreachable_panic() {
     let inst = wasm::Instance::instantiate(wasm::StdRuntime::default()).unwrap();

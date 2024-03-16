@@ -51,4 +51,26 @@
         br 1
       end
     end)
+
+  (func (export "halt_on_even") (param i32)
+    ;; Push a bunch of garbage on the stack
+    i64.const 3252365
+    i32.const 9932
+    i64.const 3295
+
+    block
+      local.get 0
+      loop (param i32)
+        i32.const 2
+        i32.rem_u
+        i32.eqz
+        if
+          return
+        end
+
+        i32.const 1
+        br 0
+      end
+    end
+    unreachable)
 )
