@@ -339,6 +339,15 @@ impl Translation {
             use wasmparser::Operator;
 
             let (op, op_offset) = operators_reader.read_with_offset()?;
+
+            let is_unreachable = validator.get_control_frame(0).unwrap().unreachable;
+            if is_unreachable && !matches!(op, Operator::End | Operator::Else) {
+                // Although code is unreachable, WASM spec still requires it to be validated
+                validator.op(op_offset, &op)?;
+                // Don't generate Rust code
+                continue;
+            }
+
             match op {
                 Operator::Nop => (),
                 Operator::Block { blockty } => {
@@ -352,6 +361,7 @@ impl Translation {
                 }
                 Operator::End => match validator.control_stack_height() {
                     0 => unreachable!("control frame stack was unexpectedly empty"),
+                    1 if is_unreachable => (),
                     1 => write_end(
                         validator,
                         &mut b,
@@ -378,6 +388,7 @@ impl Translation {
                         };
                     }
                 },
+                // TODO: Implicit return if height is 0
                 Operator::Return => write_end(
                     validator,
                     &mut b,
