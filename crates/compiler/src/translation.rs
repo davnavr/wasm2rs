@@ -214,6 +214,7 @@ impl Translation {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
                     Self::Pop(v) => std::fmt::Display::fmt(&v, f),
+                    Self::Underflow if f.alternate() => f.write_str("_"),
                     Self::Underflow => f.write_str("::core::unimplemented!(\"code generation bug, operand stack underflow occured\")"),
                 }
             }
@@ -482,6 +483,14 @@ impl Translation {
                         LocalVar(local_index)
                     );
                 }
+                Operator::LocalSet { local_index } => {
+                    let _ = writeln!(
+                        &mut b,
+                        "{} = {};",
+                        LocalVar(local_index),
+                        pop_value(validator, 0)
+                    );
+                }
                 Operator::I32Const { value } => {
                     let _ = writeln!(
                         &mut b,
@@ -489,17 +498,22 @@ impl Translation {
                         StackValue(validator.operand_stack_height()),
                     );
                 }
+                Operator::I64Const { value } => {
+                    let _ = writeln!(
+                        &mut b,
+                        "let {} = {value}i64;",
+                        StackValue(validator.operand_stack_height()),
+                    );
+                }
                 Operator::I32Eqz | Operator::I64Eqz => {
                     let result_value = pop_value(validator, 1);
-                    let _ = writeln!(&mut b, "let {} = {} == 0;", result_value, result_value);
+                    let _ = writeln!(&mut b, "let {:#} = {} == 0;", result_value, result_value);
                 }
                 Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => {
                     let result_value = pop_value(validator, 1);
                     let _ = writeln!(
                         &mut b,
-                        "let {} = {} == {};",
-                        result_value,
-                        result_value,
+                        "let {result_value:#} = {result_value} == {};",
                         pop_value(validator, 0)
                     );
                 }
@@ -507,9 +521,7 @@ impl Translation {
                     let result_value = pop_value(validator, 1);
                     let _ = writeln!(
                         &mut b,
-                        "let {} = {} == {};",
-                        result_value,
-                        result_value,
+                        "let {result_value:#} = {result_value} == {};",
                         pop_value(validator, 0)
                     );
                 }
@@ -517,10 +529,31 @@ impl Translation {
                     let result_value = pop_value(validator, 1);
                     let _ = writeln!(
                         &mut b,
-                        "let {} = i32::wrapping_add({}, {});",
-                        result_value,
-                        result_value,
+                        "let {result_value:#} = i32::wrapping_add({result_value}, {});",
                         pop_value(validator, 0)
+                    );
+                }
+                Operator::I64Sub => {
+                    let result_value = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {result_value:#} = i64::wrapping_sub({result_value}, {});",
+                        pop_value(validator, 0)
+                    );
+                }
+                Operator::I64Mul => {
+                    let result_value = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {result_value:#} = i64::wrapping_mul({result_value}, {});",
+                        pop_value(validator, 0)
+                    );
+                }
+                Operator::I64ExtendI32U => {
+                    let result_value = pop_value(validator, 0);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {result_value:#} = (({result_value} as u32) as u64) as i64;",
                     );
                 }
                 _ => todo!("translate {op:?}"),
