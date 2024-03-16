@@ -115,7 +115,7 @@ impl Translation {
 
             let _ = write!(
                 b,
-                "{}: {}",
+                "mut {}: {}",
                 LocalVar(u32::try_from(i).expect("too many parameters")),
                 ValType(*ty)
             );
