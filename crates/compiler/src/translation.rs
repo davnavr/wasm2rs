@@ -570,6 +570,17 @@ impl Translation {
                         pop_value(validator, 0)
                     );
                 }
+                Operator::I32Load { memarg } => {
+                    let address = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "{RT_CRATE_PATH}::memory::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._rt)?;",
+                        memarg.align,
+                        memarg.memory,
+                        MemId(memarg.memory),
+                        memarg.offset
+                    );
+                }
                 Operator::I32Store { memarg } => {
                     let to_store = pop_value(validator, 0);
                     let address = pop_value(validator, 1);
