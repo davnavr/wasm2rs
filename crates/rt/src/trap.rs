@@ -81,6 +81,8 @@ pub enum TrapCode {
     Unreachable,
     /// A memory access was out of bounds.
     MemoryBoundsCheck(MemoryAccess),
+    /// An integer or floating point operation attempted a division by zero.
+    DivisionByZero,
     //UnalignedAtomicOperation
     //NullReference
 }
@@ -90,6 +92,7 @@ impl core::fmt::Display for TrapCode {
         match self {
             Self::Unreachable => f.write_str("executed unreachable instruction"),
             Self::MemoryBoundsCheck(access) => write!(f, "out-of-bounds {}", access),
+            Self::DivisionByZero => f.write_str("division by zero"),
         }
     }
 }

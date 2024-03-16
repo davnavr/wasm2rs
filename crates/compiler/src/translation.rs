@@ -613,6 +613,14 @@ impl Translation {
                         pop_value(validator, 0)
                     );
                 }
+                Operator::I32RemU => {
+                    let result_value = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {result_value:#} = ::{RT_CRATE_PATH}::math::i32_rem_u({result_value}, {}, &self._rt);",
+                        pop_value(validator, 0)
+                    );
+                }
                 Operator::I64Sub => {
                     let result_value = pop_value(validator, 1);
                     let _ = writeln!(
