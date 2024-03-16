@@ -138,7 +138,7 @@ impl Translation {
             let _ = write!(b, "{}", ValType(*ty));
         }
 
-        if results.len() > 1 {
+        if results.len() != 1 {
             let _ = write!(b, ")");
         }
 
@@ -301,7 +301,7 @@ impl Translation {
             if result_count == 0u32 {
                 let _ = match kind {
                     EndKind::ExplicitReturn => writeln!(b, "return Ok(());"),
-                    EndKind::ImplicitReturn => writeln!(b, "Ok(());"),
+                    EndKind::ImplicitReturn => writeln!(b, "Ok(())"),
                     EndKind::Block => writeln!(b),
                 };
                 return;

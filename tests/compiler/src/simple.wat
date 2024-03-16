@@ -24,4 +24,6 @@
     else
       i32.const 0xDEAD
   	end)
+
+  (func (export "do_nothing"))
 )
