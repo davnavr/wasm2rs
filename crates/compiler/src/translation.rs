@@ -121,14 +121,12 @@ impl Translation {
             );
         }
 
-        let _ = write!(b, ") ");
+        let _ = write!(b, ") -> ::core::result::Result<");
 
         let results = sig.results();
-        if !results.is_empty() {
-            let _ = write!(b, "-> ");
-            if results.len() > 1 {
-                let _ = write!(b, "(");
-            }
+
+        if results.len() != 1 {
+            let _ = write!(b, "(");
         }
 
         // Write the result types
@@ -143,6 +141,8 @@ impl Translation {
         if results.len() > 1 {
             let _ = write!(b, ")");
         }
+
+        let _ = write!(b, ", <RT as {RT_CRATE_PATH}::trap::Trap>::Repr>");
 
         Ok(())
     }
@@ -282,51 +282,66 @@ impl Translation {
             Block,
         }
 
-        impl std::fmt::Display for EndKind {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl EndKind {
+            fn write_start(&self, b: &mut Vec<u8>) {
                 match self {
-                    Self::ExplicitReturn => f.write_str("return "),
-                    //Self::Branch(label) => write!(f, "break {label}"),
-                    Self::Block | Self::ImplicitReturn => Ok(()),
+                    Self::ExplicitReturn => {
+                        let _ = write!(b, "return Ok(");
+                    }
+                    Self::ImplicitReturn => {
+                        let _ = write!(b, "Ok(");
+                    }
+                    Self::Block => (),
                 }
             }
         }
 
         // For `return` and `end` instructions
         let write_end = |validator: &_, b: &mut Vec<u8>, kind: EndKind, result_count| {
-            match result_count {
-                0u32 => {
-                    let _ = write!(b, "{kind}");
-                }
-                1 => {
-                    let _ = write!(b, "{kind}{}", pop_value(validator, 0));
-                }
-                _ => {
-                    for i in 0..result_count {
-                        let _ = writeln!(
-                            b,
-                            "let _r{} = {};",
-                            result_count - i - 1,
-                            pop_value(validator, i),
-                        );
-                    }
-
-                    let _ = write!(b, "{kind}(");
-                    for i in 0..result_count {
-                        if i > 0 {
-                            let _ = write!(b, ", ");
-                        }
-
-                        let _ = write!(b, "_r{i}");
-                    }
-                    let _ = write!(b, ")");
-                }
+            if result_count == 0u32 {
+                let _ = match kind {
+                    EndKind::ExplicitReturn => writeln!(b, "return Ok(());"),
+                    EndKind::ImplicitReturn => writeln!(b, "Ok(());"),
+                    EndKind::Block => writeln!(b),
+                };
+                return;
             }
 
-            let _ = if matches!(kind, EndKind::ExplicitReturn) {
-                writeln!(b, ";")
+            if result_count == 1 {
+                kind.write_start(b);
+                let _ = write!(b, "{}", pop_value(validator, 0));
             } else {
-                writeln!(b)
+                for i in 0..result_count {
+                    let _ = writeln!(
+                        b,
+                        "let _r{} = {};",
+                        result_count - i - 1,
+                        pop_value(validator, i),
+                    );
+                }
+
+                kind.write_start(b);
+                let _ = write!(b, "(");
+                for i in 0..result_count {
+                    if i > 0 {
+                        let _ = write!(b, ", ");
+                    }
+
+                    let _ = write!(b, "_r{i}");
+                }
+                let _ = write!(b, ")");
+            }
+
+            let _ = match kind {
+                EndKind::ExplicitReturn => {
+                    writeln!(b, ");")
+                }
+                EndKind::ImplicitReturn => {
+                    writeln!(b, ")")
+                }
+                EndKind::Block => {
+                    writeln!(b)
+                }
             };
         };
 
@@ -348,6 +363,20 @@ impl Translation {
             }
 
             match op {
+                Operator::Unreachable => {
+                    let in_block = validator.control_stack_height() > 1;
+                    if in_block {
+                        let _ = write!(b, "return ");
+                    }
+
+                    let _ = write!(b, "::core::result::Result::Err(<RT as {RT_CRATE_PATH}::trap::Trap>::trap(&self._rt, {RT_CRATE_PATH}::trap::TrapCode::Unreachable))");
+
+                    let _ = if in_block {
+                        writeln!(b, ";")
+                    } else {
+                        writeln!(b)
+                    };
+                }
                 Operator::Nop => (),
                 Operator::Block { blockty } => {
                     write_block_start(

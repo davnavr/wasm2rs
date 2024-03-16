@@ -11,4 +11,9 @@
       local.get 0
     end
     i32.add)
+
+  (func (export "unreachable_instruction") (result i32)
+    unreachable)
+
+  ;; (func (export "is_life") (param i32) (result i32) if)
 )
