@@ -90,13 +90,13 @@ impl crate::memory::Memory32 for HeapMemory32 {
         self.limit
     }
 
-    fn size(&self) -> i32 {
-        self.modify(|a| a.size()) as i32
+    fn size(&self) -> u32 {
+        self.modify(|a| a.size())
     }
 
-    fn grow(&self, delta: i32) -> i32 {
-        self.modify(|a| match a.grow(delta as u32) {
-            Some(old) => old as i32,
+    fn grow(&self, delta: u32) -> u32 {
+        self.modify(|a| match a.grow(delta) {
+            Some(old) => old,
             None => crate::memory::MEMORY_GROW_FAILED,
         })
     }

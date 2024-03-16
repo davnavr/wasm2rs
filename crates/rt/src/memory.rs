@@ -17,7 +17,7 @@ pub const PAGE_SIZE: u32 = 65536;
 /// A constant value used to indicate that a [`memory.grow`] operation failed.
 ///
 /// [`memory.grow`]: Memory32::grow()
-pub const MEMORY_GROW_FAILED: i32 = -1;
+const MEMORY_GROW_FAILED: u32 = -1i32 as u32;
 
 /// Error type used when the minimum required number of pages for a linear memory could not be
 /// allocated.
@@ -36,6 +36,8 @@ impl core::fmt::Display for AllocationError {
 impl std::error::Error for AllocationError {}
 
 /// Describes what kind of value was being read or written in a [`MemoryAccess`].
+///
+/// [`MemoryAccess`]: crate::trap::MemoryAccess
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 #[allow(missing_docs)]
@@ -89,6 +91,27 @@ pub struct MemoryAccessError {
     pub pointee: MemoryAccessPointee,
 }
 
+impl MemoryAccessError {
+    /// Generates a trap for this invalid memory access.
+    ///
+    /// See the documentation for the [`trap::MemoryAccess`] struct for more information.
+    ///
+    /// [`trap::MemoryAccess`]: crate::trap::MemoryAccess
+    pub fn trap<TR>(self, memory: u32, bound: u64, trap: &TR) -> TR::Repr
+    where
+        TR: crate::trap::Trap + ?Sized,
+    {
+        trap.trap(crate::trap::TrapCode::MemoryBoundsCheck(
+            crate::trap::MemoryAccess {
+                pointee: self.pointee,
+                memory,
+                bound,
+                address: self.address.into(),
+            },
+        ))
+    }
+}
+
 impl core::fmt::Display for MemoryAccessError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
@@ -107,23 +130,30 @@ impl std::error::Error for MemoryAccessError {}
 /// [linear memory]: Memory32
 pub type AccessResult<T> = core::result::Result<T, MemoryAccessError>;
 
+fn unaligned_i32_load<M: Memory32 + ?Sized>(mem: &M, addr: u32) -> AccessResult<i32> {
+    let mut dst = [0u8; 4];
+    mem.copy_to_slice(addr, &mut dst)?;
+    Ok(i32::from_le_bytes(dst))
+}
+
+fn unaligned_i32_store<M: Memory32 + ?Sized>(mem: &M, addr: u32, value: i32) -> AccessResult<()> {
+    mem.copy_from_slice(addr, &value.to_le_bytes())
+}
+
 /// A [WebAssembly linear memory] with a 32-bit address space.
+///
+/// Some read and write operations take a constant alignment operation `A`, where the alignment is
+/// 2 to the power of `A`.
 ///
 /// [WebAssembly linear memory]: https://webassembly.github.io/spec/core/syntax/modules.html#memories
 pub trait Memory32 {
     /// Returns the size of the linear memory, in terms of the [`PAGE_SIZE`].
-    ///
-    /// This implements the [`memory.size`] instruction.
-    ///
-    /// [`memory.size`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
-    fn size(&self) -> i32;
+    fn size(&self) -> u32;
 
     /// Gets the maximum number of pages that this linear memory can have.
     fn limit(&self) -> u32;
 
     /// Increases the size of the linear memory by the specified number of [pages], and returns the old number of pages.
-    ///
-    /// This implements the [`memory.grow`] instruction.
     ///
     /// The default implementation for this method simply calls [`Memory32::size()`] of `delta` is
     /// `0`, and returns `-1` otherwise.
@@ -133,8 +163,7 @@ pub trait Memory32 {
     /// If the size of the memory oculd not be increased, then `-1` is returned.
     ///
     /// [pages]: PAGE_SIZE
-    /// [`memory.grow`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
-    fn grow(&self, delta: i32) -> i32 {
+    fn grow(&self, delta: u32) -> u32 {
         if delta == 0 {
             self.size()
         } else {
@@ -178,7 +207,7 @@ pub trait Memory32 {
         let end_addr = match range.end_bound() {
             Bound::Included(bound) => *bound,
             Bound::Excluded(bound) => bound.wrapping_sub(1),
-            Bound::Unbounded => ((self.size() as u32) * PAGE_SIZE).wrapping_sub(1),
+            Bound::Unbounded => (self.size() * PAGE_SIZE).wrapping_sub(1),
         };
 
         if start_addr > end_addr {
@@ -187,14 +216,64 @@ pub trait Memory32 {
 
         let mut slice =
             alloc::vec![0u8; usize::try_from(end_addr - start_addr + 1).unwrap_or(usize::MAX)];
+
         self.copy_to_slice(start_addr, &mut slice)?;
         Ok(slice.into_boxed_slice())
+    }
+
+    /// Loads a potentially aligned 32-bit integer from the given address.
+    fn i32_load<const A: u8>(&self, addr: u32) -> AccessResult<i32> {
+        unaligned_i32_load(self, addr)
+    }
+
+    /// Stores a potentially aligned 32-bit integer into the given address.
+    fn i32_store<const A: u8>(&self, addr: u32, value: i32) -> AccessResult<()> {
+        unaligned_i32_store(self, addr, value)
     }
 }
 
 //pub trait UnsharedMemory32: Memory32 + core::ops::Deref<Target = [u8]> + core::ops::DerefMut8 where Self: !Sync {}
 
-//fn i32_load
+/// This implements the [`memory.size`] instruction.
+///
+/// For more information, see the documentation for the [`Memory32::size()`] method.
+///
+/// [`memory.size`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "memory.size")]
+pub fn size<M: Memory32 + ?Sized>(mem: &M) -> i32 {
+    mem.size() as i32
+}
+
+/// This implements the [`memory.grow`] instruction.
+///
+/// For more information, see the documentation for the [`Memory32::grow()`] method.
+///
+/// [`memory.grow`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "memory.grow")]
+pub fn grow<M: Memory32 + ?Sized>(mem: &M, delta: i32) -> i32 {
+    mem.grow(delta as u32) as i32
+}
+
+/// This implements the [`i32.load`] instruction.
+///
+/// For more information, see the documentation for the [`Memory32::i32_load()`] method.
+///
+/// [`i32.load`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "i32.load")]
+pub fn i32_load<const A: u8, const IDX: u32, M, TR>(
+    mem: &M,
+    addr: i32,
+    trap: &TR,
+) -> Result<i32, TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    match mem.i32_load::<A>(addr as u32) {
+        Ok(value) => Ok(value),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
 
 struct DisplaySize(u32);
 
