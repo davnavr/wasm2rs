@@ -132,12 +132,23 @@ pub type AccessResult<T> = core::result::Result<T, MemoryAccessError>;
 
 fn unaligned_i32_load<M: Memory32 + ?Sized>(mem: &M, addr: u32) -> AccessResult<i32> {
     let mut dst = [0u8; 4];
-    mem.copy_to_slice(addr, &mut dst)?;
-    Ok(i32::from_le_bytes(dst))
+    match mem.copy_to_slice(addr, &mut dst) {
+        Ok(()) => Ok(i32::from_le_bytes(dst)),
+        Err(mut e) => {
+            e.pointee = MemoryAccessPointee::I32;
+            Err(e)
+        }
+    }
 }
 
 fn unaligned_i32_store<M: Memory32 + ?Sized>(mem: &M, addr: u32, value: i32) -> AccessResult<()> {
-    mem.copy_from_slice(addr, &value.to_le_bytes())
+    match mem.copy_from_slice(addr, &value.to_le_bytes()) {
+        Ok(()) => Ok(()),
+        Err(mut e) => {
+            e.pointee = MemoryAccessPointee::I32;
+            Err(e)
+        }
+    }
 }
 
 /// A [WebAssembly linear memory] with a 32-bit address space.
@@ -271,6 +282,28 @@ where
 {
     match mem.i32_load::<A>(addr as u32) {
         Ok(value) => Ok(value),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
+
+/// This implements the [`i32.store`] instruction.
+///
+/// For more information, see the documentation for the [`Memory32::i32_store()`] method.
+///
+/// [`i32.store`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "i32.store")]
+pub fn i32_store<const A: u8, const IDX: u32, M, TR>(
+    mem: &M,
+    addr: i32,
+    value: i32,
+    trap: &TR,
+) -> Result<(), TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    match mem.i32_store::<A>(addr as u32, value) {
+        Ok(()) => Ok(()),
         Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
     }
 }
