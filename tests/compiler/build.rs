@@ -21,5 +21,7 @@ fn main() {
     };
 
     println!("cargo:rerun-if-changed=src/simple.wat");
+    println!("cargo:rerun-if-changed=src/memory.wat");
     compile_wasm(include_str!("./src/simple.wat"), "simple");
+    compile_wasm(include_str!("./src/memory.wat"), "memory");
 }

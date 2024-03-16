@@ -52,6 +52,15 @@ fn get_block_type<'a>(
     }
 }
 
+#[derive(Clone, Copy)]
+struct MemId(u32);
+
+impl std::fmt::Display for MemId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_mem_{}", self.0)
+    }
+}
+
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
@@ -881,29 +890,85 @@ impl Translation {
         // TODO: Type parameter for imports
         write!(
             output,
-            "pub struct Instance<RT = StdRuntime> where RT: Runtime,"
+            "#[derive(Debug)]\n#[non_exhaustive]\npub struct Instance<RT = StdRuntime> where RT: Runtime,"
         )?;
 
-        // TODO: Insert global variables in struct as public fields
+        // TODO: Should exported tables/globals/memories be exposed as public fields
+        // TODO: Insert globals in struct as public fields
         writeln!(output, "{{")?;
         writeln!(output, "_rt: RT,")?;
+
+        for i in 0..types.memory_count() {
+            writeln!(output, "{}: RT::Memory{i},", MemId(i))?;
+        }
+
         writeln!(output, "}}")?;
 
+        // Generate `limits` module
+        writeln!(output, "pub mod limits {{")?;
+
+        for i in 0..types.memory_count() {
+            let mem_type = types.memory_at(i);
+            debug_assert!(!mem_type.memory64);
+
+            writeln!(
+                output,
+                "#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]\n#[repr(u32)]"
+            )?;
+            writeln!(
+                output,
+                "pub enum MinMemoryPages{i} {{ Value = {}u32, }}",
+                mem_type.initial
+            )?;
+            writeln!(
+                output,
+                "#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]\n#[repr(u32)]"
+            )?;
+            writeln!(
+                output,
+                "pub enum MaxMemoryPages{i} {{ Value = {}u32, }}",
+                mem_type.maximum.unwrap_or(u32::MAX.into())
+            )?;
+        }
+
+        writeln!(output, "}}")?;
+
+        // Generate `Runtime` trait
+        writeln!(output, "pub trait Runtime: {RT_CRATE_PATH}::trap::Trap {{")?;
+
+        for i in 0..types.memory_count() {
+            writeln!(output, "type Memory{i}: {RT_CRATE_PATH}::memory::Memory32;")?;
+            writeln!(
+                output,
+                "fn initialize{}(&self, minimum: self::limits::MinMemoryPages{i}, maximum: self::limits::MaxMemoryPages{i}) -> ::core::result::Result<Self::Memory{i}, <Self as {RT_CRATE_PATH}::trap::Trap>::Repr>;",
+                MemId(i))?;
+        }
+
+        writeln!(output, "}}")?;
+
+        // Generate `StdRuntime` struct
         writeln!(
             output,
-            "pub trait Runtime: {RT_CRATE_PATH}::trap::Trap {{}}"
+            "#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]\n#[non_exhaustive]\npub struct StdRuntime;"
         )?;
 
-        writeln!(
-            output,
-            "#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]\npub struct StdRuntime;"
-        )?;
         writeln!(output, "impl {RT_CRATE_PATH}::trap::Trap for StdRuntime {{")?;
         writeln!(output, "type Repr = ::core::convert::Infallible;")?;
         write!(output, "#[cold]\n#[inline(never)]\nfn trap(&self, code: {RT_CRATE_PATH}::trap::TrapCode) -> Self::Repr {{ ")?;
         writeln!(output, "::core::panic!(\"{{code}}\") }}")?;
         writeln!(output, "}}")?;
-        writeln!(output, "impl Runtime for StdRuntime {{}}")?;
+
+        writeln!(output, "impl Runtime for StdRuntime {{")?;
+
+        // TODO: Runtime library needs a default memory impl that defaults to array in no_std+no alloc platforms.
+        for i in 0..types.memory_count() {
+            writeln!(output, "type Memory{i} = {RT_CRATE_PATH}::memory::HeapMemory32;")?;
+            writeln!(output, "fn initialize{}(&self, minimum: self::limits::MinMemoryPages{i}, maximum: self::limits::MaxMemoryPages{i}) -> ::core::result::Result<Self::Memory{i}, ::core::convert::Infallible> {{", MemId(i))?;
+            writeln!(output, "{RT_CRATE_PATH}::memory::HeapMemory32::with_limits(minimum as u32, maximum as u32).map_err(|error| <Self as {RT_CRATE_PATH}::trap::Trap>::trap(self, {RT_CRATE_PATH}::trap::TrapCode::MemoryInstantiation {{ memory: {i}, error }}))")?;
+            writeln!(output, "}}")?;
+        }
+
+        writeln!(output, "}}")?;
 
         writeln!(output, "impl<RT: Runtime> Instance<RT> {{")?;
 
@@ -912,17 +977,25 @@ impl Translation {
             output.write_all(&buf)?;
         }
 
+        // TODO: If `RT: Default` generate `instantiate()`, rename below to `instantiate_with`
+
         // TODO: Parameter for imports
         writeln!(output, "pub fn instantiate(runtime: RT) -> ::core::result::Result<Self, <RT as {RT_CRATE_PATH}::trap::Trap>::Repr> {{")?;
         // TODO: Call start function
-        writeln!(output, "Ok(Self {{ _rt: runtime }})")?;
-        writeln!(output, "}}")?;
+        writeln!(output, "Ok(Self {{")?;
+
+        for i in 0..types.memory_count() {
+            let mem = MemId(i);
+            writeln!(output, "{mem}: runtime.initialize{mem}(self::limits::MinMemoryPages{i}::Value, self::limits::MaxMemoryPages{i}::Value)?,",)?;
+        }
+
+        writeln!(output, "_rt: runtime,\n}})\n}}")?;
 
         for buf in function_exports {
             output.write_all(&buf)?;
         }
 
-        writeln!(output, "}}}}")?;
+        writeln!(output, "}}\n}}")?;
         output.flush()?;
         Ok(())
     }

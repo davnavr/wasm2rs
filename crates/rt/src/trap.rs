@@ -44,6 +44,9 @@ impl core::fmt::Display for MemoryAccess {
     }
 }
 
+#[cfg(feature = "std")]
+impl std::error::Error for MemoryAccess {}
+
 /// Indicates why a trap occured.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
@@ -58,6 +61,13 @@ pub enum TrapCode {
     DivisionByZero,
     //UnalignedAtomicOperation
     //NullReference
+    /// Instantiating a module failed because linear memory could not be allocated.
+    MemoryInstantiation {
+        /// The index of the memory that could not be instantiated.
+        memory: u32,
+        /// The error describing why the memory could not be allocated.
+        error: crate::memory::AllocationError,
+    },
 }
 
 impl core::fmt::Display for TrapCode {
@@ -66,12 +76,21 @@ impl core::fmt::Display for TrapCode {
             Self::Unreachable => f.write_str("executed unreachable instruction"),
             Self::MemoryBoundsCheck(access) => write!(f, "out-of-bounds {}", access),
             Self::DivisionByZero => f.write_str("division by zero"),
+            Self::MemoryInstantiation { memory, error } => write!(f, "instantiation of memory #{memory} failed: {error}"),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for TrapCode {}
+impl std::error::Error for TrapCode {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::MemoryBoundsCheck(access) => Some(access),
+            Self::MemoryInstantiation { memory: _, error } => Some(error),
+            _ => None,
+        }
+    }
+}
 
 //struct TrapReason { byte_offset: Option<u64>, code: TrapCode, dwarf: Option<(&'static str, u32, u32)> }
 
