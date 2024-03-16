@@ -387,16 +387,27 @@ impl Translation {
                     );
                     let _ = writeln!(b, "{{");
                 }
-                Operator::End => match validator.control_stack_height() {
-                    0 => unreachable!(),
-                    1 if current_frame.unreachable => (),
-                    1 => write_end(
-                        validator,
+                Operator::If { blockty } => {
+                    write_block_start(
                         &mut b,
-                        EndKind::ImplicitReturn,
-                        func_result_count,
-                    ),
-                    _ => {
+                        Label(validator.control_stack_height() + 1),
+                        validator.operand_stack_height() - 1,
+                        blockty,
+                    );
+                    let _ = writeln!(b, "{{ if {} {{", pop_value(validator, 0));
+                }
+                Operator::Else => {
+                    let result_count = get_block_type(types, &current_frame.block_type)
+                        .1
+                        .len()
+                        .try_into()
+                        .expect("too many block results");
+
+                    write_end(validator, &mut b, EndKind::Block, result_count);
+                    let _ = writeln!(b, "}} else {{");
+                }
+                Operator::End => {
+                    if validator.control_stack_height() > 1 {
                         let result_count = get_block_type(types, &current_frame.block_type)
                             .1
                             .len()
@@ -406,13 +417,28 @@ impl Translation {
                         write_end(validator, &mut b, EndKind::Block, result_count);
                         let _ = write!(b, "}}");
 
+                        // Extra brackets needed to end `if`/`else`
+                        if matches!(
+                            current_frame.kind,
+                            wasmparser::FrameKind::Else | wasmparser::FrameKind::If
+                        ) {
+                            let _ = write!(b, " }}");
+                        }
+
                         let _ = if result_count > 0 {
                             writeln!(b, ";")
                         } else {
                             writeln!(b)
                         };
+                    } else if !current_frame.unreachable {
+                        write_end(
+                            validator,
+                            &mut b,
+                            EndKind::ImplicitReturn,
+                            func_result_count,
+                        );
                     }
-                },
+                }
                 // TODO: Implicit return if height is 0
                 Operator::Return => write_end(
                     validator,
@@ -437,6 +463,30 @@ impl Translation {
                         &mut b,
                         "let {} = {value}i32;",
                         StackValue(validator.operand_stack_height()),
+                    );
+                }
+                Operator::I32Eqz | Operator::I64Eqz => {
+                    let result_value = pop_value(validator, 1);
+                    let _ = writeln!(&mut b, "let {} = {} == 0;", result_value, result_value);
+                }
+                Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => {
+                    let result_value = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {} = {} == {};",
+                        result_value,
+                        result_value,
+                        pop_value(validator, 0)
+                    );
+                }
+                Operator::I32Ne | Operator::I64Ne | Operator::F32Ne | Operator::F64Ne => {
+                    let result_value = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {} = {} == {};",
+                        result_value,
+                        result_value,
+                        pop_value(validator, 0)
                     );
                 }
                 Operator::I32Add => {

@@ -15,5 +15,13 @@
   (func (export "unreachable_instruction") (result i32)
     unreachable)
 
-  ;; (func (export "is_life") (param i32) (result i32) if)
+  (func (export "life") (param i32) (result i32)
+    local.get 0
+    i32.const 42
+    i32.eq
+    if (result i32)
+      i32.const 0x42424242
+    else
+      i32.const 0xDEAD
+  	end)
 )

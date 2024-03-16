@@ -10,6 +10,13 @@ fn add_five_works() {
 }
 
 #[test]
+fn if_else_block() {
+    let inst = wasm::Instance::instantiate(wasm::StdRuntime::default()).unwrap();
+    assert_eq!(inst.life(42), Ok(0x4242_4242));
+    assert_eq!(inst.life(43), Ok(0xDEAD));
+}
+
+#[test]
 #[should_panic]
 fn unreachable_panic() {
     let inst = wasm::Instance::instantiate(wasm::StdRuntime::default()).unwrap();
