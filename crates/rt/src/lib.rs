@@ -19,4 +19,5 @@ extern crate std;
 extern crate alloc;
 
 pub mod math;
+pub mod memory;
 pub mod trap;

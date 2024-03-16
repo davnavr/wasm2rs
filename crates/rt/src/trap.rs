@@ -2,32 +2,20 @@
 //!
 //! [WebAssembly traps]: https://webassembly.github.io/spec/core/intro/overview.html#trap
 
-/// Describes what kind of value was being read or written in a [`MemoryAccess`].
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[non_exhaustive]
-#[allow(missing_docs)]
-pub enum MemoryAccessKind {
-    I8,
-    I16,
-    I32,
-    I64,
-    F32,
-    F64,
-    V128,
-    /// Used for other memory instructions (e.g. **`memory.copy`** or **`memory.fill`**).
-    Other,
-}
-
 /// Describes a memory access that resulted in a trap.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct MemoryAccess {
-    #[allow(missing_docs)]
-    pub kind: MemoryAccessKind,
-    /// The index of the memory into which the access occured.
+    /// The type of the value that the `address` refers to.
+    pub pointee: crate::memory::MemoryAccessPointee,
+    /// The index of the [linear memory] with which the access occured.
+    ///
+    /// [linear memory]: crate::memory::Memory32
     pub memory: u32,
     /// The address that was out-of-bounds or misaligned.
     pub address: u64,
     /// The size of the [`memory`], in bytes, at the time the access occured.
+    ///
+    /// [`memory`]: MemoryAccess::memory
     pub bound: u64,
 }
 
@@ -45,25 +33,10 @@ impl core::fmt::Display for MemoryAccess {
             }
         }
 
-        f.write_str("read/write")?;
-
-        if self.kind != MemoryAccessKind::Other {
-            f.write_str(" of ")?;
-            match self.kind {
-                MemoryAccessKind::I8 => f.write_str("i8")?,
-                MemoryAccessKind::I16 => f.write_str("i16")?,
-                MemoryAccessKind::I32 => f.write_str("i32")?,
-                MemoryAccessKind::I64 => f.write_str("i64")?,
-                MemoryAccessKind::F32 => f.write_str("f32")?,
-                MemoryAccessKind::F64 => f.write_str("f64")?,
-                MemoryAccessKind::V128 => f.write_str("v128")?,
-                MemoryAccessKind::Other => (),
-            }
-        }
-
         write!(
             f,
-            " at address {} into memory #{} with size {}",
+            "read/write of {} at address {} into memory #{} with size {}",
+            self.pointee,
             Address(self.address),
             self.memory,
             Address(self.bound)
