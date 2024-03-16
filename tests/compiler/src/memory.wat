@@ -15,15 +15,16 @@
 
   (func (export "grow_then_write") (result i32)
     (local $old_size i32)
+    (local $address i32)
     (local.set $old_size (memory.size))
-    (i32.mul (local.get $old_size) (i32.const 65536))
+    (local.set $address (i32.mul (local.get $old_size) (i32.const 65536)))
 
-    ;; grow then write to this address
-    ;; (memory.grow (i32.add (i32.const 1) (local.get $old_size)))
+    (memory.grow (i32.add (i32.const 1) (local.get $old_size)))
 
-    ;; i32.const 0xBABA
-    ;; i32.store
+    (local.get $address)
+    i32.const 0xBABA
+    i32.store
 
-    ;; (i32.load (i32.const 0xBABA))
+    (i32.load (local.get $address))
     )
 )

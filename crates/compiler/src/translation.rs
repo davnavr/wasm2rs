@@ -597,8 +597,16 @@ impl Translation {
                 Operator::MemorySize { mem, mem_byte: _ } => {
                     let _ = writeln!(
                         &mut b,
-                        "let {} = {RT_CRATE_PATH}::memory::size(&self.{});",
+                        "let {}: i32 = {RT_CRATE_PATH}::memory::size(&self.{});",
                         StackValue(validator.operand_stack_height()),
+                        MemId(mem),
+                    );
+                }
+                Operator::MemoryGrow { mem, mem_byte: _ } => {
+                    let operand = pop_value(validator, 0);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {operand:#}: i32 = {RT_CRATE_PATH}::memory::grow(&self.{}, operand);",
                         MemId(mem),
                     );
                 }
