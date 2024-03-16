@@ -7,4 +7,8 @@
 
   (func (export "read_my_int") (result i32)
     i32.const 500
+    i32.load)
+
+  (func (export "out_of_bounds_read") (result i32)
+    i32.const 65536
     i32.load))
