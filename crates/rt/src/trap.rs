@@ -76,7 +76,9 @@ impl core::fmt::Display for TrapCode {
             Self::Unreachable => f.write_str("executed unreachable instruction"),
             Self::MemoryBoundsCheck(access) => write!(f, "out-of-bounds {}", access),
             Self::DivisionByZero => f.write_str("division by zero"),
-            Self::MemoryInstantiation { memory, error } => write!(f, "instantiation of memory #{memory} failed: {error}"),
+            Self::MemoryInstantiation { memory, error } => {
+                write!(f, "instantiation of memory #{memory} failed: {error}")
+            }
         }
     }
 }

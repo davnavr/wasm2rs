@@ -192,12 +192,18 @@ impl Translation {
                 validator.define_locals(locals_reader.original_position(), count, ty)?;
 
                 for _ in 0..count {
+                    let default_value = match ty {
+                        wasmparser::ValType::I32 | wasmparser::ValType::I64 => "0",
+                        _ => "Default::default()",
+                    };
+
                     let _ = writeln!(
                         &mut b,
-                        "let mut {}: {} = Default::default();",
+                        "let mut {}: {} = {default_value};",
                         LocalVar(local_index),
-                        ValType(ty)
+                        ValType(ty),
                     );
+
                     local_index += 1;
                 }
             }
@@ -962,7 +968,10 @@ impl Translation {
 
         // TODO: Runtime library needs a default memory impl that defaults to array in no_std+no alloc platforms.
         for i in 0..types.memory_count() {
-            writeln!(output, "type Memory{i} = {RT_CRATE_PATH}::memory::HeapMemory32;")?;
+            writeln!(
+                output,
+                "type Memory{i} = {RT_CRATE_PATH}::memory::HeapMemory32;"
+            )?;
             writeln!(output, "fn initialize{}(&self, minimum: self::limits::MinMemoryPages{i}, maximum: self::limits::MaxMemoryPages{i}) -> ::core::result::Result<Self::Memory{i}, ::core::convert::Infallible> {{", MemId(i))?;
             writeln!(output, "{RT_CRATE_PATH}::memory::HeapMemory32::with_limits(minimum as u32, maximum as u32).map_err(|error| <Self as {RT_CRATE_PATH}::trap::Trap>::trap(self, {RT_CRATE_PATH}::trap::TrapCode::MemoryInstantiation {{ memory: {i}, error }}))")?;
             writeln!(output, "}}")?;
