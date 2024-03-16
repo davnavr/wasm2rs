@@ -426,7 +426,7 @@ impl Translation {
                         writeln!(b)
                     };
                 }
-                Operator::Nop => (),
+                Operator::Nop | Operator::Drop => (),
                 Operator::Block { blockty } => {
                     let _ = write_block_start(
                         &mut b,
@@ -606,7 +606,7 @@ impl Translation {
                     let operand = pop_value(validator, 0);
                     let _ = writeln!(
                         &mut b,
-                        "let {operand:#}: i32 = {RT_CRATE_PATH}::memory::grow(&self.{}, operand);",
+                        "let {operand:#}: i32 = {RT_CRATE_PATH}::memory::grow(&self.{}, {operand});",
                         MemId(mem),
                     );
                 }

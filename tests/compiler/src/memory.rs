@@ -13,3 +13,9 @@ fn bounds_checking() {
     let inst = wasm::Instance::instantiate(wasm::StdRuntime::default()).unwrap();
     let _ = inst.out_of_bounds_read();
 }
+
+#[test]
+fn growing() {
+    let inst = wasm::Instance::instantiate(wasm::StdRuntime::default()).unwrap();
+    assert_eq!(inst.grow_then_write(), Ok(0xBABA));
+}
