@@ -594,6 +594,14 @@ impl Translation {
                         memarg.offset
                     );
                 }
+                Operator::MemorySize { mem, mem_byte: _ } => {
+                    let _ = writeln!(
+                        &mut b,
+                        "let {} = {RT_CRATE_PATH}::memory::size(&self.{});",
+                        StackValue(validator.operand_stack_height()),
+                        MemId(mem),
+                    );
+                }
                 Operator::I32Const { value } => {
                     let _ = writeln!(
                         &mut b,
@@ -645,6 +653,14 @@ impl Translation {
                     let _ = writeln!(
                         &mut b,
                         "let {result_value:#} = i32::wrapping_sub({result_value}, {});",
+                        pop_value(validator, 0)
+                    );
+                }
+                Operator::I32Mul => {
+                    let result_value = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {result_value:#} = i32::wrapping_mul({result_value}, {});",
                         pop_value(validator, 0)
                     );
                 }
