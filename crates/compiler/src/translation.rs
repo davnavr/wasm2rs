@@ -5,7 +5,7 @@ impl std::fmt::Display for ValType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             wasmparser::ValType::I32 => f.write_str("i32"),
-            wasmparser::ValType::I64 => f.write_str("f64"),
+            wasmparser::ValType::I64 => f.write_str("i64"),
             other => todo!("how to write {other}?"),
         }
     }
@@ -235,6 +235,7 @@ impl Translation {
             }
         };
 
+        #[derive(Clone, Copy)]
         struct Label(u32);
 
         impl std::fmt::Display for Label {
@@ -243,9 +244,36 @@ impl Translation {
             }
         }
 
+        #[must_use]
+        struct BlockInputs {
+            label: Label,
+            count: u32,
+        }
+
+        impl BlockInputs {
+            fn write(self, b: &mut Vec<u8>) {
+                for i in 0..self.count {
+                    let operand = StackValue(i);
+                    let _ = writeln!(b, "let _b{}{operand} = {operand};", self.label.0);
+                }
+            }
+        }
+
         let write_block_start = |b: &mut Vec<u8>, label: Label, operand_height, ty| {
-            let result_count =
-                u32::try_from(get_block_type(types, &ty).1.len()).expect("too many results");
+            let (argument_types, result_types) = get_block_type(types, &ty);
+            let argument_count = u32::try_from(argument_types.len()).expect("too many parameters");
+            let result_count = u32::try_from(result_types.len()).expect("too many results");
+            let result_start_height = operand_height - argument_count;
+
+            for (i, param_ty) in (0..argument_count).zip(argument_types) {
+                let operand = StackValue(operand_height - i - 1);
+                let _ = writeln!(
+                    b,
+                    "let mut _b{}{operand}: {} = {operand};",
+                    label.0,
+                    ValType(*param_ty)
+                );
+            }
 
             if result_count > 0 {
                 let _ = write!(b, "let ");
@@ -262,7 +290,10 @@ impl Translation {
                     let _ = write!(
                         b,
                         "{}",
-                        StackValue(i.checked_add(operand_height).expect("too many results"))
+                        StackValue(
+                            i.checked_add(result_start_height)
+                                .expect("too many results")
+                        )
                     );
                 }
 
@@ -274,17 +305,23 @@ impl Translation {
             }
 
             let _ = write!(b, " {label}: ");
+            BlockInputs {
+                label,
+                count: argument_count,
+            }
         };
 
-        enum EndKind {
+        #[derive(Clone, Copy)]
+        enum BranchKind {
             ExplicitReturn,
             ImplicitReturn,
             Block,
             Loop(Label),
-            //Branch(Label)
+            /// Branch out of a `block` or `if`/`else` block.
+            Branch(Label),
         }
 
-        impl EndKind {
+        impl BranchKind {
             fn write_start(&self, b: &mut Vec<u8>) {
                 match self {
                     Self::ExplicitReturn => {
@@ -294,58 +331,60 @@ impl Translation {
                         let _ = write!(b, "Ok(");
                     }
                     Self::Block => (),
-                    Self::Loop(label) => {
+                    Self::Loop(label) | Self::Branch(label) => {
                         let _ = write!(b, "break {label} ");
                     }
                 }
             }
         }
 
-        // TODO: Rename to write_control_flow
-        // For `return` and `end` instructions
-        let write_end = |validator: &_, b: &mut Vec<u8>, kind: EndKind, result_count| {
-            if result_count == 0u32 {
-                let _ = match kind {
-                    EndKind::ExplicitReturn => writeln!(b, "return Ok(());"),
-                    EndKind::ImplicitReturn => writeln!(b, "Ok(())"),
-                    EndKind::Block => writeln!(b),
-                    EndKind::Loop(label) => writeln!(b, "break {label};"),
-                };
-                return;
-            }
-
-            if result_count == 1 {
-                kind.write_start(b);
-                let _ = write!(b, "{}", pop_value(validator, 0));
-            } else {
-                for i in 0..result_count {
-                    let _ = writeln!(
-                        b,
-                        "let _r{} = {};",
-                        result_count - i - 1,
-                        pop_value(validator, i),
-                    );
-                }
-
-                kind.write_start(b);
-                let _ = write!(b, "(");
-                for i in 0..result_count {
-                    if i > 0 {
-                        let _ = write!(b, ", ");
+        // For `return`, `end`, and `br` instructions
+        let write_control_flow =
+            |validator: &_, b: &mut Vec<u8>, kind: BranchKind, result_count| {
+                if result_count == 0u32 {
+                    let _ = match kind {
+                        BranchKind::ExplicitReturn => writeln!(b, "return Ok(());"),
+                        BranchKind::ImplicitReturn => writeln!(b, "Ok(())"),
+                        BranchKind::Block => writeln!(b),
+                        BranchKind::Loop(label) | BranchKind::Branch(label) => {
+                            writeln!(b, "break {label};")
+                        }
+                    };
+                    return;
+                } else if result_count == 1 {
+                    kind.write_start(b);
+                    let _ = write!(b, "{}", pop_value(validator, 0));
+                } else {
+                    for i in 0..result_count {
+                        let _ = writeln!(
+                            b,
+                            "let _r{} = {};",
+                            result_count - i - 1,
+                            pop_value(validator, i),
+                        );
                     }
 
-                    let _ = write!(b, "_r{i}");
-                }
-                let _ = write!(b, ")");
-            }
+                    kind.write_start(b);
+                    let _ = write!(b, "(");
+                    for i in 0..result_count {
+                        if i > 0 {
+                            let _ = write!(b, ", ");
+                        }
 
-            let _ = match kind {
-                EndKind::ExplicitReturn => writeln!(b, ");"),
-                EndKind::ImplicitReturn => writeln!(b, ")"),
-                EndKind::Block => writeln!(b),
-                EndKind::Loop(_) => writeln!(b, ";"),
+                        let _ = write!(b, "_r{i}");
+                    }
+                    let _ = write!(b, ")");
+                }
+
+                let _ = match kind {
+                    BranchKind::ExplicitReturn => writeln!(b, ");"),
+                    BranchKind::ImplicitReturn => writeln!(b, ")"),
+                    BranchKind::Block => writeln!(b),
+                    BranchKind::Loop(_) | BranchKind::Branch(_) => {
+                        writeln!(b, ";")
+                    }
+                };
             };
-        };
 
         let mut operators_reader = body.get_operators_reader()?;
         while !operators_reader.eof() {
@@ -381,7 +420,7 @@ impl Translation {
                 }
                 Operator::Nop => (),
                 Operator::Block { blockty } => {
-                    write_block_start(
+                    let _ = write_block_start(
                         &mut b,
                         Label(validator.control_stack_height() + 1),
                         validator.operand_stack_height(),
@@ -391,7 +430,7 @@ impl Translation {
                     let _ = writeln!(b, "{{");
                 }
                 Operator::Loop { blockty } => {
-                    write_block_start(
+                    let inputs = write_block_start(
                         &mut b,
                         Label(validator.control_stack_height() + 1),
                         validator.operand_stack_height(),
@@ -399,15 +438,17 @@ impl Translation {
                     );
 
                     let _ = writeln!(b, "loop {{");
+                    inputs.write(&mut b);
                 }
                 Operator::If { blockty } => {
-                    write_block_start(
+                    let _ = write_block_start(
                         &mut b,
                         Label(validator.control_stack_height() + 1),
                         validator.operand_stack_height() - 1,
                         blockty,
                     );
-                    let _ = writeln!(b, "{{ if {} {{", pop_value(validator, 0));
+
+                    let _ = writeln!(b, "{{ if {} != 0i32 {{", pop_value(validator, 0));
                 }
                 Operator::Else => {
                     let result_count = get_block_type(types, &current_frame.block_type)
@@ -416,7 +457,7 @@ impl Translation {
                         .try_into()
                         .expect("too many block results");
 
-                    write_end(validator, &mut b, EndKind::Block, result_count);
+                    write_control_flow(validator, &mut b, BranchKind::Block, result_count);
                     let _ = writeln!(b, "}} else {{");
                 }
                 Operator::End => {
@@ -429,13 +470,13 @@ impl Translation {
 
                         // Generate code to write to result variables
                         if !current_frame.unreachable {
-                            write_end(
+                            write_control_flow(
                                 validator,
                                 &mut b,
                                 if current_frame.kind != wasmparser::FrameKind::Loop {
-                                    EndKind::Block
+                                    BranchKind::Block
                                 } else {
-                                    EndKind::Loop(Label(validator.control_stack_height()))
+                                    BranchKind::Loop(Label(validator.control_stack_height()))
                                 },
                                 result_count,
                             );
@@ -448,30 +489,57 @@ impl Translation {
                             current_frame.kind,
                             wasmparser::FrameKind::Else | wasmparser::FrameKind::If
                         ) {
-                            let _ = write!(b, " }}");
+                            let _ = write!(b, "}}");
                         }
 
-                        let _ = if result_count > 0 && !current_frame.unreachable {
+                        let _ = if result_count > 0 {
                             writeln!(b, ";")
                         } else {
                             writeln!(b)
                         };
                     } else if !current_frame.unreachable {
-                        write_end(
+                        write_control_flow(
                             validator,
                             &mut b,
-                            EndKind::ImplicitReturn,
+                            BranchKind::ImplicitReturn,
                             func_result_count,
                         );
                     }
                 }
-                Operator::Return => write_end(
+                Operator::Br { relative_depth } => {
+                    if let Some(frame) = validator.get_control_frame(relative_depth as usize) {
+                        // `validator` will handle bad labels
+                        let (block_parameters, block_results) =
+                            get_block_type(types, &frame.block_type);
+
+                        let label = Label(validator.control_stack_height() - relative_depth);
+                        if frame.kind == wasmparser::FrameKind::Loop {
+                            for i in 0..u32::try_from(block_parameters.len()).unwrap() {
+                                //let _ = writeln!(b, "_b{}{} = {}", label.0, );
+                                todo!("loop block inputs not yet supported")
+                            }
+
+                            let _ = writeln!(b, "continue {label};");
+                        } else {
+                            write_control_flow(
+                                validator,
+                                &mut b,
+                                BranchKind::Branch(label),
+                                block_results
+                                    .len()
+                                    .try_into()
+                                    .expect("too many types for branch"),
+                            );
+                        }
+                    }
+                }
+                Operator::Return => write_control_flow(
                     validator,
                     &mut b,
                     if validator.control_stack_height() == 1 {
-                        EndKind::ImplicitReturn
+                        BranchKind::ImplicitReturn
                     } else {
-                        EndKind::ExplicitReturn
+                        BranchKind::ExplicitReturn
                     },
                     func_result_count,
                 ),
@@ -506,14 +574,18 @@ impl Translation {
                     );
                 }
                 Operator::I32Eqz | Operator::I64Eqz => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(&mut b, "let {:#} = {} == 0;", result_value, result_value);
+                    let result_value = pop_value(validator, 0);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {:#} = ({} == 0) as i32;",
+                        result_value, result_value
+                    );
                 }
                 Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => {
                     let result_value = pop_value(validator, 1);
                     let _ = writeln!(
                         &mut b,
-                        "let {result_value:#} = {result_value} == {};",
+                        "let {result_value:#} = ({result_value} == {}) as i32;",
                         pop_value(validator, 0)
                     );
                 }
@@ -521,7 +593,7 @@ impl Translation {
                     let result_value = pop_value(validator, 1);
                     let _ = writeln!(
                         &mut b,
-                        "let {result_value:#} = {result_value} == {};",
+                        "let {result_value:#} = ({result_value} != {}) as i32;",
                         pop_value(validator, 0)
                     );
                 }
@@ -530,6 +602,14 @@ impl Translation {
                     let _ = writeln!(
                         &mut b,
                         "let {result_value:#} = i32::wrapping_add({result_value}, {});",
+                        pop_value(validator, 0)
+                    );
+                }
+                Operator::I32Sub => {
+                    let result_value = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {result_value:#} = i32::wrapping_sub({result_value}, {});",
                         pop_value(validator, 0)
                     );
                 }
