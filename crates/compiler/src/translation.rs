@@ -278,8 +278,9 @@ impl Translation {
         enum EndKind {
             ExplicitReturn,
             ImplicitReturn,
-            //Branch(Label)
             Block,
+            Loop(Label),
+            //Branch(Label)
         }
 
         impl EndKind {
@@ -292,10 +293,14 @@ impl Translation {
                         let _ = write!(b, "Ok(");
                     }
                     Self::Block => (),
+                    Self::Loop(label) => {
+                        let _ = write!(b, "break {label} ");
+                    }
                 }
             }
         }
 
+        // TODO: Rename to write_control_flow
         // For `return` and `end` instructions
         let write_end = |validator: &_, b: &mut Vec<u8>, kind: EndKind, result_count| {
             if result_count == 0u32 {
@@ -303,6 +308,7 @@ impl Translation {
                     EndKind::ExplicitReturn => writeln!(b, "return Ok(());"),
                     EndKind::ImplicitReturn => writeln!(b, "Ok(())"),
                     EndKind::Block => writeln!(b),
+                    EndKind::Loop(label) => writeln!(b, "break {label};"),
                 };
                 return;
             }
@@ -333,15 +339,10 @@ impl Translation {
             }
 
             let _ = match kind {
-                EndKind::ExplicitReturn => {
-                    writeln!(b, ");")
-                }
-                EndKind::ImplicitReturn => {
-                    writeln!(b, ")")
-                }
-                EndKind::Block => {
-                    writeln!(b)
-                }
+                EndKind::ExplicitReturn => writeln!(b, ");"),
+                EndKind::ImplicitReturn => writeln!(b, ")"),
+                EndKind::Block => writeln!(b),
+                EndKind::Loop(_) => writeln!(b, ";"),
             };
         };
 
@@ -385,7 +386,18 @@ impl Translation {
                         validator.operand_stack_height(),
                         blockty,
                     );
+
                     let _ = writeln!(b, "{{");
+                }
+                Operator::Loop { blockty } => {
+                    write_block_start(
+                        &mut b,
+                        Label(validator.control_stack_height() + 1),
+                        validator.operand_stack_height(),
+                        blockty,
+                    );
+
+                    let _ = writeln!(b, "loop {{");
                 }
                 Operator::If { blockty } => {
                     write_block_start(
@@ -414,7 +426,20 @@ impl Translation {
                             .try_into()
                             .expect("too many block results");
 
-                        write_end(validator, &mut b, EndKind::Block, result_count);
+                        // Generate code to write to result variables
+                        if !current_frame.unreachable {
+                            write_end(
+                                validator,
+                                &mut b,
+                                if current_frame.kind != wasmparser::FrameKind::Loop {
+                                    EndKind::Block
+                                } else {
+                                    EndKind::Loop(Label(validator.control_stack_height()))
+                                },
+                                result_count,
+                            );
+                        }
+
                         let _ = write!(b, "}}");
 
                         // Extra brackets needed to end `if`/`else`
@@ -425,7 +450,7 @@ impl Translation {
                             let _ = write!(b, " }}");
                         }
 
-                        let _ = if result_count > 0 {
+                        let _ = if result_count > 0 && !current_frame.unreachable {
                             writeln!(b, ";")
                         } else {
                             writeln!(b)
@@ -439,7 +464,6 @@ impl Translation {
                         );
                     }
                 }
-                // TODO: Implicit return if height is 0
                 Operator::Return => write_end(
                     validator,
                     &mut b,
