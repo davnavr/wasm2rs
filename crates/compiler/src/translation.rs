@@ -72,7 +72,7 @@ pub struct Translation<'a> {
     //thread_pool: Option<rayon::ThreadPool>,
     //runtime_crate_path: CratePath,
     //visibility: Public|Crate(Option<Path>),
-    generated_module_name: &'a str,
+    generated_module_name: crate::rust::SafeIdent<'a>,
 }
 
 impl Default for Translation<'_> {
@@ -109,14 +109,16 @@ impl<'a> Translation<'a> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
         Self {
-            generated_module_name: "wasm",
+            generated_module_name: crate::rust::SafeIdent::from("wasm"),
         }
     }
 
     /// Sets the name of the Rust module that is generated to contain all of the translated code.
-    pub fn generated_module_name(&mut self, name: &'a str) -> &mut Self {
-        // TODO: This should take a rust::Ident or something
-        self.generated_module_name = name;
+    pub fn generated_module_name<N>(&mut self, name: N) -> &mut Self
+    where
+        N: Into<crate::rust::SafeIdent<'a>>,
+    {
+        self.generated_module_name = name.into();
         self
     }
 
@@ -737,11 +739,7 @@ impl<'a> Translation<'a> {
     ) -> crate::Result<()> {
         use std::io::Write as _;
 
-        let _ = write!(
-            buf,
-            "pub fn {}(&self, ",
-            crate::rust::Ident::new(name).expect("TODO: implement name mangling")
-        );
+        let _ = write!(buf, "pub fn {}(&self, ", crate::rust::SafeIdent::from(name),);
 
         let func_type = get_function_type(types.get(types.core_function_at(index)).unwrap());
         self.write_function_signature(func_type, buf)?;
@@ -1061,6 +1059,7 @@ impl<'a> Translation<'a> {
 
         writeln!(output, "_rt: runtime,\n}})\n}}")?;
 
+        // Write exports
         for buf in function_exports {
             output.write_all(&buf)?;
         }

@@ -108,11 +108,13 @@ pub struct SafeIdent<'a>(SafeIdentKind<'a>);
 
 impl<'a> From<Ident<'a>> for SafeIdent<'a> {
     fn from(ident: Ident<'a>) -> Self {
-        Self(if !ident.is_escaped() && ident.name().starts_with(MANGLE_START) {
-            SafeIdentKind::Mangled(MangledIdent(ident.name()))
-        } else {
-            SafeIdentKind::Valid(ident)
-        })
+        Self(
+            if !ident.is_escaped() && ident.name().starts_with(MANGLE_START) {
+                SafeIdentKind::Mangled(MangledIdent(ident.name()))
+            } else {
+                SafeIdentKind::Valid(ident)
+            },
+        )
     }
 }
 
