@@ -33,7 +33,7 @@ impl<'a> Ident<'a> {
             } else if start.is_ascii_lowercase() {
                 // Assumes any identifier that consists only of ASCII lowercase is a keyword.
                 // If it is just a single character, then it definitely isn't a keyword though.
-                name.len() > 1
+                name.len() > 1 && !name.contains(|c: char| c.is_ascii_digit())
             } else {
                 // Invalid start of identifier
                 return None;
@@ -123,7 +123,11 @@ impl<'a> From<SafeIdent<'a>> for AnyIdent<'a> {
 
 impl<'a> From<&'a str> for AnyIdent<'a> {
     fn from(name: &'a str) -> Self {
-        Self::from(SafeIdent::from(name))
+        if let Some(ident) = Ident::new(name) {
+            Self::Valid(ident)
+        } else {
+            Self::Mangled(MangledIdent(name))
+        }
     }
 }
 
