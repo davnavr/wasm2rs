@@ -2,8 +2,10 @@
 
 mod ident;
 mod keyword;
+mod path;
 mod writer;
 
-pub use ident::{Ident, MangledIdent, SafeIdent};
+pub use ident::{AnyIdent, Ident, MangledIdent, SafeIdent};
 pub use keyword::Keyword;
+pub use path::Path;
 pub use writer::Writer;
