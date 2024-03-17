@@ -1,3 +1,7 @@
-This directory will eventually contain the [WebAssembly test suite] in the `suite` submodule.
+This directory tests the compliance of `wasm2rs` with the [WebAssembly specification test suite].
 
-[WebAssembly test suite]: https://github.com/WebAssembly/testsuite
+Currently, only a small selection of test files are explicitly included. As more WebAssembly
+features are implemented by `wasm2rs`, this will change to a list of test files to *exclude*
+instead.
+
+[WebAssembly specification test suite]: https://github.com/WebAssembly/testsuite

@@ -2,7 +2,7 @@ alias f := fmt
 alias d := doc
 
 check: fmt
-    cargo clippy --workspace --exclude wasm2rs-compiler-tests
+    cargo clippy
     cargo clippy --package wasm2rs-rt --no-default-features --features alloc
     cargo clippy --package wasm2rs-rt --no-default-features
 

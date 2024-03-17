@@ -9,7 +9,9 @@ members = [
     "crates/compiler",
     "crates/rt",
     "tests/compiler",
+    "tests/spec",
 ]
+default-members = ["crates/compiler", "crates/rt"]
 
 [workspace.dependencies]
 wasm2rs-rt = { path = "crates/rt" }
