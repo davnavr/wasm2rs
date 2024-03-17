@@ -4,6 +4,6 @@ mod ident;
 mod keyword;
 mod writer;
 
-pub use ident::Ident;
+pub use ident::{Ident, MangledIdent, SafeIdent};
 pub use keyword::Keyword;
 pub use writer::Writer;
