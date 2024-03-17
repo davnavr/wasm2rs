@@ -10,6 +10,7 @@ impl std::fmt::Display for ValType {
         }
     }
 }
+
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 struct LocalVar(u32);
@@ -66,20 +67,21 @@ impl std::fmt::Display for MemId {
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
 /// [Rust source file]: https://doc.rust-lang.org/reference/crates-and-source-files.html
 #[derive(Debug)]
-pub struct Translation {
+pub struct Translation<'a> {
     //buffers: dyn Fn() -> Vec<u8>,
     //thread_pool: Option<rayon::ThreadPool>,
     //runtime_crate_path: CratePath,
     //visibility: Public|Crate(Option<Path>),
+    generated_module_name: &'a str,
 }
 
-impl Default for Translation {
+impl Default for Translation<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Translation {
+impl<'a> Translation<'a> {
     const SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
         mutable_global: false,
         saturating_float_to_int: false,
@@ -106,7 +108,16 @@ impl Translation {
 
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            generated_module_name: "wasm",
+        }
+    }
+
+    /// Sets the name of the Rust module that is generated to contain all of the translated code.
+    pub fn generated_module_name(&mut self, name: &'a str) -> &mut Self {
+        // TODO: This should take a rust::Ident or something
+        self.generated_module_name = name;
+        self
     }
 
     fn write_function_signature(
@@ -753,8 +764,10 @@ impl Translation {
     ///
     /// If the `rayon` feature is enabled, portions of the parsing, validation, and translation
     /// process may be run in parallel.
+    ///
+    /// [`Write`]: std::io::Write
     pub fn compile_from_buffer(
-        self,
+        &self,
         wasm: &[u8],
         output: &mut dyn std::io::Write,
     ) -> crate::Result<()> {
@@ -939,7 +952,7 @@ impl Translation {
             "#[allow(unused_labels)]\n#[allow(unreachable_code)]"
         )?;
 
-        writeln!(output, "pub mod wasm {{")?;
+        writeln!(output, "pub mod {} {{", self.generated_module_name)?;
 
         // TODO: Type parameter for imports
         write!(

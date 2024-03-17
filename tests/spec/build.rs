@@ -48,7 +48,7 @@ fn main() {
         let _ = writeln!(&mut rs_file, "// Generated from {wast_path:?}");
 
         for directive in wast.directives {
-            // Generation of test cases is blocked on 1) export name mangling 2) renaming of generated module
+            // Generation of test cases is blocked on export name mangling
             let (line, col) = directive.span().linecol_in(wast_text);
             println!(
                 "cargo:warning={}:{line}:{col} : unsupported directive was skipped",
