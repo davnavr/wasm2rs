@@ -101,13 +101,38 @@ fn main() {
             }
         }
 
+        enum SpecTrapReason {
+            IntegerDivideByZero,
+        }
+
+        impl std::fmt::Display for SpecTrapReason {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    Self::IntegerDivideByZero => f.write_str("DivisionByZero"),
+                }
+            }
+        }
+
+        enum SpecFunctionResults {
+            Values(Vec<SpecValue>),
+            Trap(SpecTrapReason),
+        }
+
+        impl SpecFunctionResults {
+            fn trap_with_message(message: &str) -> Option<Self> {
+                Some(Self::Trap(match message {
+                    "integer divide by zero" => SpecTrapReason::IntegerDivideByZero,
+                    _ => return None,
+                }))
+            }
+        }
+
         enum SpecTestKind {
             Function {
                 arguments: Vec<SpecValue>,
-                results: Vec<SpecValue>,
+                results: SpecFunctionResults,
             },
             //Global
-            //Trap { code: TrapCode }
         }
 
         struct SpecTest<'a> {
@@ -156,13 +181,60 @@ fn main() {
                     Self::Parsed { .. } => unreachable!(),
                 }
             }
+
+            fn get_current(
+                wat: &mut Option<Self>,
+                span: wast::token::Span,
+            ) -> Result<&mut SpecModule<'a>, AssertTranslationError> {
+                wat.as_mut()
+                    .ok_or_else(|| {
+                        AssertTranslationError::with_span(span, "missing module for assertion")
+                    })?
+                    .encode()
+                    .map_err(|e| AssertTranslationError::with_span(span, format!("{e}")))
+            }
         }
 
         let mut spec_module_list = Vec::new();
         let mut module_count = 0usize;
         let mut current_wat = None;
 
-        let mut write_directive = |directive| -> Result<(), std::borrow::Cow<'_, str>> {
+        struct AssertTranslationError {
+            span: Option<wast::token::Span>,
+            message: std::borrow::Cow<'static, str>,
+        }
+
+        impl AssertTranslationError {
+            fn with_span<M>(span: wast::token::Span, message: M) -> Self
+            where
+                M: Into<std::borrow::Cow<'static, str>>,
+            {
+                Self {
+                    span: Some(span),
+                    message: message.into(),
+                }
+            }
+        }
+
+        impl From<String> for AssertTranslationError {
+            fn from(message: String) -> Self {
+                Self {
+                    span: None,
+                    message: message.into(),
+                }
+            }
+        }
+
+        impl From<&'static str> for AssertTranslationError {
+            fn from(message: &'static str) -> Self {
+                Self {
+                    span: None,
+                    message: message.into(),
+                }
+            }
+        }
+
+        let mut write_directive = |directive| {
             use wast::WastDirective;
 
             match directive {
@@ -183,22 +255,18 @@ fn main() {
                     }
                 }
                 WastDirective::AssertReturn {
-                    span: _,
+                    span,
                     exec,
                     results,
                 } => {
-                    let wat = current_wat
-                        .as_mut()
-                        .ok_or_else(|| "missing module for assertion")?
-                        .encode()
-                        .map_err(|e| format!("{e}"))?;
-
+                    let wat = CurrentWat::get_current(&mut current_wat, span)?;
                     match exec {
                         wast::WastExecute::Invoke(invoke) => {
                             if invoke.module.is_some() {
-                                return Err(
-                                    "assertion with named module is not yet supported".into()
-                                );
+                                return Err(AssertTranslationError::with_span(
+                                    span,
+                                    "assertion with named module is not yet supported",
+                                ));
                             } else {
                                 wat.tests.push(SpecTest {
                                     export_name: invoke.name,
@@ -208,16 +276,63 @@ fn main() {
                                             .into_iter()
                                             .map(TryFrom::try_from)
                                             .collect::<Result<_, _>>()?,
-                                        results: results
-                                            .into_iter()
-                                            .map(TryFrom::try_from)
-                                            .collect::<Result<_, _>>()?,
+                                        results: SpecFunctionResults::Values(
+                                            results
+                                                .into_iter()
+                                                .map(TryFrom::try_from)
+                                                .collect::<Result<_, _>>()?,
+                                        ),
                                     },
                                 });
                             }
                         }
                         unknown => {
-                            return Err(format!("unsupported assertion {unknown:?}").into());
+                            return Err(AssertTranslationError::with_span(
+                                span,
+                                format!("unsupported assertion {unknown:?}"),
+                            ));
+                        }
+                    }
+                }
+                WastDirective::AssertTrap {
+                    span,
+                    exec,
+                    message,
+                } => {
+                    let wat = CurrentWat::get_current(&mut current_wat, span)?;
+                    match exec {
+                        wast::WastExecute::Invoke(invoke) => {
+                            if invoke.module.is_some() {
+                                return Err(AssertTranslationError::with_span(
+                                    span,
+                                    "assertion with named module is not yet supported",
+                                ));
+                            } else if let Some(results) =
+                                SpecFunctionResults::trap_with_message(message)
+                            {
+                                wat.tests.push(SpecTest {
+                                    export_name: invoke.name,
+                                    kind: SpecTestKind::Function {
+                                        arguments: invoke
+                                            .args
+                                            .into_iter()
+                                            .map(TryFrom::try_from)
+                                            .collect::<Result<_, _>>()?,
+                                        results,
+                                    },
+                                });
+                            } else {
+                                return Err(AssertTranslationError::with_span(
+                                    span,
+                                    format!("unrecognized trap reason: {message:?}"),
+                                ));
+                            }
+                        }
+                        unknown => {
+                            return Err(AssertTranslationError::with_span(
+                                span,
+                                format!("unsupported assertion {unknown:?}"),
+                            ));
                         }
                     }
                 }
@@ -230,8 +345,18 @@ fn main() {
         for directive in wast.directives {
             let span = directive.span();
             if let Err(err) = write_directive(directive) {
-                let (line, col) = span.linecol_in(wast_text);
-                println!("cargo:warning={}:{line}:{col} : {err}", wast_path.display());
+                let err_span = if let Some(other_span) = err.span {
+                    other_span
+                } else {
+                    span
+                };
+
+                let (line, col) = err_span.linecol_in(wast_text);
+                println!(
+                    "cargo:warning={}:{line}:{col} : {}",
+                    wast_path.display(),
+                    err.message
+                );
             }
         }
 
@@ -305,14 +430,30 @@ fn main() {
                     }
                 }
 
-                if let SpecTestKind::Function { arguments, results } = assertion.kind {
-                    let _ = writeln!(
-                        &mut rs_file,
-                        "    assert_eq!(inst.{}({:#}), Ok({}));",
-                        wasm2rs::rust::SafeIdent::from(assertion.export_name),
-                        PrintValues(&arguments),
-                        PrintValues(&results)
-                    );
+                let SpecTestKind::Function { arguments, results } = assertion.kind;
+                match results {
+                    SpecFunctionResults::Values(result_values) => {
+                        let _ = writeln!(
+                            &mut rs_file,
+                            "  assert_eq!(inst.{}({:#}), Ok({}));",
+                            wasm2rs::rust::SafeIdent::from(assertion.export_name),
+                            PrintValues(&arguments),
+                            PrintValues(&result_values)
+                        );
+                    }
+                    SpecFunctionResults::Trap(reason) => {
+                        let _ = writeln!(
+                            &mut rs_file,
+                            "  let result = inst.{}({:#});",
+                            wasm2rs::rust::SafeIdent::from(assertion.export_name),
+                            PrintValues(&arguments),
+                        );
+
+                        let _ = writeln!(&mut rs_file, "  match result {{");
+                        let _ = writeln!(&mut rs_file, "    Ok(values) => panic!(\"expected trap {reason}, but got {{values:?}}\"),");
+                        let _ = writeln!(&mut rs_file, "    Err(err) => assert_eq!(err.code(), wasm2rs_rt::trap::TrapCode::{reason}, \"incorrect trap code\")");
+                        let _ = writeln!(&mut rs_file, "  }}");
+                    }
                 }
 
                 let _ = writeln!(&mut rs_file, "}}\n");

@@ -74,6 +74,18 @@ pub enum TrapCode {
     },
 }
 
+impl core::cmp::PartialEq<TrapCode> for &TrapCode {
+    fn eq(&self, other: &TrapCode) -> bool {
+        <TrapCode as core::cmp::PartialEq<TrapCode>>::eq(*self, other)
+    }
+}
+
+impl core::cmp::PartialEq<&TrapCode> for TrapCode {
+    fn eq(&self, other: &&TrapCode) -> bool {
+        <Self as core::cmp::PartialEq<Self>>::eq(self, *other)
+    }
+}
+
 impl core::fmt::Display for TrapCode {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
