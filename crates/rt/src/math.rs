@@ -2,11 +2,20 @@
 
 #[cold]
 #[inline(never)]
-fn trap_division_by_zero<TR>(trap: &TR) -> TR::Repr
+fn integer_division_by_zero<TR>(trap: &TR) -> TR::Repr
 where
     TR: crate::trap::Trap + ?Sized,
 {
     trap.trap(crate::trap::TrapCode::IntegerDivisionByZero)
+}
+
+#[cold]
+#[inline(never)]
+fn integer_overflow<TR>(trap: &TR) -> TR::Repr
+where
+    TR: crate::trap::Trap + ?Sized,
+{
+    trap.trap(crate::trap::TrapCode::IntegerOverflow)
 }
 
 macro_rules! int_ops {
@@ -30,10 +39,10 @@ macro_rules! int_ops {
         where
             TR: crate::trap::Trap + ?Sized,
         {
-            if let Some(quot) = <$signed>::checked_div(num, denom) {
-                Ok(quot)
-            } else {
-                Err(trap_division_by_zero(trap))
+            match <$signed>::checked_div(num, denom) {
+                Some(quot) => Ok(quot),
+                _ if denom == 0 => Err(integer_division_by_zero(trap)),
+                _ => Err(integer_overflow(trap)),
             }
         }
 
@@ -52,7 +61,7 @@ macro_rules! int_ops {
             if let Some(quot) = <$unsigned>::checked_div(num as $unsigned, denom as $unsigned) {
                 Ok(quot as $signed)
             } else {
-                Err(trap_division_by_zero(trap))
+                Err(integer_division_by_zero(trap))
             }
         }
 
@@ -70,7 +79,7 @@ macro_rules! int_ops {
             if let Some(rem) = <$signed>::checked_rem(num, denom) {
                 Ok(rem)
             } else {
-                Err(trap_division_by_zero(trap))
+                Err(integer_division_by_zero(trap))
             }
         }
 
@@ -89,7 +98,7 @@ macro_rules! int_ops {
             if let Some(rem) = <$unsigned>::checked_rem(num as $unsigned, denom as $unsigned) {
                 Ok(rem as $signed)
             } else {
-                Err(trap_division_by_zero(trap))
+                Err(integer_division_by_zero(trap))
             }
         }
     )*};
