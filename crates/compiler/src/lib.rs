@@ -10,6 +10,7 @@
 mod error;
 mod translation;
 
+pub mod buffer;
 pub mod rust;
 
 pub use error::Error;
