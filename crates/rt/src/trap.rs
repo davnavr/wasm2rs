@@ -61,8 +61,10 @@ pub enum TrapCode {
     Unreachable,
     /// A memory access was out of bounds.
     MemoryBoundsCheck(MemoryAccess),
-    /// An integer or floating point operation attempted a division by zero.
-    DivisionByZero,
+    /// An integer operation attempted a division by zero.
+    IntegerDivisionByZero,
+    /// An integer operation overflowed.
+    IntegerOverflow,
     //UnalignedAtomicOperation
     //NullReference
     /// Instantiating a module failed because linear memory could not be allocated.
@@ -91,7 +93,8 @@ impl core::fmt::Display for TrapCode {
         match self {
             Self::Unreachable => f.write_str("executed unreachable instruction"),
             Self::MemoryBoundsCheck(access) => write!(f, "out-of-bounds {}", access),
-            Self::DivisionByZero => f.write_str("division by zero"),
+            Self::IntegerDivisionByZero => f.write_str("integer division by zero"),
+            Self::IntegerOverflow => f.write_str("integer overflow"),
             Self::MemoryInstantiation { memory, error } => {
                 write!(f, "instantiation of memory #{memory} failed: {error}")
             }

@@ -103,12 +103,14 @@ fn main() {
 
         enum SpecTrapReason {
             IntegerDivideByZero,
+            IntegerOverflow,
         }
 
         impl std::fmt::Display for SpecTrapReason {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
-                    Self::IntegerDivideByZero => f.write_str("DivisionByZero"),
+                    Self::IntegerDivideByZero => f.write_str("IntegerDivisionByZero"),
+                    Self::IntegerOverflow => f.write_str("IntegerOverflow"),
                 }
             }
         }
@@ -122,6 +124,7 @@ fn main() {
             fn trap_with_message(message: &str) -> Option<Self> {
                 Some(Self::Trap(match message {
                     "integer divide by zero" => SpecTrapReason::IntegerDivideByZero,
+                    "integer overflow" => SpecTrapReason::IntegerOverflow,
                     _ => return None,
                 }))
             }

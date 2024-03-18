@@ -6,7 +6,7 @@ fn trap_division_by_zero<TR>(trap: &TR) -> TR::Repr
 where
     TR: crate::trap::Trap + ?Sized,
 {
-    trap.trap(crate::trap::TrapCode::DivisionByZero)
+    trap.trap(crate::trap::TrapCode::IntegerDivisionByZero)
 }
 
 macro_rules! int_ops {
