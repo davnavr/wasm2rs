@@ -2,6 +2,10 @@
 //!
 //! [WebAssembly traps]: https://webassembly.github.io/spec/core/intro/overview.html#trap
 
+mod return_on_trap;
+
+pub use return_on_trap::{ReturnOnTrap, TrapValue};
+
 /// Describes a memory access that resulted in a trap.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct MemoryAccess {
@@ -106,4 +110,26 @@ pub trait Trap {
     /// The `wasm2rs` compiler generates calls to this function for instructions that generate a
     /// trap.
     fn trap(&self, code: TrapCode) -> Self::Repr;
+}
+
+impl<T: Trap + ?Sized> Trap for &T {
+    type Repr = T::Repr;
+
+    fn trap(&self, code: TrapCode) -> Self::Repr {
+        <T>::trap(self, code)
+    }
+}
+
+/// A [`Trap`] implementation that panics.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct PanicOnTrap;
+
+impl Trap for PanicOnTrap {
+    type Repr = core::convert::Infallible; // never "!" is still unstable
+
+    #[cold]
+    #[inline(never)]
+    fn trap(&self, code: TrapCode) -> Self::Repr {
+        panic!("{code}")
+    }
 }

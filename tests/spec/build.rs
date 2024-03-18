@@ -274,7 +274,7 @@ fn main() {
 
                 let _ = writeln!(
                     &mut rs_file,
-                    "    let inst = {module_ident}::Instance::instantiate({module_ident}::StdRuntime::default()).unwrap();"
+                    "    let inst = {module_ident}::Instance::instantiate().unwrap();"
                 );
 
                 struct PrintValues<'a>(&'a [SpecValue]);
