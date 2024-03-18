@@ -3,6 +3,7 @@ name = "wasm2rs-rt"
 description = "Runtime support library for WebAssembly modules translated to Rust"
 version.workspace = true
 edition.workspace = true
+repository.workspace = true
 
 [features]
 default = ["std"]
