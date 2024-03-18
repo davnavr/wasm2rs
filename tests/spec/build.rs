@@ -37,8 +37,10 @@ fn main() {
         let wast = wast::parser::parse::<wast::Wast>(&wast_buf)
             .unwrap_or_else(|e| panic!("could not parse test file {wast_path:?}: {e}"));
 
+        let test_name = wast_path.file_stem().unwrap().to_str().unwrap();
+
         // Path to directory containing the translated Rust files for this test
-        let rs_dir = out_dir.join(wast_path.file_stem().unwrap());
+        let rs_dir = out_dir.join(test_name);
 
         match std::fs::create_dir(&rs_dir) {
             Ok(()) => (),
@@ -263,6 +265,10 @@ fn main() {
             }
         }
 
-        let _ = writeln!(&mut all_file, "include!({rs_file_path:?});");
+        let _ = writeln!(
+            &mut all_file,
+            "mod {} {{\n    include!({rs_file_path:?});\n}}",
+            wasm2rs::rust::SafeIdent::from(test_name)
+        );
     }
 }
