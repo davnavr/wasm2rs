@@ -8,6 +8,8 @@ impl BufferPool {
     /// Gets an new empty buffer.
     ///
     /// If no buffers are currently in the pool, a new one is returned with the specified capacity.
+    ///
+    /// Buffers originating from the pool are guaranteed to not have a capacity of zero.
     pub fn take_buffer(&self, new_buffer_capacity: usize) -> bytes::BytesMut {
         match self.pool.pop() {
             Some(buf) => buf,
@@ -17,8 +19,10 @@ impl BufferPool {
 
     /// Attempts to move a buffer back into the pool.
     pub fn return_buffer(&self, mut buffer: bytes::BytesMut) {
-        buffer.clear();
-        self.pool.push(buffer)
+        if !buffer.is_empty() {
+            buffer.clear();
+            self.pool.push(buffer)
+        }
     }
 }
 
