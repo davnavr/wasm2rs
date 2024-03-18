@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 fn main() {
     let out_dir = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
 
@@ -56,6 +58,15 @@ fn main() {
         enum SpecValue {
             I32(i32),
             I64(i64),
+        }
+
+        impl std::fmt::Display for SpecValue {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    Self::I32(i) => write!(f, "{i}i32"),
+                    Self::I64(i) => write!(f, "{i}i64"),
+                }
+            }
         }
 
         impl TryFrom<wast::WastArg<'_>> for SpecValue {
@@ -260,7 +271,50 @@ fn main() {
                     &mut rs_file,
                     "#[test]\nfn assert_{module_ident}_{assertion_number}() {{"
                 );
-                let _ = writeln!(&mut rs_file, "    todo!()");
+
+                let _ = writeln!(
+                    &mut rs_file,
+                    "    let inst = {module_ident}::Instance::instantiate({module_ident}::StdRuntime::default()).unwrap();"
+                );
+
+                struct PrintValues<'a>(&'a [SpecValue]);
+
+                impl std::fmt::Display for PrintValues<'_> {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self.0 {
+                            [] if f.alternate() => Ok(()),
+                            [] => f.write_str("()"),
+                            [val] => write!(f, "{val}"),
+                            [first, rest @ ..] => {
+                                if !f.alternate() {
+                                    f.write_char('(')?;
+                                }
+
+                                write!(f, "{first}")?;
+                                for result in rest {
+                                    write!(f, ", {result}")?;
+                                }
+
+                                if !f.alternate() {
+                                    f.write_char(')')?;
+                                }
+
+                                Ok(())
+                            }
+                        }
+                    }
+                }
+
+                if let SpecTestKind::Function { arguments, results } = assertion.kind {
+                    let _ = writeln!(
+                        &mut rs_file,
+                        "    assert_eq!(inst.{}({:#}), Ok({}));",
+                        wasm2rs::rust::SafeIdent::from(assertion.export_name),
+                        PrintValues(&arguments),
+                        PrintValues(&results)
+                    );
+                }
+
                 let _ = writeln!(&mut rs_file, "}}\n");
             }
         }
