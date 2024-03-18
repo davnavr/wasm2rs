@@ -9,17 +9,104 @@ where
     trap.trap(crate::trap::TrapCode::DivisionByZero)
 }
 
-/// Implementation for the `i32.rem_u` instruction.
-///
-/// Calculates `num % denom`, trapping on division by zero.
-#[inline(always)]
-pub fn i32_rem_u<TR>(num: i32, denom: i32, trap: &TR) -> Result<i32, TR::Repr>
-where
-    TR: crate::trap::Trap + ?Sized,
-{
-    if let Some(rem) = u32::checked_rem(num as u32, denom as u32) {
-        Ok(rem as i32)
-    } else {
-        Err(trap_division_by_zero(trap))
+macro_rules! int_ops {
+    {$(
+        $signed:ty | $unsigned:ty {
+            $div_s:ident = $div_s_name:literal;
+            $div_u:ident = $div_u_name:literal;
+            $rem_s:ident = $rem_s_name:literal;
+            $rem_u:ident = $rem_u_name:literal;
+        }
+    )*} => {$(
+        #[doc = "Implementation for the [`"]
+        #[doc = $div_s_name]
+        #[doc = "`] instruction.\n\nCalculates `num / denom`, trapping on division by zero.\n\n"]
+        #[doc = "[`"]
+        #[doc = $div_s_name]
+        #[doc = "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"]
+        #[inline(always)]
+        #[doc(alias = $div_s_name)]
+        pub fn $div_s<TR>(num: $signed, denom: $signed, trap: &TR) -> Result<$signed, TR::Repr>
+        where
+            TR: crate::trap::Trap + ?Sized,
+        {
+            if let Some(quot) = <$signed>::checked_div(num, denom) {
+                Ok(quot)
+            } else {
+                Err(trap_division_by_zero(trap))
+            }
+        }
+
+        #[doc = "Implementation for the [`"]
+        #[doc = $div_u_name]
+        #[doc = "`] instruction.\n\nInterprets parameters as an unsigned integer, then calculates"]
+        #[doc = " `num / denom`, trapping on division by zero.\n\n [`"]
+        #[doc = $div_u_name]
+        #[doc = "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"]
+        #[inline(always)]
+        #[doc(alias = $div_u_name)]
+        pub fn $div_u<TR>(num: $signed, denom: $signed, trap: &TR) -> Result<$signed, TR::Repr>
+        where
+            TR: crate::trap::Trap + ?Sized,
+        {
+            if let Some(quot) = <$unsigned>::checked_div(num as $unsigned, denom as $unsigned) {
+                Ok(quot as $signed)
+            } else {
+                Err(trap_division_by_zero(trap))
+            }
+        }
+
+        #[doc = "Implementation for the [`"]
+        #[doc = $rem_s_name]
+        #[doc = "`] instruction.\n\nCalculates `num % denom`, trapping on division by zero.\n\n [`"]
+        #[doc = $rem_s_name]
+        #[doc = "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"]
+        #[inline(always)]
+        #[doc(alias = $rem_u_name)]
+        pub fn $rem_s<TR>(num: $signed, denom: $signed, trap: &TR) -> Result<$signed, TR::Repr>
+        where
+            TR: crate::trap::Trap + ?Sized,
+        {
+            if let Some(rem) = <$signed>::checked_rem(num, denom) {
+                Ok(rem)
+            } else {
+                Err(trap_division_by_zero(trap))
+            }
+        }
+
+        #[doc = "Implementation for the [`"]
+        #[doc = $rem_u_name]
+        #[doc = "`] instruction.\n\nInterprets parameters as an unsigned integer, then calculates"]
+        #[doc = " `num % denom`, trapping on division by zero.\n\n [`"]
+        #[doc = $rem_u_name]
+        #[doc = "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"]
+        #[inline(always)]
+        #[doc(alias = $rem_u_name)]
+        pub fn $rem_u<TR>(num: $signed, denom: $signed, trap: &TR) -> Result<$signed, TR::Repr>
+        where
+            TR: crate::trap::Trap + ?Sized,
+        {
+            if let Some(rem) = <$unsigned>::checked_rem(num as $unsigned, denom as $unsigned) {
+                Ok(rem as $signed)
+            } else {
+                Err(trap_division_by_zero(trap))
+            }
+        }
+    )*};
+}
+
+int_ops! {
+    i32 | u32 {
+        i32_div_s = "i32.div_s";
+        i32_div_u = "i32.div_u";
+        i32_rem_s = "i32.rem_s";
+        i32_rem_u = "i32.rem_u";
+    }
+
+    i64 | u64 {
+        i64_div_s = "i64.div_s";
+        i64_div_u = "i64.div_u";
+        i64_rem_s = "i64.rem_s";
+        i64_rem_u = "i64.rem_u";
     }
 }

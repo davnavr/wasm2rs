@@ -661,6 +661,27 @@ impl<'a> Translation<'a> {
                         pop_value(validator, 0)
                     );
                 }
+                Operator::I32LtS | Operator::I64LtS => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(&mut b, "let {c_1:#} = ({c_1} < {c_2}) as i32;");
+                }
+                Operator::I32LtU => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = (({c_1} as u32) < ({c_2} as u32)) as i32;"
+                    );
+                }
+                Operator::I64LtU => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = (({c_1} as u32) < ({c_2} as u32)) as i32;"
+                    );
+                }
                 Operator::I32Add => {
                     let result_value = pop_value(validator, 1);
                     let _ = writeln!(
@@ -685,11 +706,61 @@ impl<'a> Translation<'a> {
                         pop_value(validator, 0)
                     );
                 }
+                Operator::I32DivS => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = {RT_CRATE_PATH}::math::i32_div_s({c_1}, {c_2}, &self._rt)?;",
+                    );
+                }
+                Operator::I32DivU => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = {RT_CRATE_PATH}::math::i32_div_u({c_1}, {c_2}, &self._rt)?;",
+                    );
+                }
+                Operator::I32RemS => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = {RT_CRATE_PATH}::math::i32_rem_s({c_1}, {c_2}, &self._rt)?;",
+                    );
+                }
                 Operator::I32RemU => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = {RT_CRATE_PATH}::math::i32_rem_u({c_1}, {c_2}, &self._rt)?;",
+                    );
+                }
+                Operator::I32Shl => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(&mut b, "let {c_1:#} = {c_1} << ({c_2} % 32);");
+                }
+                Operator::I32ShrS => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(&mut b, "let {c_1:#} = {c_1} >> ({c_2} % 32);");
+                }
+                Operator::I32ShrU => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = (({c_1} as u32) >> ({c_2} % 32)) as i32;"
+                    );
+                }
+                Operator::I64Add => {
                     let result_value = pop_value(validator, 1);
                     let _ = writeln!(
                         &mut b,
-                        "let {result_value:#} = {RT_CRATE_PATH}::math::i32_rem_u({result_value}, {}, &self._rt)?;",
+                        "let {result_value:#} = i64::wrapping_add({result_value}, {});",
                         pop_value(validator, 0)
                     );
                 }
@@ -709,11 +780,69 @@ impl<'a> Translation<'a> {
                         pop_value(validator, 0)
                     );
                 }
-                Operator::I64ExtendI32U => {
-                    let result_value = pop_value(validator, 0);
+                Operator::I64DivS => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
                     let _ = writeln!(
                         &mut b,
-                        "let {result_value:#} = (({result_value} as u32) as u64) as i64;",
+                        "let {c_1:#} = {RT_CRATE_PATH}::math::i64_div_s({c_1}, {c_2}, &self._rt)?;",
+                    );
+                }
+                Operator::I64DivU => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = {RT_CRATE_PATH}::math::i64_div_u({c_1}, {c_2}, &self._rt)?;",
+                    );
+                }
+                Operator::I64RemS => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = {RT_CRATE_PATH}::math::i64_rem_s({c_1}, {c_2}, &self._rt)?;",
+                    );
+                }
+                Operator::I64RemU => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = {RT_CRATE_PATH}::math::i64_rem_u({c_1}, {c_2}, &self._rt)?;",
+                    );
+                }
+                Operator::I64Shl => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(&mut b, "let {c_1:#} = {c_1} << ({c_2} % 64);");
+                }
+                Operator::I64ShrS => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(&mut b, "let {c_1:#} = {c_1} >> ({c_2} % 64);");
+                }
+                Operator::I64ShrU => {
+                    let c_2 = pop_value(validator, 0);
+                    let c_1 = pop_value(validator, 1);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {c_1:#} = (({c_1} as u64) >> ({c_2} % 64)) as i64;"
+                    );
+                }
+                Operator::I32WrapI64 => {
+                    let popped = pop_value(validator, 0);
+                    let _ = writeln!(&mut b, "let {popped:#} = {popped} as i32;");
+                }
+                Operator::I64ExtendI32S => {
+                    let popped = pop_value(validator, 0);
+                    let _ = writeln!(&mut b, "let {popped:#} = ({popped} as i32) as i64;");
+                }
+                Operator::I64ExtendI32U => {
+                    let popped = pop_value(validator, 0);
+                    let _ = writeln!(
+                        &mut b,
+                        "let {popped:#} = (({popped} as u32) as u64) as i64;",
                     );
                 }
                 _ => todo!("translate {op:?}"),
