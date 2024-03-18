@@ -1079,6 +1079,9 @@ impl<'a> Translation<'a> {
             "#[allow(unused_labels)]\n#[allow(unreachable_code)]"
         )?;
 
+        // Names might be mangled
+        writeln!(output, "#[allow(non_snake_case)]")?;
+
         writeln!(output, "pub mod {} {{", self.generated_module_name)?;
 
         // TODO: Type parameter for imports
