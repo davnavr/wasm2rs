@@ -1,5 +1,6 @@
 alias f := fmt
 alias d := doc
+alias t := test
 
 check: fmt
     cargo clippy
@@ -8,6 +9,9 @@ check: fmt
 
 fmt:
     cargo fmt
+
+test:
+    cargo test --workspace
 
 # Generate documentation; requires Rust nightly.
 doc *FLAGS='--all-features':
