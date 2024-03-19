@@ -1,10 +1,10 @@
 /// Stores byte buffers for later use.
 #[derive(Default)]
-pub struct BufferPool {
-    pool: Box<crossbeam_queue::SegQueue<bytes::BytesMut>>,
+pub struct Pool {
+    pool: crossbeam_queue::SegQueue<bytes::BytesMut>,
 }
 
-impl BufferPool {
+impl Pool {
     /// Gets an new empty buffer.
     ///
     /// If no buffers are currently in the pool, a new one is returned with the specified capacity.
@@ -26,7 +26,7 @@ impl BufferPool {
     }
 }
 
-impl std::fmt::Debug for BufferPool {
+impl std::fmt::Debug for Pool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BufferPool").finish_non_exhaustive()
     }

@@ -3,5 +3,5 @@
 mod pool;
 mod writer;
 
-pub use pool::BufferPool;
+pub use pool::Pool;
 pub use writer::Writer;

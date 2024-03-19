@@ -3,14 +3,14 @@
 pub struct Writer<'a> {
     output: Vec<bytes::Bytes>,
     buffer: bytes::BytesMut,
-    pool: &'a crate::buffer::BufferPool,
+    pool: &'a crate::buffer::Pool,
 }
 
 impl<'a> Writer<'a> {
     const DEFAULT_BUFFER_CAPACITY: usize = 512;
 
     /// Creates a new buffer that bytes can be written to, taking new buffers from the given `pool`.
-    pub fn new(pool: &'a crate::buffer::BufferPool) -> Self {
+    pub fn new(pool: &'a crate::buffer::Pool) -> Self {
         Self {
             output: Vec::new(),
             buffer: pool.take_buffer(0),
@@ -19,7 +19,7 @@ impl<'a> Writer<'a> {
     }
 
     /// Gets the pool that new buffers are taken from.
-    pub fn pool(&self) -> &'a crate::buffer::BufferPool {
+    pub fn pool(&self) -> &'a crate::buffer::Pool {
         self.pool
     }
 
