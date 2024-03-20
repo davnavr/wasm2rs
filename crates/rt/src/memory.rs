@@ -150,25 +150,37 @@ impl std::error::Error for MemoryAccessError {}
 /// [linear memory]: Memory32
 pub type AccessResult<T> = core::result::Result<T, MemoryAccessError>;
 
-fn unaligned_i32_load<M: Memory32 + ?Sized>(mem: &M, addr: u32) -> AccessResult<i32> {
-    let mut dst = [0u8; 4];
-    match mem.copy_to_slice(addr, &mut dst) {
-        Ok(()) => Ok(i32::from_le_bytes(dst)),
-        Err(mut e) => {
-            e.pointee = MemoryAccessPointee::I32;
-            Err(e)
+macro_rules! unaligned_integer_accesses {
+    {
+        $($int:ty => $pointee:ident : $load:ident / $store:ident;)*
+    } => {$(
+        fn $load<M: Memory32 + ?Sized>(mem: &M, addr: u32) -> AccessResult<$int> {
+            let mut dst = [0u8; core::mem::size_of::<$int>()];
+            match mem.copy_to_slice(addr, &mut dst) {
+                Ok(()) => Ok(<$int>::from_le_bytes(dst)),
+                Err(mut e) => {
+                    e.pointee = MemoryAccessPointee::$pointee;
+                    Err(e)
+                }
+            }
         }
-    }
+
+        fn $store<M: Memory32 + ?Sized>(mem: &M, addr: u32, value: $int) -> AccessResult<()> {
+            match mem.copy_from_slice(addr, &value.to_le_bytes()) {
+                Ok(()) => Ok(()),
+                Err(mut e) => {
+                    e.pointee = MemoryAccessPointee::$pointee;
+                    Err(e)
+                }
+            }
+        }
+    )*};
 }
 
-fn unaligned_i32_store<M: Memory32 + ?Sized>(mem: &M, addr: u32, value: i32) -> AccessResult<()> {
-    match mem.copy_from_slice(addr, &value.to_le_bytes()) {
-        Ok(()) => Ok(()),
-        Err(mut e) => {
-            e.pointee = MemoryAccessPointee::I32;
-            Err(e)
-        }
-    }
+unaligned_integer_accesses! {
+    i16 => I16 : unaligned_i16_load / unaligned_i16_store;
+    i32 => I32 : unaligned_i32_load / unaligned_i32_store;
+    i64 => I64 : unaligned_i64_load / unaligned_i64_store;
 }
 
 /// A [WebAssembly linear memory] with a 32-bit address space.
@@ -252,14 +264,51 @@ pub trait Memory32 {
         Ok(slice.into_boxed_slice())
     }
 
+    /// Loads the value of the byte stored at the given address.
+    fn i8_load(&self, addr: u32) -> AccessResult<i8> {
+        let mut dst = 0u8;
+        match self.copy_to_slice(addr, core::slice::from_mut(&mut dst)) {
+            Ok(()) => Ok(dst as i8),
+            Err(mut err) => {
+                err.pointee = MemoryAccessPointee::I8;
+                Err(err)
+            }
+        }
+    }
+
+    /// Loads a potentially aligned 32-bit integer from the given address.
+    fn i16_load<const A: u8>(&self, addr: u32) -> AccessResult<i16> {
+        unaligned_i16_load(self, addr)
+    }
+
     /// Loads a potentially aligned 32-bit integer from the given address.
     fn i32_load<const A: u8>(&self, addr: u32) -> AccessResult<i32> {
         unaligned_i32_load(self, addr)
     }
 
+    /// Loads a potentially aligned 64-bit integer from the given address.
+    fn i64_load<const A: u8>(&self, addr: u32) -> AccessResult<i64> {
+        unaligned_i64_load(self, addr)
+    }
+
+    /// Writes into the byte at the given address.
+    fn i8_store(&self, addr: u32, value: i8) -> AccessResult<()> {
+        self.copy_from_slice(addr, &[value as u8])
+    }
+
+    /// Stores a potentially aligned 16-bit integer into the given address.
+    fn i16_store<const A: u8>(&self, addr: u32, value: i16) -> AccessResult<()> {
+        unaligned_i16_store(self, addr, value)
+    }
+
     /// Stores a potentially aligned 32-bit integer into the given address.
     fn i32_store<const A: u8>(&self, addr: u32, value: i32) -> AccessResult<()> {
         unaligned_i32_store(self, addr, value)
+    }
+
+    /// Stores a potentially aligned 64-bit integer into the given address.
+    fn i64_store<const A: u8>(&self, addr: u32, value: i64) -> AccessResult<()> {
+        unaligned_i64_store(self, addr, value)
     }
 }
 
@@ -328,6 +377,50 @@ where
     }
 }
 
+/// This implements the [`iXX.load8_s` and `iXX.load8_u`] family of instructions.
+///
+/// For more information, see the documentation for the [`Memory32::i8_load()`] method.
+///
+/// [`iXX.load8_s` and `iXX.load8_u`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "i32.load8_s")]
+#[doc(alias = "i32.load8_u")]
+#[doc(alias = "i64.load8_s")]
+#[doc(alias = "i64.load8_u")]
+pub fn i8_load<const IDX: u32, M, TR>(mem: &M, addr: i32, trap: &TR) -> Result<i8, TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    match mem.i8_load(addr as u32) {
+        Ok(value) => Ok(value),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
+
+/// This implements the [`iXX.load16_s` and `iXX.load16_u`] family of instructions.
+///
+/// For more information, see the documentation for the [`Memory32::i16_load()`] method.
+///
+/// [`iXX.load16_s` and `iXX.load16_u`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "i32.load16_s")]
+#[doc(alias = "i32.load16_u")]
+#[doc(alias = "i64.load16_s")]
+#[doc(alias = "i64.load16_u")]
+pub fn i16_load<const A: u8, const IDX: u32, M, TR>(
+    mem: &M,
+    addr: i32,
+    trap: &TR,
+) -> Result<i16, TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    match mem.i16_load::<A>(addr as u32) {
+        Ok(value) => Ok(value),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
+
 /// This implements the [`i32.load`] instruction.
 ///
 /// For more information, see the documentation for the [`Memory32::i32_load()`] method.
@@ -349,7 +442,76 @@ where
     }
 }
 
-/// This implements the [`i32.store`] instruction.
+/// This implements the [`i64.load`], `i64.load32_s` and `i64.load32_u` instructions.
+///
+/// For more information, see the documentation for the [`Memory32::i64_load()`] method.
+///
+/// [`i64.load`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "i64.load")]
+#[doc(alias = "i64.load32_s")]
+#[doc(alias = "i64.load32_u")]
+pub fn i64_load<const A: u8, const IDX: u32, M, TR>(
+    mem: &M,
+    addr: i32,
+    trap: &TR,
+) -> Result<i64, TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    match mem.i64_load::<A>(addr as u32) {
+        Ok(value) => Ok(value),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
+
+/// This implements the [`iXX.store8`] family of instructions.
+///
+/// For more information, see the documentation for the [`Memory32::i8_store()`] method.
+///
+/// [`iXX.store8`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "i32.store16")]
+#[doc(alias = "i64.store16")]
+pub fn i8_store<const IDX: u32, M, TR>(
+    mem: &M,
+    addr: i32,
+    value: i8,
+    trap: &TR,
+) -> Result<(), TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    match mem.i8_store(addr as u32, value) {
+        Ok(()) => Ok(()),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
+
+/// This implements the [`iXX.store16`] family of instructions.
+///
+/// For more information, see the documentation for the [`Memory32::i16_store()`] method.
+///
+/// [`iXX.store16`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "i32.store16")]
+#[doc(alias = "i64.store16")]
+pub fn i16_store<const A: u8, const IDX: u32, M, TR>(
+    mem: &M,
+    addr: i32,
+    value: i16,
+    trap: &TR,
+) -> Result<(), TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    match mem.i16_store::<A>(addr as u32, value) {
+        Ok(()) => Ok(()),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
+
+/// This implements the [`i32.store`] and `i64.store32` instructions.
 ///
 /// For more information, see the documentation for the [`Memory32::i32_store()`] method.
 ///
@@ -366,6 +528,28 @@ where
     TR: crate::trap::Trap + ?Sized,
 {
     match mem.i32_store::<A>(addr as u32, value) {
+        Ok(()) => Ok(()),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
+
+/// This implements the [`i64.store`] instruction.
+///
+/// For more information, see the documentation for the [`Memory32::i64_store()`] method.
+///
+/// [`i64.store`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+#[doc(alias = "i64.store")]
+pub fn i64_store<const A: u8, const IDX: u32, M, TR>(
+    mem: &M,
+    addr: i32,
+    value: i64,
+    trap: &TR,
+) -> Result<(), TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    match mem.i64_store::<A>(addr as u32, value) {
         Ok(()) => Ok(()),
         Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
     }
