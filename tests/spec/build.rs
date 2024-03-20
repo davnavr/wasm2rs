@@ -144,6 +144,7 @@ fn main() {
         struct SpecTest<'a> {
             export_name: &'a str,
             kind: SpecTestKind,
+            assert_span: wast::token::Span,
         }
 
         struct SpecModule<'a> {
@@ -289,6 +290,7 @@ fn main() {
                                                 .collect::<Result<_, _>>()?,
                                         ),
                                     },
+                                    assert_span: span,
                                 });
                             }
                         }
@@ -326,6 +328,7 @@ fn main() {
                                             .collect::<Result<_, _>>()?,
                                         results,
                                     },
+                                    assert_span: span,
                                 });
                             } else {
                                 return Err(AssertTranslationError::with_span(
@@ -401,6 +404,23 @@ fn main() {
             );
 
             for (assertion_number, assertion) in module.tests.into_iter().enumerate() {
+                struct AssertLocation<'a> {
+                    line: usize,
+                    column: usize,
+                    path: &'a std::path::Path,
+                }
+
+                impl std::fmt::Display for AssertLocation<'_> {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        writeln!(f, "{}:{}:{}", self.path.display(), self.line, self.column)
+                    }
+                }
+
+                let assertion_location = {
+                    let (line, column) = assertion.assert_span.linecol_in(wast_text);
+                    AssertLocation { line, column, path: &wast_path }
+                };
+
                 let _ = writeln!(
                     &mut rs_file,
                     "#[test]\nfn assert_{module_ident}_{assertion_number}() {{"
@@ -444,7 +464,7 @@ fn main() {
                     SpecFunctionResults::Values(result_values) => {
                         let _ = writeln!(
                             &mut rs_file,
-                            "  assert_eq!(inst.{}({:#}), Ok({}));",
+                            "  assert_eq!(inst.{}({:#}), Ok({}), \"incorrect values at {assertion_location}\");",
                             wasm2rs::rust::SafeIdent::from(assertion.export_name),
                             PrintValues(&arguments),
                             PrintValues(&result_values)
@@ -459,8 +479,8 @@ fn main() {
                         );
 
                         let _ = writeln!(&mut rs_file, "  match result {{");
-                        let _ = writeln!(&mut rs_file, "    Ok(values) => panic!(\"expected trap {reason}, but got {{values:?}}\"),");
-                        let _ = writeln!(&mut rs_file, "    Err(err) => assert!(matches!(err.code(), wasm2rs_rt::trap::TrapCode::{reason} {{ .. }}), \"incorrect trap code, expected {reason} but got {{}}\", err.code())");
+                        let _ = writeln!(&mut rs_file, "    Ok(values) => panic!(\"expected trap {reason}, but got {{values:?}} at {assertion_location}\"),");
+                        let _ = writeln!(&mut rs_file, "    Err(err) => assert!(matches!(err.code(), wasm2rs_rt::trap::TrapCode::{reason} {{ .. }}), \"incorrect trap code, expected {reason} but got {{}} at {assertion_location}\", err.code())");
                         let _ = writeln!(&mut rs_file, "  }}");
                     }
                 }
