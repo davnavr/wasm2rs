@@ -333,19 +333,19 @@ fn write_i8_load(
     let address = PoppedValue::pop(validator, 0);
     let _ = write!(
         out,
-        "let {} = {}::i8_load::<{}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)?",
+        "let {} = {}::i8_load::<{}, _, _>(&self.{}, {}.wrapping_add({address}), &self._embedder)?",
         StackValue(validator.operand_stack_height() - 1),
         paths::MEMORY,
         memarg.memory,
         MemId(memarg.memory),
-        memarg.offset
+        MemOffset(memarg.offset)
     );
 
     if let Signedness::Unsigned = signed {
         out.write_str(" as u8");
     }
 
-    let _ = writeln!(out, "as {destination};");
+    let _ = writeln!(out, " as {destination};");
 }
 
 fn write_i16_load(
@@ -358,20 +358,33 @@ fn write_i16_load(
     let address = PoppedValue::pop(validator, 0);
     let _ = write!(
         out,
-        "let {} = {}::i16_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)?",
+        "let {} = {}::i16_load::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), &self._embedder)?",
         StackValue(validator.operand_stack_height() - 1),
         paths::MEMORY,
         memarg.align,
         memarg.memory,
         MemId(memarg.memory),
-        memarg.offset
+        MemOffset(memarg.offset)
     );
 
     if let Signedness::Unsigned = signed {
         out.write_str(" as u16");
     }
 
-    let _ = writeln!(out, "as {destination};");
+    let _ = writeln!(out, " as {destination};");
+}
+
+#[derive(Clone, Copy, Debug)]
+struct MemOffset(u64);
+
+impl std::fmt::Display for MemOffset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Ok(offset) = i32::try_from(self.0) {
+            write!(f, "{offset}i32")
+        } else {
+            write!(f, "({:#010X}u32 as i32)", self.0)
+        }
+    }
 }
 
 /// Generates a [Rust function] definition corresponding to a [WebAssembly function body].
@@ -586,48 +599,48 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)?;",
+                    "let {} = {MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), &self._embedder)?;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset),
                 );
             }
             Operator::I64Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {MEMORY}::i64_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)?;",
+                    "let {} = {MEMORY}::i64_load::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), &self._embedder)?;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::F32Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = f32::from_bits({MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)? as u32);",
+                    "let {} = f32::from_bits({MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), &self._embedder)? as u32);",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::F64Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = f64::from_bits({MEMORY}::i64_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)? as u64);",
+                    "let {} = f64::from_bits({MEMORY}::i64_load::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), &self._embedder)? as u64);",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::I32Load8S { memarg } => {
@@ -658,24 +671,24 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)? as i64;",
+                    "let {} = {MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), &self._embedder)? as i64;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::I64Load32U { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)? as u32 as i64;",
+                    "let {} = {MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), &self._embedder)? as u32 as i64;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::I32Store { memarg } => {
@@ -683,11 +696,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i32_store::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), {to_store}, &self._embedder)?;",
+                    "{MEMORY}::i32_store::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), {to_store}, &self._embedder)?;",
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::I64Store { memarg } => {
@@ -695,11 +708,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i64_store::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), {to_store}, &self._embedder)?;",
+                    "{MEMORY}::i64_store::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), {to_store}, &self._embedder)?;",
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::I32Store8 { memarg } | Operator::I64Store8 { memarg } => {
@@ -707,10 +720,10 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i8_store::<{}, _, _>(&self.{}, {}i32.wrapping_add({address}), {to_store} as i8, &self._embedder)?;",
+                    "{MEMORY}::i8_store::<{}, _, _>(&self.{}, {}.wrapping_add({address}), {to_store} as i8, &self._embedder)?;",
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::I32Store16 { memarg } | Operator::I64Store16 { memarg } => {
@@ -718,11 +731,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i16_store::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), {to_store} as i16, &self._embedder)?;",
+                    "{MEMORY}::i16_store::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), {to_store} as i16, &self._embedder)?;",
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::I64Store32 { memarg } => {
@@ -730,11 +743,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i32_store::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), {to_store} as i32, &self._embedder)?;",
+                    "{MEMORY}::i32_store::<{}, {}, _, _>(&self.{}, {}.wrapping_add({address}), {to_store} as i32, &self._embedder)?;",
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
-                    memarg.offset
+                    MemOffset(memarg.offset)
                 );
             }
             Operator::MemorySize { mem, mem_byte: _ } => {
