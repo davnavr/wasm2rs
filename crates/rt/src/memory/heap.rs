@@ -48,7 +48,7 @@ impl HeapMemory32 {
         let mut mem = Self::with_maximum(maximum);
         match mem.allocation.get_mut().grow(minimum) {
             Some(_) => Ok(mem),
-            None => Err(crate::memory::AllocationError { size: minimum }),
+            None => Err(crate::memory::AllocationError::with_size(minimum)),
         }
     }
 

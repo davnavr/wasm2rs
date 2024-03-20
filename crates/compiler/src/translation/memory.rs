@@ -16,7 +16,15 @@ pub fn write(
             "    {id}: {}::Memory{index},",
             crate::translation::EMBEDDER_PATH
         );
-        let _ = writeln!(init_out, "      let {id} = embedder.initialize{id}()?;",);
+
+        let _ = writeln!(
+            init_out,
+            "      let {id} = embedder.initialize{id}::<{}, {}u32, {}u32>()?;",
+            id.0,
+            memory.initial,
+            memory.maximum.unwrap_or(u32::MAX.into())
+        );
+
         debug_assert!(!memory.shared);
         debug_assert!(!memory.memory64);
     }

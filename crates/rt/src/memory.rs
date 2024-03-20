@@ -30,6 +30,12 @@ pub struct AllocationError {
     size: u32,
 }
 
+impl AllocationError {
+    pub(crate) const fn with_size(size: u32) -> Self {
+        Self { size }
+    }
+}
+
 impl core::fmt::Display for AllocationError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "could not allocate {} pages for memory", self.size)
