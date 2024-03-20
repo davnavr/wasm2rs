@@ -767,6 +767,22 @@ pub(in crate::translation) fn write_definition(
                     StackValue(validator.operand_stack_height()),
                 );
             }
+            Operator::F32Const { value } => {
+                let _ = writeln!(
+                    out,
+                    "let {} = {:#010X}f32;",
+                    StackValue(validator.operand_stack_height()),
+                    value.bits(),
+                );
+            }
+            Operator::F64Const { value } => {
+                let _ = writeln!(
+                    out,
+                    "let {} = {:#018X}f64;",
+                    StackValue(validator.operand_stack_height()),
+                    value.bits(),
+                );
+            }
             Operator::I32Eqz | Operator::I64Eqz => {
                 let result_value = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
