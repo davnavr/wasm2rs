@@ -298,6 +298,7 @@ impl Translation<'_> {
             impl_line_groups.push(impl_lines);
         }
 
+        let item_lines = item_lines;
         let field_lines = field_lines;
         let init_lines = init_lines;
         let impl_line_groups = impl_line_groups;
@@ -319,13 +320,17 @@ impl Translation<'_> {
                 // Some branches may not be taken (e.g. infinite loops detected by `rustc`)
                 "#[allow(unreachable_code)]\n",
                 "$vis mod $module {\n",
-                //
-                "  #[derive(Debug)]\n  #[non_exhaustive]\n",
-                "  $vis struct Instance {\n",
+                // TODO: "pub use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n"
             )
             .as_bytes(),
         )?;
 
+        // Write other items
+        write_all_vectored(output, item_lines)?;
+
+        // Write `Instance` struct
+        output
+            .write_all(b"\n  #[derive(Debug)]\n  #[non_exhaustive]\n  $vis struct Instance {\n")?;
         writeln!(output, "    _embedder: {EMBEDDER_PATH}::State,")?;
 
         // Write fields

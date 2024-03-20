@@ -24,7 +24,7 @@ pub fn write(
         let data = result?;
 
         let id = crate::translation::display::DataId(index);
-        let _ = write!(item_out, "const {id}: &[u8] = ");
+        let _ = write!(item_out, "  const {id}: &[u8] = ");
 
         if data.data.len() <= PREFER_LITERAL_LENGTH {
             write_data_literal(&mut item_out, data.data);
@@ -47,14 +47,14 @@ pub fn write(
             } => {
                 let _ = write!(
                     init_out,
-                    "      <{}::rt::memory::Memory32>::copy_from_slice(&instantiated.{}, ",
+                    "      {}::rt::memory::init::<{memory_index}, _, _>(&{}, {id}, ",
                     crate::translation::EMBEDDER_PATH,
                     crate::translation::display::MemId(memory_index)
                 );
 
                 crate::translation::const_expr::write(&mut init_out, &offset_expr)?;
 
-                let _ = writeln!(init_out, ",\n      {id})?;");
+                let _ = writeln!(init_out, ", 0, {}i32, &embedder)?;", data.data.len());
             }
             DataKind::Passive => (),
         }

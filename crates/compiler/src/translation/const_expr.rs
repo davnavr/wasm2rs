@@ -7,7 +7,7 @@ pub(in crate::translation) fn write(
 ) -> wasmparser::Result<()> {
     use wasmparser::Operator;
 
-    out.write_str("{");
+    out.write_str("{ ");
 
     let mut ops = expr.get_operators_reader();
     let mut stack_height = 0usize;
@@ -19,21 +19,21 @@ pub(in crate::translation) fn write(
             //     stack_height += 1;
             // },
             Operator::I32Const { value } => {
-                let _ = writeln!(out, "let s_{stack_height} = {value}i32;");
+                let _ = write!(out, "let s_{stack_height} = {value}i32; ");
                 stack_height += 1;
             }
             Operator::I64Const { value } => {
-                let _ = writeln!(out, "let s_{stack_height} = {value}i64;");
+                let _ = write!(out, "let s_{stack_height} = {value}i64; ");
                 stack_height += 1;
             }
             Operator::I32Add => {
                 let c_2 = stack_height - 1;
                 let c_1 = stack_height - 2;
-                let _ = writeln!(out, "let {c_1} = i32::wrapping_add({c_1}, {c_2});",);
+                let _ = write!(out, "let s_{c_1} = i32::wrapping_add({c_1}, {c_2}); ",);
                 stack_height -= 1;
             }
             Operator::End => {
-                let _ = write!(out, "{}\n}}", stack_height - 1);
+                let _ = write!(out, "s_{} }}", stack_height - 1);
                 return ops.ensure_end();
             }
             bad => {
