@@ -4,6 +4,11 @@
 #[repr(transparent)]
 pub(in crate::translation) struct ValType(pub(in crate::translation) wasmparser::ValType);
 
+impl ValType {
+    pub(in crate::translation) const I32: Self = Self(wasmparser::ValType::I32);
+    pub(in crate::translation) const I64: Self = Self(wasmparser::ValType::I64);
+}
+
 impl std::fmt::Display for ValType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
