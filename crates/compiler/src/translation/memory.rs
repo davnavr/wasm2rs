@@ -11,11 +11,7 @@ pub fn write(
     for (result, index) in section.into_iter().zip(start_index..) {
         let memory = result?;
         let id = crate::translation::display::MemId(index);
-        let _ = writeln!(
-            field_out,
-            "    {id}: {}::Memory{index},",
-            crate::translation::EMBEDDER_PATH
-        );
+        let _ = writeln!(field_out, "    {id}: embedder::Memory{index},",);
 
         let _ = writeln!(
             init_out,

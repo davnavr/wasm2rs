@@ -17,7 +17,7 @@ pub(in crate::translation) fn write_definition_signature(
         );
     }
 
-    let _ = write!(out, ") -> {}::Result<", crate::translation::EMBEDDER_PATH);
+    out.write_str(") -> embedder::Result<");
     let results = sig.results();
 
     if results.len() != 1 {
@@ -360,33 +360,11 @@ pub(in crate::translation) fn write_definition(
             continue;
         }
 
-        /// Paths to well-known types provided by runtime code.
-        enum Paths {
-            Embedder,
-            Memory,
-            Math,
-            TrapTrait,
-            TrapCode,
-        }
-
-        impl std::fmt::Display for Paths {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                use crate::translation::EMBEDDER_PATH;
-                match self {
-                    Self::Embedder => write!(f, "{EMBEDDER_PATH}::State"),
-                    Self::Memory => write!(f, "{EMBEDDER_PATH}::rt::memory"),
-                    Self::Math => write!(f, "{EMBEDDER_PATH}::rt::math"),
-                    Self::TrapTrait => write!(f, "{EMBEDDER_PATH}::rt::trap::Trap"),
-                    Self::TrapCode => write!(f, "{EMBEDDER_PATH}::rt::trap::TrapCode"),
-                }
-            }
-        }
-
-        const EMBEDDER: Paths = Paths::Embedder;
-        const MEMORY: Paths = Paths::Memory;
-        const MATH: Paths = Paths::Math;
-        const TRAP_TRAIT: Paths = Paths::TrapTrait;
-        const TRAP_CODE: Paths = Paths::TrapCode;
+        const STATE: &str = "embedder::State";
+        const MEMORY: &str = "embedder::rt::memory";
+        const MATH: &str = "embedder::rt::math";
+        const TRAP_TRAIT: &str = "embedder::rt::trap::Trap";
+        const TRAP_CODE: &str = "embedder::rt::trap::TrapCode";
 
         match op {
             Operator::Unreachable => {
@@ -397,7 +375,7 @@ pub(in crate::translation) fn write_definition(
 
                 let _ = write!(
                     out,
-                    "::core::result::Result::Err(<{EMBEDDER} as {TRAP_TRAIT}>::trap(&self._embedder, {TRAP_CODE}::Unreachable))"
+                    "::core::result::Result::Err(<{STATE} as {TRAP_TRAIT}>::trap(&self._embedder, {TRAP_CODE}::Unreachable))"
                 );
 
                 if in_block {

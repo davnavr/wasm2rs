@@ -7,8 +7,6 @@ mod export;
 mod function;
 mod memory;
 
-const EMBEDDER_PATH: &str = "$(::$embedder_start::)? $($embedder_more)::+";
-
 #[derive(Default)]
 struct GeneratedLines {
     items: Vec<bytes::Bytes>,
@@ -320,7 +318,7 @@ impl Translation<'_> {
                 // Some branches may not be taken (e.g. infinite loops detected by `rustc`)
                 "#[allow(unreachable_code)]\n",
                 "$vis mod $module {\n",
-                // TODO: "pub use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n"
+                "  use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n",
             )
             .as_bytes(),
         )?;
@@ -329,9 +327,15 @@ impl Translation<'_> {
         write_all_vectored(output, item_lines)?;
 
         // Write `Instance` struct
-        output
-            .write_all(b"\n  #[derive(Debug)]\n  #[non_exhaustive]\n  $vis struct Instance {\n")?;
-        writeln!(output, "    _embedder: {EMBEDDER_PATH}::State,")?;
+        output.write_all(
+            concat!(
+                "\n  #[derive(Debug)]\n",
+                "  #[non_exhaustive]\n",
+                "  $vis struct Instance {\n",
+                "    _embedder: embedder::State,\n"
+            )
+            .as_bytes(),
+        )?;
 
         // Write fields
         write_all_vectored(output, field_lines)?;
@@ -343,10 +347,8 @@ impl Translation<'_> {
         }
 
         // Write instantiate function
-        writeln!(
-            output,
-            "    $vis fn instantiate(embedder: {}::State) -> {}::Result<Self> {{",
-            EMBEDDER_PATH, EMBEDDER_PATH,
+        output.write_all(
+            b"    $vis fn instantiate(embedder: embedder::State) -> embedder::Result<Self> {\n",
         )?;
         write_all_vectored(output, init_lines)?;
         writeln!(output, "      let instantiated = Self {{")?;

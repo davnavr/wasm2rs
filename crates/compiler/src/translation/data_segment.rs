@@ -47,8 +47,7 @@ pub fn write(
             } => {
                 let _ = write!(
                     init_out,
-                    "      {}::rt::memory::init::<{memory_index}, _, _>(&{}, {id}, ",
-                    crate::translation::EMBEDDER_PATH,
+                    "      embedder::rt::memory::init::<{memory_index}, _, _>(&{}, {id}, ",
                     crate::translation::display::MemId(memory_index)
                 );
 

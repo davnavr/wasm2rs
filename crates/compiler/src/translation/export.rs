@@ -63,8 +63,7 @@ pub fn write(
                 let index = crate::translation::display::MemId(export.index);
                 let _ = writeln!(
                     impl_out,
-                    "(&self) -> &{}::Memory{} {{ &self.{index} }}",
-                    crate::translation::EMBEDDER_PATH,
+                    "(&self) -> &embedder::Memory{} {{ &self.{index} }}",
                     index.0
                 );
             }
