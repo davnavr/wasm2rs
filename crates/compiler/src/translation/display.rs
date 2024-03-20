@@ -14,6 +14,8 @@ impl std::fmt::Display for ValType {
         match self.0 {
             wasmparser::ValType::I32 => f.write_str("i32"),
             wasmparser::ValType::I64 => f.write_str("i64"),
+            wasmparser::ValType::F32 => f.write_str("f32"),
+            wasmparser::ValType::F64 => f.write_str("f64"),
             other => todo!("how to write {other}?"),
         }
     }

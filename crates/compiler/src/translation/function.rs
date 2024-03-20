@@ -606,6 +606,30 @@ pub(in crate::translation) fn write_definition(
                     memarg.offset
                 );
             }
+            Operator::F32Load { memarg } => {
+                let address = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {} = f32::from_bits({MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)? as u32);",
+                    StackValue(validator.operand_stack_height() - 1),
+                    memarg.align,
+                    memarg.memory,
+                    MemId(memarg.memory),
+                    memarg.offset
+                );
+            }
+            Operator::F64Load { memarg } => {
+                let address = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {} = f64::from_bits({MEMORY}::i64_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)? as u64);",
+                    StackValue(validator.operand_stack_height() - 1),
+                    memarg.align,
+                    memarg.memory,
+                    MemId(memarg.memory),
+                    memarg.offset
+                );
+            }
             Operator::I32Load8S { memarg } => {
                 write_i8_load(out, validator, &memarg, Signedness::Signed, ValType::I32);
             }
