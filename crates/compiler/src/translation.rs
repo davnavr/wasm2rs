@@ -1,5 +1,6 @@
 //! Contains the core code for translating WebAssembly to Rust.
 
+mod const_expr;
 mod data_segment;
 mod display;
 mod export;

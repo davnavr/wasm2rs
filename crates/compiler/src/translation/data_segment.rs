@@ -23,16 +23,12 @@ pub fn write(
 
         let data = result?;
 
-        let _ = write!(
-            item_out,
-            "const {}: &[u8] = ",
-            crate::translation::display::MemId(index)
-        );
+        let id = crate::translation::display::DataId(index);
+        let _ = write!(item_out, "const {id}: &[u8] = ");
 
         if data.data.len() <= PREFER_LITERAL_LENGTH {
             write_data_literal(&mut item_out, data.data);
-        }
-        if let Some(path) = writer(index, data.data)? {
+        } else if let Some(path) = writer(index, data.data)? {
             let _ = write!(
                 item_out,
                 "::core::include_bytes!({});",
@@ -49,7 +45,16 @@ pub fn write(
                 memory_index,
                 offset_expr,
             } => {
-                todo!("active data segments not supported")
+                let _ = write!(
+                    init_out,
+                    "      <{}::rt::memory::Memory32>::copy_from_slice(&instantiated.{}, ",
+                    crate::translation::EMBEDDER_PATH,
+                    crate::translation::display::MemId(memory_index)
+                );
+
+                crate::translation::const_expr::write(&mut init_out, &offset_expr)?;
+
+                let _ = writeln!(init_out, ",\n      {id})?;");
             }
             DataKind::Passive => (),
         }
