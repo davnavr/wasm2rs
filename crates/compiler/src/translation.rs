@@ -284,12 +284,12 @@ impl Translation<'_> {
 
         output.write_all(
             concat!(
-                "    ($($vis:vis)? mod $module:ident use $embedder:path) => {\n",
+                "    ($vis:vis mod $module:ident use $embedder:path) => {\n",
                 //
-                "$($vis)? mod $module {\n",
+                "$vis mod $module {\n",
                 //
                 "  #[derive(Debug)]\n  #[non_exhaustive]\n",
-                "  $($vis)? struct Instance {\n",
+                "  $vis struct Instance {\n",
                 "    _embedder: $embedder::State,\n",
             )
             .as_bytes(),
@@ -331,10 +331,10 @@ impl Translation<'_> {
         output.write_all(b"\n      Ok(instantiated)\n    }\n  }\n}\n")?; // impl Instance
 
         // Other macro cases
-        output.write_all(b"}}\n    }};\n    ($($vis:vis)? mod $module:ident) => {{\n")?;
+        output.write_all(b"    };\n    ($vis:vis mod $module:ident) => {\n")?;
         writeln!(
             output,
-            "        {}!($($vis)? mod $module use ::wasm2rs_rt::embedder);\n    }};",
+            "        {}!($vis mod $module use ::wasm2rs_rt::embedder);\n    }};",
             self.generated_macro_name
         )?;
 
@@ -346,7 +346,13 @@ impl Translation<'_> {
 
         writeln!(
             output,
-            "    ($($vis:vis)?) => {{ {}!($($vis)? mod wasm) }};",
+            "    ($vis:vis) => {{ {}!($vis mod wasm) }};",
+            self.generated_macro_name
+        )?;
+
+        writeln!(
+            output,
+            "    () => {{ {}!(pub) }};\n}}",
             self.generated_macro_name
         )?;
 

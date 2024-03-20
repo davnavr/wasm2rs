@@ -18,11 +18,7 @@ fn write_function_export(
     index: crate::translation::display::FuncId,
     types: &wasmparser::types::Types,
 ) {
-    let _ = write!(
-        out,
-        "$vis fn {}(&self, ",
-        crate::rust::SafeIdent::from(name),
-    );
+    let _ = write!(out, "    $vis fn {}", crate::rust::SafeIdent::from(name),);
     let func_type = crate::translation::function::get_function_type(
         types.get(types.core_function_at(index.0)).unwrap(),
     );
@@ -48,6 +44,8 @@ pub fn write(
 ) -> wasmparser::Result<crate::translation::GeneratedLines> {
     let mut impl_out = crate::buffer::Writer::new(buffer_pool);
 
+    impl_out.write_str("    // Exports\n");
+
     for result in section {
         use wasmparser::ExternalKind;
 
@@ -62,6 +60,8 @@ pub fn write(
             _ => todo!("unsupported export: {export:?}"),
         }
     }
+
+    impl_out.write_str("\n");
 
     Ok(crate::translation::GeneratedLines {
         impls: impl_out.finish(),

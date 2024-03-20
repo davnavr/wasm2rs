@@ -12,7 +12,7 @@ pub fn write(
         let memory = result?;
         let id = crate::translation::display::MemId(index);
         let _ = writeln!(field_out, "    {id}: $embedder::Memory{index},");
-        let _ = writeln!(init_out, "let {id} = $embedder::init{id}(embedder)?;");
+        let _ = writeln!(init_out, "      let {id} = $embedder::init{id}(embedder)?;");
         debug_assert!(!memory.shared);
         debug_assert!(!memory.memory64);
     }

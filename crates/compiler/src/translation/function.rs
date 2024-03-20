@@ -331,9 +331,9 @@ pub(in crate::translation) fn write_definition(
 
     let func_result_count = u32::try_from(func_type.results().len()).unwrap();
 
-    let _ = write!(out, "\n  fn _f{}", validator.index());
+    let _ = write!(out, "\n    fn _f{}", validator.index());
     write_definition_signature(out, func_type);
-    out.write_str(" {");
+    out.write_str(" {\n");
 
     // TODO: Make a crate::buffer::IndentedWriter or something
 
@@ -784,6 +784,6 @@ pub(in crate::translation) fn write_definition(
     // Implicit return generated when last `end` is handled.
     validator.finish(operators.original_position())?;
 
-    out.write_str("  }\n");
+    out.write_str("    }\n");
     Ok(())
 }

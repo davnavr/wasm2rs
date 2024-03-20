@@ -1,5 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/memory.rs"));
 
+wasm!();
+
 #[test]
 fn basic_read_writes() {
     let inst = wasm::Instance::instantiate().unwrap();
