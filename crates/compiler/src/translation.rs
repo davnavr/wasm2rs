@@ -1,5 +1,6 @@
 //! Contains the core code for translating WebAssembly to Rust.
 
+mod data_segment;
 mod display;
 mod export;
 mod function;
@@ -9,20 +10,33 @@ const EMBEDDER_PATH: &str = "$(::$embedder_start::)? $($embedder_more)::+";
 
 #[derive(Default)]
 struct GeneratedLines {
+    items: Vec<bytes::Bytes>,
     fields: Vec<bytes::Bytes>,
     impls: Vec<bytes::Bytes>,
-    inits: Vec<bytes::Bytes>,
+    inits: Vec<bytes::Bytes>, // Vec<Ordered<u8, bytes::Bytes>>,
 }
+
+/// Function that writes a data segment to some file, returning a path to it.
+///
+/// This function is passed the index of the data segment and its contents. An implementation
+/// is expected to write the contents to a new file, and return a path to it such that the
+/// generated code may use [`include_bytes!`].
+///
+/// # Errors
+///
+/// - `Ok(None)` is returned if a file could not be created. In this case, the data segment
+///   contents are included as a byte string literal.
+/// - `Err` is returned if a file could not be created.
+pub type DataSegmentWriter<'a> =
+    &'a (dyn Fn(u32, &[u8]) -> std::io::Result<Option<String>> + Send + Sync);
 
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
 /// [Rust source file]: https://doc.rust-lang.org/reference/crates-and-source-files.html
-#[derive(Debug)]
 pub struct Translation<'a> {
-    //runtime_path: CratePath,
-    //visibility: Public|Crate(Option<Path>),
     generated_macro_name: crate::rust::SafeIdent<'a>,
+    data_segment_writer: DataSegmentWriter<'a>,
     wasm_features: &'a wasmparser::WasmFeatures,
     buffer_pool: Option<&'a crate::buffer::Pool>,
 }
@@ -63,6 +77,7 @@ impl<'a> Translation<'a> {
     pub fn new() -> Self {
         Self {
             generated_macro_name: crate::rust::Ident::DEFAULT_MACRO_NAME.into(),
+            data_segment_writer: &|_, _| Ok(None),
             wasm_features: &Self::DEFAULT_SUPPORTED_FEATURES,
             buffer_pool: None,
         }
@@ -98,11 +113,20 @@ impl<'a> Translation<'a> {
         self.buffer_pool = Some(pool);
         self
     }
+
+    /// Sets the function used to write data segment contents to disk.
+    ///
+    /// For more information, see the documentation for [`DataSegmentWriter`].
+    pub fn data_segment_writer(&mut self, writer: DataSegmentWriter<'a>) -> &mut Self {
+        self.data_segment_writer = writer;
+        self
+    }
 }
 
 enum KnownSection<'a> {
     Memory(wasmparser::MemorySectionReader<'a>),
     Export(wasmparser::ExportSectionReader<'a>),
+    Data(wasmparser::DataSectionReader<'a>),
 }
 
 struct FunctionValidator<'a> {
@@ -140,6 +164,7 @@ fn parse_wasm_sections<'a>(
             }
             Payload::ExportSection(exports) => sections.push(KnownSection::Export(exports)),
             Payload::StartSection { func, range: _ } => start_function = Some(func),
+            Payload::DataSection(data) => sections.push(KnownSection::Data(data)),
             _ => (),
         }
 
@@ -235,25 +260,35 @@ impl Translation<'_> {
         std::mem::drop(func_validator_allocation_pool);
 
         // Generate globals, exports, memories, tables, and other things
+        let mut item_lines = Vec::new();
         let mut field_lines = Vec::new();
         let mut init_lines = Vec::new();
         let mut impl_line_groups = function_decls;
 
+        // Note that because `sections` is in a consistent order, all of these contents will be in
+        // a consistent order too.
         {
             let contents = sections
                 .into_par_iter()
                 .map(|section| match section {
                     KnownSection::Memory(memories) => {
                         memory::write(buffer_pool, memories, memory_import_count)
+                            .map_err(Into::into)
                     }
-                    KnownSection::Export(exports) => export::write(buffer_pool, exports, &types),
+                    KnownSection::Export(exports) => {
+                        export::write(buffer_pool, exports, &types).map_err(Into::into)
+                    }
+                    KnownSection::Data(data) => {
+                        data_segment::write(buffer_pool, data, self.data_segment_writer)
+                    }
                 })
-                .collect::<Vec<wasmparser::Result<_>>>();
+                .collect::<Vec<crate::Result<_>>>();
 
             let mut impl_lines = Vec::new();
 
             for result in contents.into_iter() {
                 let mut lines = result?;
+                item_lines.append(&mut lines.items);
                 field_lines.append(&mut lines.fields);
                 init_lines.append(&mut lines.inits);
                 impl_lines.append(&mut lines.impls);
@@ -355,5 +390,14 @@ impl Translation<'_> {
         )?;
 
         output.flush().map_err(Into::into)
+    }
+}
+
+impl std::fmt::Debug for Translation<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Translation")
+            .field("generated_macro_name", &self.generated_macro_name)
+            .field("wasm_features", self.wasm_features)
+            .finish_non_exhaustive()
     }
 }

@@ -43,3 +43,13 @@ impl std::fmt::Display for MemId {
         write!(f, "_mem_{}", self.0)
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+#[repr(transparent)]
+pub(in crate::translation) struct DataId(pub(in crate::translation) u32);
+
+impl std::fmt::Display for DataId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_DATA_{}", self.0)
+    }
+}

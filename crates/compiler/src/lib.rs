@@ -14,7 +14,7 @@ pub mod buffer;
 pub mod rust;
 
 pub use error::Error;
-pub use translation::Translation;
+pub use translation::{DataSegmentWriter, Translation};
 
 /// Result type used for translation operations.
 pub type Result<T> = std::result::Result<T, Error>;
