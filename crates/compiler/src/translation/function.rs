@@ -17,8 +17,7 @@ pub(in crate::translation) fn write_definition_signature(
         );
     }
 
-    out.write_str(") -> ::core::result::Result<");
-
+    let _ = write!(out, ") -> {}::Result<", crate::translation::EMBEDDER_PATH);
     let results = sig.results();
 
     if results.len() != 1 {
@@ -38,7 +37,7 @@ pub(in crate::translation) fn write_definition_signature(
         out.write_str(")");
     }
 
-    out.write_str(", <RT as {RT_CRATE_PATH}::trap::Trap>::Repr>");
+    out.write_str(">");
 }
 
 type Validator = wasmparser::FuncValidator<wasmparser::ValidatorResources>;
@@ -331,7 +330,7 @@ pub(in crate::translation) fn write_definition(
 
     let func_result_count = u32::try_from(func_type.results().len()).unwrap();
 
-    let _ = write!(out, "\n    fn _f{}", validator.index());
+    let _ = write!(out, "\n    fn {}", FuncId(validator.index()));
     write_definition_signature(out, func_type);
     out.write_str(" {\n");
 

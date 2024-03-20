@@ -1,5 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/simple.rs"));
 
+wasm!();
+
 #[test]
 fn add_five_works() {
     let inst = wasm::Instance::instantiate().unwrap();

@@ -304,7 +304,7 @@ impl Translation<'_> {
         // Write instantiate function
         writeln!(
             output,
-            "    fn instantiate(embedder: $embedder::State) -> $embedder::Result<Self> {{"
+            "    $vis fn instantiate(embedder: $embedder::State) -> $embedder::Result<Self> {{"
         )?;
         write_all_vectored(output, init_lines)?;
         writeln!(output, "      let instantiated = Self {{")?;
