@@ -64,12 +64,7 @@ fn write_local_variables(
         };
 
         for _ in 0..count {
-            let _ = writeln!(
-                out,
-                "let mut {}: {} = {default_value};",
-                local,
-                ValType(ty),
-            );
+            let _ = writeln!(out, "let mut {}: {} = {default_value};", local, ValType(ty),);
 
             local.0 += 1;
         }
@@ -78,7 +73,7 @@ fn write_local_variables(
     Ok(())
 }
 
-fn get_function_type(ty: &wasmparser::SubType) -> &wasmparser::FuncType {
+pub(in crate::translation) fn get_function_type(ty: &wasmparser::SubType) -> &wasmparser::FuncType {
     match ty {
         wasmparser::SubType {
             is_final: true,
@@ -336,7 +331,7 @@ pub(in crate::translation) fn write_definition(
 
     let func_result_count = u32::try_from(func_type.results().len()).unwrap();
 
-    let _ = write!(out, "fn _f{}", validator.index());
+    let _ = write!(out, "\n  fn _f{}", validator.index());
     write_definition_signature(out, &func_type);
     out.write_str(" {");
 
@@ -778,10 +773,7 @@ pub(in crate::translation) fn write_definition(
             }
             Operator::I64ExtendI32U => {
                 let popped = PoppedValue::pop(validator, 0);
-                let _ = writeln!(
-                    out,
-                    "let {popped:#} = (({popped} as u32) as u64) as i64;",
-                );
+                let _ = writeln!(out, "let {popped:#} = (({popped} as u32) as u64) as i64;",);
             }
             _ => todo!("translate {op:?}"),
         }
@@ -792,6 +784,6 @@ pub(in crate::translation) fn write_definition(
     // Implicit return generated when last `end` is handled.
     validator.finish(operators.original_position())?;
 
-    out.write_str("}\n}\n\n");
+    out.write_str("  }\n");
     Ok(())
 }

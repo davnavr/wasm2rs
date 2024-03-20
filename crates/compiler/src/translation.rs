@@ -141,6 +141,18 @@ fn parse_wasm_sections<'a>(
     unreachable!("missing end payload");
 }
 
+fn write_all_vectored(
+    output: &mut dyn std::io::Write,
+    bytes: Vec<bytes::Bytes>,
+) -> std::io::Result<()> {
+    // TODO: Actually call write_vectored
+    for buffer in bytes.into_iter() {
+        output.write_all(&buffer)?;
+    }
+
+    Ok(())
+}
+
 impl Translation<'_> {
     /// Translates an in-memory WebAssembly binary module, and [`Write`]s the resulting Rust source
     /// code to the given output.
@@ -199,6 +211,28 @@ impl Translation<'_> {
         std::mem::drop(func_validator_allocation_pool);
 
         // Generate globals, exports, memories, tables, and other miscellaneous things
+        let (field_lines, impl_line_groups) = {
+            let contents = sections
+                .into_par_iter()
+                .map(|section| match section {
+                    KnownSection::Export(exports) => export::write(buffer_pool, exports, &types),
+                })
+                .collect::<Vec<wasmparser::Result<_>>>();
+
+            let mut field_lines = Vec::new();
+            let mut impl_lines = Vec::new();
+
+            for result in contents.into_iter() {
+                let (mut fields, mut impls) = result?;
+                field_lines.append(&mut fields);
+                impl_lines.append(&mut impls);
+            }
+
+            let mut impl_line_groups = function_decls;
+            impl_line_groups.push(impl_lines);
+
+            (field_lines, impl_line_groups)
+        };
 
         // Write the file contents
         output.write_all(
@@ -222,17 +256,29 @@ impl Translation<'_> {
 
         output.write_all(
             concat!(
-                "    ($($vis:vis)? mod $module:ident use $embedder:ident) => {\n",
+                "    ($($vis:vis)? mod $module:ident use $embedder:path) => {\n",
+                //
                 "$($vis)? mod $module {\n",
+                //
+                "  #[derive(Debug)]\n  #[non_exhaustive]\n",
+                "  $($vis)? struct Instance {\n",
+                "    _embedder: $embedder::State,\n",
             )
             .as_bytes(),
         )?;
 
+        // Write fields
+        write_all_vectored(output, field_lines)?;
+
+        // Write methods
+        output.write_all(concat!("  }\n\n  impl Instance {\n").as_bytes());
+        for impl_lines in impl_line_groups {
+            write_all_vectored(output, impl_lines)?;
+        }
+        output.write_all(b"  }\n}\n")?;
+
         // Other macro cases
-        writeln!(
-            output,
-            "}}\n    }};\n    ($($vis:vis)? mod $module:ident) => {{"
-        )?;
+        output.write_all(b"}}\n    }};\n    ($($vis:vis)? mod $module:ident) => {{\n")?;
         writeln!(
             output,
             "        {}!($($vis)? mod $module use ::wasm2rs_rt::embedder);\n    }};",
@@ -241,7 +287,7 @@ impl Translation<'_> {
 
         writeln!(
             output,
-            "    (use $embedder:ident) => {{ {}!(mod wasm use $embedder) }};",
+            "    (use $embedder:path) => {{ {}!(mod wasm use $embedder) }};",
             self.generated_macro_name
         )?;
 
