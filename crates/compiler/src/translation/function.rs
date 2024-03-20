@@ -229,10 +229,10 @@ impl BranchKind {
 
         match self {
             BranchKind::ExplicitReturn => {
-                writeln!(out, ");");
+                out.write_str(");\n");
             }
             BranchKind::ImplicitReturn => {
-                writeln!(out, ")");
+                out.write_str(")\n");
             }
             BranchKind::Block => out.write_str("\n"),
             BranchKind::Loop(_) | BranchKind::Branch(_) => {

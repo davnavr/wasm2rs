@@ -271,7 +271,7 @@ impl Translation<'_> {
         write_all_vectored(output, field_lines)?;
 
         // Write methods
-        output.write_all(concat!("  }\n\n  impl Instance {\n").as_bytes());
+        output.write_all(concat!("  }\n\n  impl Instance {\n").as_bytes())?;
         for impl_lines in impl_line_groups {
             write_all_vectored(output, impl_lines)?;
         }

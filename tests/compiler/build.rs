@@ -15,7 +15,7 @@ fn main() {
             Err(e) => panic!("could not open output file {out_path:?}: {e}"),
         };
 
-        if let Err(e) = wasm2rs::Translation::new().compile_from_buffer(&wasm, &mut output) {
+        if let Err(e) = wasm2rs::Translation::new().translate_from_buffer(&wasm, &mut output) {
             panic!("compilation failed for {name:?}: {e}");
         }
     };
