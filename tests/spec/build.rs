@@ -383,8 +383,8 @@ fn main() {
                 .unwrap_or_else(|e| panic!("could not create module file {mod_file_path:?}: {e}"));
 
             let translation_result = wasm2rs::Translation::new()
-                .generated_module_name(module_ident)
-                .compile_from_buffer(&module.contents, &mut mod_file);
+                .generated_macro_name(module_ident)
+                .translate_from_buffer(&module.contents, &mut mod_file);
 
             if let Err(e) = translation_result {
                 panic!("could not translate module {module_ident} from {wast_path:?}: {e}");
@@ -392,7 +392,10 @@ fn main() {
 
             std::mem::drop(mod_file);
 
-            let _ = writeln!(&mut rs_file, "include!({mod_file_path:?});");
+            let _ = writeln!(
+                &mut rs_file,
+                "include!({mod_file_path:?});\n{module_ident}!(pub mod {module_ident});"
+            );
 
             for (assertion_number, assertion) in module.tests.into_iter().enumerate() {
                 let _ = writeln!(
@@ -402,7 +405,7 @@ fn main() {
 
                 let _ = writeln!(
                     &mut rs_file,
-                    "    let inst = {module_ident}::Instance::instantiate().unwrap();"
+                    "    let inst = {module_ident}::Instance::instantiate(Default::default()).unwrap();"
                 );
 
                 struct PrintValues<'a>(&'a [SpecValue]);

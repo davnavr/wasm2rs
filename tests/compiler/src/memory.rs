@@ -4,7 +4,7 @@ wasm!();
 
 #[test]
 fn basic_read_writes() {
-    let inst = wasm::Instance::instantiate().unwrap();
+    let inst = wasm::Instance::instantiate(Default::default()).unwrap();
     inst.write_my_int().unwrap();
     assert_eq!(inst.read_my_int(), Ok(65));
 }
@@ -12,12 +12,12 @@ fn basic_read_writes() {
 #[test]
 #[should_panic]
 fn bounds_checking() {
-    let inst = wasm::Instance::instantiate().unwrap();
+    let inst = wasm::Instance::instantiate(Default::default()).unwrap();
     inst.out_of_bounds_read().unwrap();
 }
 
 #[test]
 fn growing() {
-    let inst = wasm::Instance::instantiate().unwrap();
+    let inst = wasm::Instance::instantiate(Default::default()).unwrap();
     assert_eq!(inst.grow_then_write(), Ok(0xBABA));
 }
