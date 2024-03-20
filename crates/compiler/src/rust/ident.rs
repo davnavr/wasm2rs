@@ -75,6 +75,9 @@ impl Ident<'static> {
 
     /// Identifier for the `wasm2rs` runtime support crate.
     pub const NAME_RT_CRATE: Self = Self::unescaped("wasm2rs_rt");
+
+    /// Identifier for the default name for the generated Rust module.
+    pub const DEFAULT_MODULE_NAME: Self = Self::unescaped("wasm");
 }
 
 impl std::fmt::Display for Ident<'_> {

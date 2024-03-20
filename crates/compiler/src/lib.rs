@@ -9,12 +9,13 @@
 
 mod error;
 mod translation;
+mod translation_old;
 
 pub mod buffer;
 pub mod rust;
 
 pub use error::Error;
-pub use translation::Translation;
+pub use translation_old::Translation;
 
 /// Result type used for translation operations.
 pub type Result<T> = std::result::Result<T, Error>;
