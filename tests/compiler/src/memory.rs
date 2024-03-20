@@ -21,3 +21,10 @@ fn growing() {
     let inst = wasm::Instance::instantiate(Default::default()).unwrap();
     assert_eq!(inst.grow_then_write(), Ok(0xBABA));
 }
+
+#[test]
+fn active_data_segments() {
+    use wasm2rs_rt::memory::Memory32;
+    let inst = wasm::Instance::instantiate(Default::default()).unwrap();
+    assert_eq!(inst.mem().i32_load::<0>(1234), Ok(0x0403_0201));
+}
