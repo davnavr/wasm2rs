@@ -11,8 +11,16 @@ pub fn write(
     for (result, index) in section.into_iter().zip(start_index..) {
         let memory = result?;
         let id = crate::translation::display::MemId(index);
-        let _ = writeln!(field_out, "    {id}: $embedder::Memory{index},");
-        let _ = writeln!(init_out, "      let {id} = $embedder::init{id}(embedder)?;");
+        let _ = writeln!(
+            field_out,
+            "    {id}: {}::Memory{index},",
+            crate::translation::EMBEDDER_PATH
+        );
+        let _ = writeln!(
+            init_out,
+            "      let {id} = {}::init{id}(embedder)?;",
+            crate::translation::EMBEDDER_PATH
+        );
         debug_assert!(!memory.shared);
         debug_assert!(!memory.memory64);
     }

@@ -63,12 +63,11 @@ impl HeapMemory32 {
         len: usize,
         f: impl FnOnce(&mut [u8]) -> R,
     ) -> crate::memory::AccessResult<R> {
+        #[inline(never)]
         fn out_of_bounds(addr: u32, len: usize) -> crate::memory::MemoryAccessError {
             crate::memory::MemoryAccessError {
                 address: addr,
-                pointee: crate::memory::MemoryAccessPointee::Other {
-                    size: u16::try_from(len).ok().and_then(core::num::NonZeroU16::new),
-                },
+                pointee: crate::memory::MemoryAccessPointee::other_with_size(len),
             }
         }
 

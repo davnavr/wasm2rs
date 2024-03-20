@@ -18,6 +18,7 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+pub mod embedder;
 pub mod math;
 pub mod memory;
 pub mod trap;

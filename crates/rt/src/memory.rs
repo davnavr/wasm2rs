@@ -9,6 +9,10 @@ mod heap;
 #[cfg(feature = "alloc")]
 pub use heap::HeapMemory32;
 
+mod empty;
+
+pub use empty::EmptyMemory;
+
 /// The size, in bytes, of a WebAssembly linear memory [page].
 ///
 /// [page]: https://webassembly.github.io/spec/core/exec/runtime.html#page-size
@@ -54,6 +58,16 @@ pub enum MemoryAccessPointee {
         /// The size, in bytes, of the read or write; or `None` if the size is too large to fit.
         size: Option<core::num::NonZeroU16>,
     },
+}
+
+impl MemoryAccessPointee {
+    fn other_with_size(size: usize) -> Self {
+        Self::Other {
+            size: u16::try_from(size)
+                .ok()
+                .and_then(core::num::NonZeroU16::new),
+        }
+    }
 }
 
 impl core::fmt::Display for MemoryAccessPointee {
