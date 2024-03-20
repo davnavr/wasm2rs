@@ -2,9 +2,9 @@
 //!
 //! [WebAssembly traps]: https://webassembly.github.io/spec/core/intro/overview.html#trap
 
-mod return_on_trap;
+mod trap_value;
 
-pub use return_on_trap::{ReturnOnTrap, TrapValue};
+pub use trap_value::TrapValue;
 
 /// Describes a memory access that resulted in a trap.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -132,19 +132,5 @@ impl<T: Trap + ?Sized> Trap for &T {
 
     fn trap(&self, code: TrapCode) -> Self::Repr {
         <T>::trap(self, code)
-    }
-}
-
-/// A [`Trap`] implementation that panics.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct PanicOnTrap;
-
-impl Trap for PanicOnTrap {
-    type Repr = core::convert::Infallible; // never "!" is still unstable
-
-    #[cold]
-    #[inline(never)]
-    fn trap(&self, code: TrapCode) -> Self::Repr {
-        panic!("{code}")
     }
 }

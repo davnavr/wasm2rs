@@ -20,3 +20,14 @@ pub type Result<T> = ::core::result::Result<T, crate::trap::TrapValue>;
 /// The default embedder state.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct State;
+
+impl crate::trap::Trap for State {
+    type Repr = crate::trap::TrapValue;
+
+    #[inline(never)]
+    fn trap(&self, code: crate::trap::TrapCode) -> Self::Repr {
+        <Self::Repr>::new(code)
+    }
+}
+
+// TODO: Helper macro to make a new embedder module

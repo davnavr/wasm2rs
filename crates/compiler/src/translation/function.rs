@@ -360,19 +360,33 @@ pub(in crate::translation) fn write_definition(
             continue;
         }
 
+        /// Paths to well-known types provided by runtime code.
         enum Paths {
-            Runtime,
+            Embedder,
+            Memory,
+            Math,
+            TrapTrait,
+            TrapCode,
         }
 
         impl std::fmt::Display for Paths {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                use crate::translation::EMBEDDER_PATH;
                 match self {
-                    Self::Runtime => write!(f, "{}::rt::", crate::translation::EMBEDDER_PATH),
+                    Self::Embedder => write!(f, "{EMBEDDER_PATH}::State"),
+                    Self::Memory => write!(f, "{EMBEDDER_PATH}::rt::memory"),
+                    Self::Math => write!(f, "{EMBEDDER_PATH}::rt::math"),
+                    Self::TrapTrait => write!(f, "{EMBEDDER_PATH}::rt::trap::Trap"),
+                    Self::TrapCode => write!(f, "{EMBEDDER_PATH}::rt::trap::TrapCode"),
                 }
             }
         }
 
-        const RT_PATH: Paths = Paths::Runtime;
+        const EMBEDDER: Paths = Paths::Embedder;
+        const MEMORY: Paths = Paths::Memory;
+        const MATH: Paths = Paths::Math;
+        const TRAP_TRAIT: Paths = Paths::TrapTrait;
+        const TRAP_CODE: Paths = Paths::TrapCode;
 
         match op {
             Operator::Unreachable => {
@@ -381,7 +395,10 @@ pub(in crate::translation) fn write_definition(
                     out.write_str("return ");
                 }
 
-                let _ = write!(out, "::core::result::Result::Err(<RT as {RT_PATH}trap::Trap>::trap(&self._rt, {RT_PATH}trap::TrapCode::Unreachable))");
+                let _ = write!(
+                    out,
+                    "::core::result::Result::Err(<{EMBEDDER} as {TRAP_TRAIT}>::trap(&self._embedder, {TRAP_CODE}::Unreachable))"
+                );
 
                 if in_block {
                     out.write_str(";\n");
@@ -489,7 +506,7 @@ pub(in crate::translation) fn write_definition(
 
                         for i in 0..u32::try_from(block_parameters.len()).unwrap() {
                             let operand = StackValue(operands_start + i);
-                            let _ = writeln!(out, "_b{}{operand} = {operand};", label.0);
+                            let _ = writeln!(out, "_b_{}{operand} = {operand};", label.0);
                         }
 
                         let _ = writeln!(out, "continue {label};");
@@ -531,7 +548,7 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {RT_PATH}memory::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._rt)?;",
+                    "let {} = {MEMORY}::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._embedder)?;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.align,
                     memarg.memory,
@@ -544,7 +561,7 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{RT_PATH}memory::i32_store::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), {to_store}, &self._rt)?;",
+                    "{MEMORY}::i32_store::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), {to_store}, &self._embedder)?;",
                     memarg.align,
                     memarg.memory,
                     MemId(memarg.memory),
@@ -554,7 +571,7 @@ pub(in crate::translation) fn write_definition(
             Operator::MemorySize { mem, mem_byte: _ } => {
                 let _ = writeln!(
                     out,
-                    "let {}: i32 = {RT_PATH}memory::size(&self.{});",
+                    "let {}: i32 = {MEMORY}::size(&self.{});",
                     StackValue(validator.operand_stack_height()),
                     MemId(mem),
                 );
@@ -563,7 +580,7 @@ pub(in crate::translation) fn write_definition(
                 let operand = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {operand:#}: i32 = {RT_PATH}memory::grow(&self.{}, {operand});",
+                    "let {operand:#}: i32 = {MEMORY}::grow(&self.{}, {operand});",
                     MemId(mem),
                 );
             }
@@ -655,7 +672,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = {RT_PATH}math::i32_div_s({c_1}, {c_2}, &self._rt)?;",
+                    "let {c_1:#} = {MATH}::i32_div_s({c_1}, {c_2}, &self._embedder)?;",
                 );
             }
             Operator::I32DivU => {
@@ -663,7 +680,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = {RT_PATH}math::i32_div_u({c_1}, {c_2}, &self._rt)?;",
+                    "let {c_1:#} = {MATH}::i32_div_u({c_1}, {c_2}, &self._embedder)?;",
                 );
             }
             Operator::I32RemS => {
@@ -671,7 +688,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = {RT_PATH}math::i32_rem_s({c_1}, {c_2}, &self._rt)?;",
+                    "let {c_1:#} = {MATH}::i32_rem_s({c_1}, {c_2}, &self._embedder)?;",
                 );
             }
             Operator::I32RemU => {
@@ -679,7 +696,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = {RT_PATH}math::i32_rem_u({c_1}, {c_2}, &self._rt)?;",
+                    "let {c_1:#} = {MATH}::i32_rem_u({c_1}, {c_2}, &self._embedder)?;",
                 );
             }
             Operator::I32Shl => {
@@ -729,7 +746,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = {RT_PATH}math::i64_div_s({c_1}, {c_2}, &self._rt)?;",
+                    "let {c_1:#} = {MATH}::i64_div_s({c_1}, {c_2}, &self._embedder)?;",
                 );
             }
             Operator::I64DivU => {
@@ -737,7 +754,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = {RT_PATH}math::i64_div_u({c_1}, {c_2}, &self._rt)?;",
+                    "let {c_1:#} = {MATH}::i64_div_u({c_1}, {c_2}, &self._embedder)?;",
                 );
             }
             Operator::I64RemS => {
@@ -745,7 +762,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = {RT_PATH}math::i64_rem_s({c_1}, {c_2}, &self._rt)?;",
+                    "let {c_1:#} = {MATH}::i64_rem_s({c_1}, {c_2}, &self._embedder)?;",
                 );
             }
             Operator::I64RemU => {
@@ -753,7 +770,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = {RT_PATH}math::i64_rem_u({c_1}, {c_2}, &self._rt)?;",
+                    "let {c_1:#} = {MATH}::i64_rem_u({c_1}, {c_2}, &self._embedder)?;",
                 );
             }
             Operator::I64Shl => {

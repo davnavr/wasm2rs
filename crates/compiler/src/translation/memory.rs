@@ -16,11 +16,7 @@ pub fn write(
             "    {id}: {}::Memory{index},",
             crate::translation::EMBEDDER_PATH
         );
-        let _ = writeln!(
-            init_out,
-            "      let {id} = {}::init{id}(embedder)?;",
-            crate::translation::EMBEDDER_PATH
-        );
+        let _ = writeln!(init_out, "      let {id} = embedder.initialize{id}()?;",);
         debug_assert!(!memory.shared);
         debug_assert!(!memory.memory64);
     }

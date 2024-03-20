@@ -1,24 +1,10 @@
-/// A [`Trap`] implementation that reports traps as normal Rust values.
-///
-/// [`Trap`]: crate::trap::Trap
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct ReturnOnTrap;
-
-impl crate::trap::Trap for ReturnOnTrap {
-    type Repr = TrapValue;
-
-    fn trap(&self, code: crate::trap::TrapCode) -> TrapValue {
-        TrapValue::new(code)
-    }
-}
-
 struct Inner {
     //rust_backtrace: std::backtrace::Backtrace,
     //wasm_backtrace: ?,
     code: crate::trap::TrapCode,
 }
 
-/// Describes a WebAssembly trap that was reported with [`ReturnOnTrap`].
+/// Describes a WebAssembly trap.
 ///
 /// If the `alloc` feature is not enabled, heap allocation is not used to store additional
 /// information, and only the [`TrapCode`] is stored.
@@ -34,7 +20,7 @@ pub struct TrapValue {
 }
 
 impl TrapValue {
-    fn new(code: crate::trap::TrapCode) -> Self {
+    pub(crate) fn new(code: crate::trap::TrapCode) -> Self {
         let inner = Inner { code };
         Self {
             #[cfg(feature = "alloc")]
