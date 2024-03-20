@@ -45,7 +45,7 @@ pub fn write(
     buffer_pool: &crate::buffer::Pool,
     section: wasmparser::ExportSectionReader,
     types: &wasmparser::types::Types,
-) -> wasmparser::Result<(Vec<bytes::Bytes>, Vec<bytes::Bytes>)> {
+) -> wasmparser::Result<crate::translation::GeneratedLines> {
     let mut impl_out = crate::buffer::Writer::new(buffer_pool);
 
     for result in section {
@@ -63,5 +63,8 @@ pub fn write(
         }
     }
 
-    Ok((Vec::new(), impl_out.finish()))
+    Ok(crate::translation::GeneratedLines {
+        impls: impl_out.finish(),
+        ..Default::default()
+    })
 }

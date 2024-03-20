@@ -3,6 +3,14 @@
 mod display;
 mod export;
 mod function;
+mod memory;
+
+#[derive(Default)]
+struct GeneratedLines {
+    fields: Vec<bytes::Bytes>,
+    impls: Vec<bytes::Bytes>,
+    inits: Vec<bytes::Bytes>,
+}
 
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
@@ -89,6 +97,7 @@ impl<'a> Translation<'a> {
 }
 
 enum KnownSection<'a> {
+    Memory(wasmparser::MemorySectionReader<'a>),
     Export(wasmparser::ExportSectionReader<'a>),
 }
 
@@ -101,6 +110,8 @@ struct ModuleContents<'a> {
     sections: Vec<KnownSection<'a>>,
     functions: Vec<FunctionValidator<'a>>,
     types: wasmparser::types::Types,
+    start_function: Option<u32>,
+    memory_import_count: u32,
 }
 
 fn parse_wasm_sections<'a>(
@@ -110,16 +121,21 @@ fn parse_wasm_sections<'a>(
     let mut validator = wasmparser::Validator::new_with_features(*features);
     let mut sections = Vec::new();
     let mut functions = Vec::new();
+    let mut start_function = None;
+    let mut memory_definition_count = 0;
 
     for result in wasmparser::Parser::new(0).parse_all(wasm) {
         use wasmparser::{Payload, ValidPayload};
 
         let payload = result?;
-
         let validated_payload = validator.payload(&payload)?;
-
         match payload {
-            Payload::ExportSection(exports) => sections.push(KnownSection::Export(exports.clone())),
+            Payload::MemorySection(memories) => {
+                memory_definition_count = memories.count();
+                sections.push(KnownSection::Memory(memories));
+            }
+            Payload::ExportSection(exports) => sections.push(KnownSection::Export(exports)),
+            Payload::StartSection { func, range: _ } => start_function = Some(func),
             _ => (),
         }
 
@@ -132,6 +148,8 @@ fn parse_wasm_sections<'a>(
                 return Ok(ModuleContents {
                     sections,
                     functions,
+                    start_function,
+                    memory_import_count: types.memory_count() - memory_definition_count,
                     types,
                 })
             }
@@ -175,7 +193,9 @@ impl Translation<'_> {
             sections,
             functions,
             types,
-        } = parse_wasm_sections(wasm, &self.wasm_features)?;
+            start_function,
+            memory_import_count,
+        } = parse_wasm_sections(wasm, self.wasm_features)?;
 
         let func_validator_allocation_pool =
             crossbeam_queue::SegQueue::<wasmparser::FuncValidatorAllocations>::new();
@@ -189,7 +209,7 @@ impl Translation<'_> {
             }
         };
 
-        // Write the functions
+        // Generate Rust code for the functions
         let function_decls = functions
             .into_par_iter()
             .map(|func| {
@@ -210,29 +230,37 @@ impl Translation<'_> {
 
         std::mem::drop(func_validator_allocation_pool);
 
-        // Generate globals, exports, memories, tables, and other miscellaneous things
-        let (field_lines, impl_line_groups) = {
+        // Generate globals, exports, memories, tables, and other things
+        let mut field_lines = Vec::new();
+        let mut init_lines = Vec::new();
+        let mut impl_line_groups = function_decls;
+
+        {
             let contents = sections
                 .into_par_iter()
                 .map(|section| match section {
+                    KnownSection::Memory(memories) => {
+                        memory::write(buffer_pool, memories, memory_import_count)
+                    }
                     KnownSection::Export(exports) => export::write(buffer_pool, exports, &types),
                 })
                 .collect::<Vec<wasmparser::Result<_>>>();
 
-            let mut field_lines = Vec::new();
             let mut impl_lines = Vec::new();
 
             for result in contents.into_iter() {
-                let (mut fields, mut impls) = result?;
-                field_lines.append(&mut fields);
-                impl_lines.append(&mut impls);
+                let mut lines = result?;
+                field_lines.append(&mut lines.fields);
+                init_lines.append(&mut lines.inits);
+                impl_lines.append(&mut lines.impls);
             }
 
-            let mut impl_line_groups = function_decls;
             impl_line_groups.push(impl_lines);
+        }
 
-            (field_lines, impl_line_groups)
-        };
+        let field_lines = field_lines;
+        let init_lines = init_lines;
+        let impl_line_groups = impl_line_groups;
 
         // Write the file contents
         output.write_all(
@@ -275,7 +303,32 @@ impl Translation<'_> {
         for impl_lines in impl_line_groups {
             write_all_vectored(output, impl_lines)?;
         }
-        output.write_all(b"  }\n}\n")?;
+
+        // Write instantiate function
+        writeln!(
+            output,
+            "    fn instantiate(embedder: $embedder::State) -> $embedder::Result<Self> {{"
+        )?;
+        write_all_vectored(output, init_lines)?;
+        writeln!(output, "      let instantiated = Self {{")?;
+
+        for i in 0..types.memory_count() {
+            writeln!(
+                output,
+                "        {},",
+                display::MemId(i + memory_import_count)
+            )?;
+        }
+
+        writeln!(output, "        _embedder: embedder,\n      }};\n")?;
+
+        if let Some(start_index) = start_function {
+            writeln!(output, "      self.{}()?;", display::FuncId(start_index))?;
+        } else {
+            output.write_all(b"      // No start function\n")?;
+        }
+
+        output.write_all(b"\n      Ok(instantiated)\n    }\n  }\n}\n")?; // impl Instance
 
         // Other macro cases
         output.write_all(b"}}\n    }};\n    ($($vis:vis)? mod $module:ident) => {{\n")?;

@@ -332,7 +332,7 @@ pub(in crate::translation) fn write_definition(
     let func_result_count = u32::try_from(func_type.results().len()).unwrap();
 
     let _ = write!(out, "\n  fn _f{}", validator.index());
-    write_definition_signature(out, &func_type);
+    write_definition_signature(out, func_type);
     out.write_str(" {");
 
     // TODO: Make a crate::buffer::IndentedWriter or something
@@ -372,11 +372,11 @@ pub(in crate::translation) fn write_definition(
 
                 let _ = write!(out, "::core::result::Result::Err(<RT as {RT_CRATE_PATH}::trap::Trap>::trap(&self._rt, {RT_CRATE_PATH}::trap::TrapCode::Unreachable))");
 
-                let _ = if in_block {
-                    out.write_str(";\n")
+                if in_block {
+                    out.write_str(";\n");
                 } else {
-                    out.write_str("\n")
-                };
+                    out.write_str("\n");
+                }
             }
             Operator::Nop | Operator::Drop => (),
             Operator::Block { blockty } => {
