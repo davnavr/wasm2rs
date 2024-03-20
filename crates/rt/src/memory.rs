@@ -285,6 +285,49 @@ pub fn grow<M: Memory32 + ?Sized>(mem: &M, delta: i32) -> i32 {
     mem.grow(delta as u32) as i32
 }
 
+/// This implements the [`memory.init`] instruction and [active data segment initialization].
+///
+/// For more information, see the documentation for the [`Memory32::copy_from_slice()`] method.
+///
+/// [active data segment initialization]: https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
+/// [`memory.init`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+pub fn init<const IDX: u32, M, TR>(
+    mem: &M,
+    data: &[u8],
+    memory_offset: i32,
+    segment_offset: i32,
+    length: i32,
+    trap: &TR,
+) -> Result<(), TR::Repr>
+where
+    M: Memory32 + ?Sized,
+    TR: crate::trap::Trap + ?Sized,
+{
+    fn get_data_segment(data: &[u8], offset: u32, length: u32) -> Option<&[u8]> {
+        let offset = usize::try_from(offset).ok()?;
+        let length = usize::try_from(length).ok()?;
+        data.get(offset..)?.get(..length)
+    }
+
+    let result = if let Some(src) = get_data_segment(data, segment_offset as u32, length as u32) {
+        mem.copy_from_slice(memory_offset as u32, src)
+    } else {
+        Err(MemoryAccessError {
+            address: memory_offset as u32,
+            pointee: MemoryAccessPointee::Other {
+                size: u16::try_from(length as u32)
+                    .ok()
+                    .and_then(core::num::NonZeroU16::new),
+            },
+        })
+    };
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    }
+}
+
 /// This implements the [`i32.load`] instruction.
 ///
 /// For more information, see the documentation for the [`Memory32::i32_load()`] method.
