@@ -14,11 +14,9 @@ pub struct Exports<'a> {
 
 fn write_function_export(
     out: &mut crate::buffer::Writer,
-    name: &str,
     index: crate::translation::display::FuncId,
     types: &wasmparser::types::Types,
 ) {
-    let _ = write!(out, "    $vis fn {}", crate::rust::SafeIdent::from(name),);
     let func_type = crate::translation::function::get_function_type(
         types.get(types.core_function_at(index.0)).unwrap(),
     );
@@ -50,13 +48,26 @@ pub fn write(
         use wasmparser::ExternalKind;
 
         let export = result?;
+        let _ = write!(
+            impl_out,
+            "    $vis fn {}",
+            crate::rust::SafeIdent::from(export.name),
+        );
         match export.kind {
             ExternalKind::Func => write_function_export(
                 &mut impl_out,
-                export.name,
                 crate::translation::display::FuncId(export.index),
                 types,
             ),
+            ExternalKind::Memory => {
+                let index = crate::translation::display::MemId(export.index);
+                let _ = writeln!(
+                    impl_out,
+                    "(&self) -> &{}::Memory{} {{ &self.{index} }}",
+                    crate::translation::EMBEDDER_PATH,
+                    index.0
+                );
+            }
             _ => todo!("unsupported export: {export:?}"),
         }
     }
