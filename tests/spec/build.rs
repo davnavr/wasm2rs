@@ -14,7 +14,7 @@ fn main() {
     let mut all_file = std::fs::File::create(&all_file_path)
         .unwrap_or_else(|e| panic!("could not create file {all_file_path:?}: {e}"));
 
-    const FILES: &[&str] = &["int_exprs.wast", "int_literals.wast"];
+    const FILES: &[&str] = &["address.wast", "int_exprs.wast", "int_literals.wast"];
 
     let mut file_buffer = String::with_capacity(0x20000);
     for wast_name in FILES {
@@ -104,6 +104,7 @@ fn main() {
         enum SpecTrapReason {
             IntegerDivideByZero,
             IntegerOverflow,
+            OutOfBoundsMemoryAccess,
         }
 
         impl std::fmt::Display for SpecTrapReason {
@@ -111,6 +112,7 @@ fn main() {
                 match self {
                     Self::IntegerDivideByZero => f.write_str("IntegerDivisionByZero"),
                     Self::IntegerOverflow => f.write_str("IntegerOverflow"),
+                    Self::OutOfBoundsMemoryAccess => f.write_str("MemoryBoundsCheck"),
                 }
             }
         }
@@ -125,6 +127,7 @@ fn main() {
                 Some(Self::Trap(match message {
                     "integer divide by zero" => SpecTrapReason::IntegerDivideByZero,
                     "integer overflow" => SpecTrapReason::IntegerOverflow,
+                    "out of bounds memory access" => SpecTrapReason::OutOfBoundsMemoryAccess,
                     _ => return None,
                 }))
             }
@@ -457,7 +460,7 @@ fn main() {
 
                         let _ = writeln!(&mut rs_file, "  match result {{");
                         let _ = writeln!(&mut rs_file, "    Ok(values) => panic!(\"expected trap {reason}, but got {{values:?}}\"),");
-                        let _ = writeln!(&mut rs_file, "    Err(err) => assert_eq!(err.code(), wasm2rs_rt::trap::TrapCode::{reason}, \"incorrect trap code\")");
+                        let _ = writeln!(&mut rs_file, "    Err(err) => assert!(matches!(err.code(), wasm2rs_rt::trap::TrapCode::{reason} {{ .. }}), \"incorrect trap code, expected {reason} but got {{}}\", err.code())");
                         let _ = writeln!(&mut rs_file, "  }}");
                     }
                 }
