@@ -23,16 +23,18 @@ impl<'a> Writer<'a> {
         self.pool
     }
 
-    /// Returns a vector containing all of the bytes that were written, along with an empty
-    /// buffer to any unused empty space that can be written into.
-    pub fn finish(mut self) -> (Vec<bytes::Bytes>, bytes::BytesMut) {
+    /// Returns a vector containing all of the bytes that were written.
+    ///
+    /// The writers current buffer is also returned to the pool.
+    pub fn finish(mut self) -> Vec<bytes::Bytes> {
         let to_append = self.buffer.split_to(self.buffer.len());
         if !to_append.is_empty() {
             self.output.reserve_exact(1);
             self.output.push(to_append.freeze());
         }
 
-        (self.output, self.buffer)
+        self.pool.return_buffer(self.buffer);
+        self.output
     }
 
     /// Ensures that the `buffer` is not empty, taking or allocating a new buffer as necessary and
@@ -71,11 +73,16 @@ impl<'a> Writer<'a> {
             bytes = &bytes[to_write..];
         }
     }
+
+    /// Writes all of a string's bytes into this buffer.
+    pub fn write_str(&mut self, s: &str) {
+        self.write(s.as_bytes());
+    }
 }
 
 impl std::fmt::Write for Writer<'_> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.write(s.as_bytes());
+        self.write_str(s);
         Ok(())
     }
 }

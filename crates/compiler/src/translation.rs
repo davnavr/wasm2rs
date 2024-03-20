@@ -1,4 +1,8 @@
+//! Contains the core code for translating WebAssembly to Rust.
+
+mod display;
 mod export;
+mod function;
 
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
@@ -153,7 +157,46 @@ impl Translation<'_> {
         wasm: &[u8],
         output: &mut dyn std::io::Write,
     ) -> crate::Result<()> {
-        let module_contents = parse_wasm_sections(wasm, &self.wasm_features)?;
+        use rayon::prelude::*;
+
+        let ModuleContents {
+            sections,
+            functions,
+            types,
+        } = parse_wasm_sections(wasm, &self.wasm_features)?;
+
+        let func_validator_allocation_pool =
+            crossbeam_queue::SegQueue::<wasmparser::FuncValidatorAllocations>::new();
+
+        let new_buffer_pool;
+        let buffer_pool = match self.buffer_pool {
+            Some(existing) => existing,
+            None => {
+                new_buffer_pool = crate::buffer::Pool::default();
+                &new_buffer_pool
+            }
+        };
+
+        // Write the functions
+        let function_decls = functions
+            .into_par_iter()
+            .map(|func| {
+                let mut out = crate::buffer::Writer::new(buffer_pool);
+                let mut validator = func.validator.into_validator(
+                    if let Some(allocs) = func_validator_allocation_pool.pop() {
+                        allocs
+                    } else {
+                        Default::default()
+                    },
+                );
+
+                function::write_definition(&mut out, &mut validator, &func.body, &types)?;
+                func_validator_allocation_pool.push(validator.into_allocations());
+                Ok(out.finish())
+            })
+            .collect::<wasmparser::Result<Vec<_>>>()?;
+
+        std::mem::drop(func_validator_allocation_pool);
 
         todo!()
     }
