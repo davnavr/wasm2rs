@@ -187,18 +187,6 @@ fn parse_wasm_sections<'a>(
     unreachable!("missing end payload");
 }
 
-fn write_all_vectored(
-    output: &mut dyn std::io::Write,
-    bytes: Vec<bytes::Bytes>,
-) -> std::io::Result<()> {
-    // TODO: Actually call write_vectored
-    for buffer in bytes.into_iter() {
-        output.write_all(&buffer)?;
-    }
-
-    Ok(())
-}
-
 impl Translation<'_> {
     /// Translates an in-memory WebAssembly binary module, and [`Write`]s the resulting Rust source
     /// code to the given output.
@@ -324,7 +312,8 @@ impl Translation<'_> {
         )?;
 
         // Write other items
-        write_all_vectored(output, item_lines)?;
+        let mut io_buffers = Vec::new();
+        crate::buffer::write_all_vectored(output, &item_lines, &mut io_buffers)?;
 
         // Write `Instance` struct
         output.write_all(
@@ -338,19 +327,19 @@ impl Translation<'_> {
         )?;
 
         // Write fields
-        write_all_vectored(output, field_lines)?;
+        crate::buffer::write_all_vectored(output, &field_lines, &mut io_buffers)?;
 
         // Write methods
         output.write_all(concat!("  }\n\n  impl Instance {\n").as_bytes())?;
-        for impl_lines in impl_line_groups {
-            write_all_vectored(output, impl_lines)?;
+        for impl_lines in impl_line_groups.iter() {
+            crate::buffer::write_all_vectored(output, impl_lines, &mut io_buffers)?;
         }
 
         // Write instantiate function
         output.write_all(
             b"    $vis fn instantiate(embedder: embedder::State) -> embedder::Result<Self> {\n",
         )?;
-        write_all_vectored(output, init_lines)?;
+        crate::buffer::write_all_vectored(output, &init_lines, &mut io_buffers)?;
         writeln!(output, "      let instantiated = Self {{")?;
 
         for i in 0..types.memory_count() {
