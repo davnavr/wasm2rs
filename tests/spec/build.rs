@@ -17,6 +17,7 @@ fn main() {
     const FILES: &[&str] = &["address.wast", "int_exprs.wast", "int_literals.wast"];
 
     let mut file_buffer = String::with_capacity(0x20000);
+    let buffer_pool = wasm2rs::buffer::Pool::default();
     // TODO: See if using rayon can help here
     for wast_name in FILES {
         use std::io::Write as _;
@@ -395,6 +396,7 @@ fn main() {
                 .unwrap_or_else(|e| panic!("could not create module file {mod_file_path:?}: {e}"));
 
             let translation_result = wasm2rs::Translation::new()
+                .buffer_pool(&buffer_pool)
                 .generated_macro_name(module_ident)
                 .translate_from_buffer(&module.contents, &mut mod_file);
 
@@ -416,7 +418,7 @@ fn main() {
                 "    let _inst = {module_ident}::Instance::instantiate(Default::default()).unwrap();"
             );
 
-            for (assertion_number, assertion) in module.tests.into_iter().enumerate() {
+            for assertion in module.tests.into_iter() {
                 struct AssertLocation<'a> {
                     line: usize,
                     column: usize,
@@ -495,6 +497,8 @@ fn main() {
 
             let _ = writeln!(&mut rs_file, "}}\n");
         }
+
+        let _ = rs_file.flush();
 
         let _ = writeln!(
             &mut all_file,
