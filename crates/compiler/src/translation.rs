@@ -9,10 +9,10 @@ mod memory;
 
 #[derive(Default)]
 struct GeneratedLines {
-    items: Vec<bytes::Bytes>,
-    fields: Vec<bytes::Bytes>,
-    impls: Vec<bytes::Bytes>,
-    inits: Vec<bytes::Bytes>, // Vec<Ordered<u8, bytes::Bytes>>,
+    items: Vec<bytes::BytesMut>,
+    fields: Vec<bytes::BytesMut>,
+    impls: Vec<bytes::BytesMut>,
+    inits: Vec<bytes::BytesMut>, // Vec<Ordered<u8, bytes::Bytes>>,
 }
 
 /// Function that writes a data segment to some file, returning a path to it.
@@ -386,7 +386,17 @@ impl Translation<'_> {
             self.generated_macro_name
         )?;
 
-        output.flush().map_err(Into::into)
+        output.flush()?;
+
+        // Return all used buffers back to the pool
+        if let Some(buffer_pool) = self.buffer_pool {
+            buffer_pool.return_buffers_many(item_lines);
+            buffer_pool.return_buffers_many(field_lines);
+            buffer_pool.return_buffers_many(init_lines);
+            buffer_pool.return_buffers_many(impl_line_groups.into_iter().flatten());
+        }
+
+        Ok(())
     }
 }
 

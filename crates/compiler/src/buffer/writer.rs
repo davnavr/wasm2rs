@@ -1,7 +1,7 @@
 /// Struct for writing bytes into a buffer.
 #[must_use = "call `Writer::finish()`"]
 pub struct Writer<'a> {
-    output: Vec<bytes::Bytes>,
+    output: Vec<bytes::BytesMut>,
     buffer: bytes::BytesMut,
     pool: &'a crate::buffer::Pool,
 }
@@ -26,11 +26,11 @@ impl<'a> Writer<'a> {
     /// Returns a vector containing all of the bytes that were written.
     ///
     /// The writers current buffer is also returned to the pool.
-    pub fn finish(mut self) -> Vec<bytes::Bytes> {
+    pub fn finish(mut self) -> Vec<bytes::BytesMut> {
         let to_append = self.buffer.split_to(self.buffer.len());
         if !to_append.is_empty() {
             self.output.reserve_exact(1);
-            self.output.push(to_append.freeze());
+            self.output.push(to_append);
         }
 
         self.pool.return_buffer(self.buffer);
@@ -51,7 +51,7 @@ impl<'a> Writer<'a> {
                 new_capacity = self.buffer.capacity().saturating_mul(2);
 
                 // Buffer contains data that needs to be output
-                self.output.push(std::mem::take(&mut self.buffer).freeze());
+                self.output.push(std::mem::take(&mut self.buffer));
             } else {
                 new_capacity = Self::DEFAULT_BUFFER_CAPACITY;
             }

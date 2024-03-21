@@ -19,10 +19,19 @@ impl Pool {
 
     /// Attempts to move a buffer back into the pool.
     pub fn return_buffer(&self, mut buffer: bytes::BytesMut) {
-        if !buffer.is_empty() {
+        if buffer.capacity() > 0 {
             buffer.clear();
             self.pool.push(buffer)
         }
+    }
+
+    pub(crate) fn return_buffers_many<B>(&self, buffers: B)
+    where
+        B: IntoIterator<Item = bytes::BytesMut>,
+    {
+        buffers
+            .into_iter()
+            .for_each(|buffer| self.return_buffer(buffer));
     }
 }
 

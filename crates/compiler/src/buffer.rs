@@ -9,7 +9,7 @@ pub use writer::Writer;
 /// Helper function to write all of the content from the given buffers.
 pub fn write_all_vectored<'a, W>(
     output: &mut W,
-    content: &'a [bytes::Bytes],
+    content: &'a [bytes::BytesMut],
     io_buffers: &mut Vec<std::io::IoSlice<'a>>,
 ) -> std::io::Result<()>
 where
