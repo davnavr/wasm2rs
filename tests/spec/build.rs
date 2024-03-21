@@ -17,6 +17,7 @@ fn main() {
     const FILES: &[&str] = &["address.wast", "int_exprs.wast", "int_literals.wast"];
 
     let mut file_buffer = String::with_capacity(0x20000);
+    // TODO: See if using rayon can help here
     for wast_name in FILES {
         use std::io::Write as _;
 
@@ -50,6 +51,7 @@ fn main() {
             Err(e) => panic!("could not create directory {rs_dir:?}: {e}"),
         }
 
+        // TODO: See if file buffering helps here.
         let rs_file_path = rs_dir.join("mod.rs");
         let mut rs_file = std::fs::File::create(&rs_file_path)
             .unwrap_or_else(|e| panic!("could not create file {rs_file_path:?}: {e}"));
@@ -378,10 +380,14 @@ fn main() {
         for module in spec_module_list {
             let module_name_buf;
             let module_ident = if let Some(id) = module.id {
-                wasm2rs::rust::SafeIdent::from(id.name())
+                if let Some(valid) = wasm2rs::rust::Ident::new(id.name()) {
+                    valid.into()
+                } else {
+                    wasm2rs::rust::MangledIdent(id.name()).into()
+                }
             } else {
                 module_name_buf = format!("module_{}", module.number);
-                wasm2rs::rust::AnyIdent::from(module_name_buf.as_str()).into()
+                wasm2rs::rust::AnyIdent::from(module_name_buf.as_str())
             };
 
             let mod_file_path = rs_dir.join(format!("{module_ident}.rs"));
@@ -403,6 +409,13 @@ fn main() {
                 "include!({mod_file_path:?});\n{module_ident}!(pub mod {module_ident});"
             );
 
+            let _ = writeln!(&mut rs_file, "#[test]\nfn assertions_{module_ident}() {{");
+
+            let _ = writeln!(
+                &mut rs_file,
+                "    let _inst = {module_ident}::Instance::instantiate(Default::default()).unwrap();"
+            );
+
             for (assertion_number, assertion) in module.tests.into_iter().enumerate() {
                 struct AssertLocation<'a> {
                     line: usize,
@@ -418,18 +431,12 @@ fn main() {
 
                 let assertion_location = {
                     let (line, column) = assertion.assert_span.linecol_in(wast_text);
-                    AssertLocation { line, column, path: &wast_path }
+                    AssertLocation {
+                        line,
+                        column,
+                        path: &wast_path,
+                    }
                 };
-
-                let _ = writeln!(
-                    &mut rs_file,
-                    "#[test]\nfn assert_{module_ident}_{assertion_number}() {{"
-                );
-
-                let _ = writeln!(
-                    &mut rs_file,
-                    "    let inst = {module_ident}::Instance::instantiate(Default::default()).unwrap();"
-                );
 
                 struct PrintValues<'a>(&'a [SpecValue]);
 
@@ -464,7 +471,7 @@ fn main() {
                     SpecFunctionResults::Values(result_values) => {
                         let _ = writeln!(
                             &mut rs_file,
-                            "  assert_eq!(inst.{}({:#}), Ok({}), \"incorrect values at {assertion_location}\");",
+                            "  assert_eq!(_inst.{}({:#}), Ok({}), \"incorrect values at {assertion_location}\");",
                             wasm2rs::rust::SafeIdent::from(assertion.export_name),
                             PrintValues(&arguments),
                             PrintValues(&result_values)
@@ -473,7 +480,7 @@ fn main() {
                     SpecFunctionResults::Trap(reason) => {
                         let _ = writeln!(
                             &mut rs_file,
-                            "  let result = inst.{}({:#});",
+                            "  let result = _inst.{}({:#});",
                             wasm2rs::rust::SafeIdent::from(assertion.export_name),
                             PrintValues(&arguments),
                         );
@@ -484,9 +491,9 @@ fn main() {
                         let _ = writeln!(&mut rs_file, "  }}");
                     }
                 }
-
-                let _ = writeln!(&mut rs_file, "}}\n");
             }
+
+            let _ = writeln!(&mut rs_file, "}}\n");
         }
 
         let _ = writeln!(
