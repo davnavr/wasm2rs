@@ -6,51 +6,6 @@ mod trap_value;
 
 pub use trap_value::TrapValue;
 
-/// Describes a memory access that resulted in a trap.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct MemoryAccess {
-    /// The type of the value that the `address` refers to.
-    pub pointee: crate::memory::MemoryAccessPointee,
-    /// The index of the [linear memory] with which the access occured.
-    ///
-    /// [linear memory]: crate::memory::Memory32
-    pub memory: u32,
-    /// The address that was out-of-bounds or misaligned.
-    pub address: u64,
-    /// The size of the [`memory`], in bytes, at the time the access occured.
-    ///
-    /// [`memory`]: MemoryAccess::memory
-    pub bound: u64,
-}
-
-impl core::fmt::Display for MemoryAccess {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        struct Address(u64);
-
-        impl core::fmt::Display for Address {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                if let Ok(address) = u32::try_from(self.0) {
-                    write!(f, "{address:#010X}")
-                } else {
-                    write!(f, "{:#018X}", self.0)
-                }
-            }
-        }
-
-        write!(
-            f,
-            "read/write of {} at address {} into memory #{} with size {}",
-            self.pointee,
-            Address(self.address),
-            self.memory,
-            Address(self.bound)
-        )
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for MemoryAccess {}
-
 /// Indicates why a trap occured.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
@@ -60,7 +15,16 @@ pub enum TrapCode {
     /// [**`unreachable`**]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-control
     Unreachable,
     /// A memory access was out of bounds.
-    MemoryBoundsCheck(MemoryAccess),
+    MemoryBoundsCheck {
+        /// The originating invalid memory access.
+        source: crate::memory::AccessError,
+        /// The index of the [linear memory] with which the access occured.
+        ///
+        /// [linear memory]: crate::memory::Memory32
+        memory: u32,
+        /// The address that was out-of-bounds or misaligned.
+        address: u64,
+    },
     /// An integer operation attempted a division by zero.
     IntegerDivisionByZero,
     /// An integer operation overflowed.
@@ -92,7 +56,11 @@ impl core::fmt::Display for TrapCode {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Unreachable => f.write_str("executed unreachable instruction"),
-            Self::MemoryBoundsCheck(access) => write!(f, "out-of-bounds {}", access),
+            Self::MemoryBoundsCheck {
+                source,
+                memory,
+                address,
+            } => write!(f, "at address {address:#X} into memory #{memory}: {source}"),
             Self::IntegerDivisionByZero => f.write_str("integer division by zero"),
             Self::IntegerOverflow => f.write_str("integer overflow"),
             Self::MemoryInstantiation { memory, error } => {
@@ -106,8 +74,8 @@ impl core::fmt::Display for TrapCode {
 impl std::error::Error for TrapCode {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::MemoryBoundsCheck(access) => Some(access),
-            Self::MemoryInstantiation { memory: _, error } => Some(error),
+            Self::MemoryBoundsCheck { source, .. } => Some(source),
+            Self::MemoryInstantiation { error, .. } => Some(error),
             _ => None,
         }
     }

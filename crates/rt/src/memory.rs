@@ -47,13 +47,13 @@ impl core::fmt::Display for AllocationError {
 #[cfg(feature = "std")]
 impl std::error::Error for AllocationError {}
 
-/// Describes what kind of value was being read or written in a [`MemoryAccess`].
+/// Error type used when an attempt to read or write from a [linear memory] fails.
 ///
 /// [`MemoryAccess`]: crate::trap::MemoryAccess
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 #[allow(missing_docs)]
-pub enum MemoryAccessPointee {
+pub enum AccessError {
     I8,
     I16,
     I32,
@@ -63,126 +63,113 @@ pub enum MemoryAccessPointee {
     V128,
     /// Used for other memory instructions (e.g. **`memory.copy`** or **`memory.fill`**).
     Other {
-        /// The size, in bytes, of the read or write; or `None` if the size is too large to fit.
-        size: Option<core::num::NonZeroU16>,
+        /// The size, in bytes, of the read or write.
+        size: u32,
+    },
+    /// Calculation of the address of the access overflowed.
+    AddressOverflow {
+        /// The static offset that was added to to cause an overflow.
+        offset: u32,
     },
 }
 
-impl MemoryAccessPointee {
-    fn other_with_size(size: usize) -> Self {
-        Self::Other {
-            size: u16::try_from(size)
-                .ok()
-                .and_then(core::num::NonZeroU16::new),
-        }
-    }
-}
-
-impl core::fmt::Display for MemoryAccessPointee {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::I8 => f.write_str("i8"),
-            Self::I16 => f.write_str("i16"),
-            Self::I32 => f.write_str("i32"),
-            Self::I64 => f.write_str("i64"),
-            Self::F32 => f.write_str("f32"),
-            Self::F64 => f.write_str("f64"),
-            Self::V128 => f.write_str("v128"),
-            Self::Other { size: Some(size) } => {
-                if size.get() == 1u16 {
-                    f.write_str("one byte")
-                } else {
-                    write!(f, "{size} bytes")
-                }
-            }
-            Self::Other { size: None } => f.write_str("unknown type"),
-        }
-    }
-}
-
-/// Error type used when an attempt to read or write from a [linear memory] fails.
-///
-/// [linear memory]: Memory32
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct MemoryAccessError {
-    /// The address into the [linear memory] that was out-of-bounds.
+impl AccessError {
+    /// An access was attempted with the given size.
     ///
-    /// [linear memory]: Memory32
-    pub address: u32,
-    /// The type of value behind the address.
-    pub pointee: MemoryAccessPointee,
-}
+    /// This size value may be truncated.
+    pub fn with_size(size: usize) -> Self {
+        Self::Other {
+            size: u32::try_from(size).unwrap_or(u32::MAX),
+        }
+    }
 
-impl MemoryAccessError {
     /// Generates a trap for this invalid memory access.
     ///
-    /// See the documentation for the [`trap::MemoryAccess`] struct for more information.
+    /// See the documentation for the [`TrapCode::MemoryBoundsCheck`] struct for more information.
     ///
-    /// [`trap::MemoryAccess`]: crate::trap::MemoryAccess
-    pub fn trap<TR>(self, memory: u32, bound: u64, trap: &TR) -> TR::Repr
+    /// [`TrapCode::MemoryBoundsCheck`]: crate::trap::TrapCode::MemoryBoundsCheck
+    pub fn trap<TR>(self, memory: u32, address: u64, trap: &TR) -> TR::Repr
     where
         TR: crate::trap::Trap + ?Sized,
     {
-        trap.trap(crate::trap::TrapCode::MemoryBoundsCheck(
-            crate::trap::MemoryAccess {
-                pointee: self.pointee,
-                memory,
-                bound,
-                address: self.address.into(),
-            },
-        ))
+        trap.trap(crate::trap::TrapCode::MemoryBoundsCheck {
+            source: self,
+            memory,
+            address,
+        })
     }
 }
 
-impl core::fmt::Display for MemoryAccessError {
+impl core::fmt::Display for AccessError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "out-of-bounds access of {} at {:#010X}",
-            self.pointee, self.address
-        )
+        f.write_str("out-of-bounds access")?;
+        match self {
+            Self::I8 => f.write_str(" of i8"),
+            Self::I16 => f.write_str(" of i16"),
+            Self::I32 => f.write_str(" of i32"),
+            Self::I64 => f.write_str(" of i64"),
+            Self::F32 => f.write_str(" of f32"),
+            Self::F64 => f.write_str(" of f64"),
+            Self::V128 => f.write_str(" of v128"),
+            Self::Other { size: 0 } => Ok(()),
+            Self::Other { size: 1 } => f.write_str("of 1 byte"),
+            Self::Other { size } => write!(f, " of {size} bytes"),
+            Self::AddressOverflow { offset } => {
+                write!(f, ", offset {offset} + address overflowed")
+            }
+        }
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for MemoryAccessError {}
+impl std::error::Error for AccessError {}
 
 /// Result type used for reads from or writes to [linear memory].
 ///
 /// [linear memory]: Memory32
-pub type AccessResult<T> = core::result::Result<T, MemoryAccessError>;
+pub type AccessResult<T> = core::result::Result<T, AccessError>;
+
+/// Error type used when an address was out of bounds.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct BoundsCheckError;
+
+impl core::fmt::Display for BoundsCheckError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("out-of-bounds address")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for BoundsCheckError {}
+
+/// Result type used for validating that addresses are in bounds.
+pub type BoundsCheck<T> = core::result::Result<T, BoundsCheckError>;
 
 macro_rules! unaligned_integer_accesses {
     {
-        $($int:ty => $pointee:ident : $load:ident / $store:ident;)*
+        $($int:ty : $load:ident / $store:ident;)*
     } => {$(
-        fn $load<M: Memory32 + ?Sized>(mem: &M, addr: u32) -> AccessResult<$int> {
+        fn $load<M: Memory32 + ?Sized>(mem: &M, addr: u32) -> BoundsCheck<$int> {
             let mut dst = [0u8; core::mem::size_of::<$int>()];
             match mem.copy_to_slice(addr, &mut dst) {
                 Ok(()) => Ok(<$int>::from_le_bytes(dst)),
-                Err(mut e) => {
-                    e.pointee = MemoryAccessPointee::$pointee;
-                    Err(e)
-                }
+                Err(e) => Err(e),
             }
         }
 
-        fn $store<M: Memory32 + ?Sized>(mem: &M, addr: u32, value: $int) -> AccessResult<()> {
+        fn $store<M: Memory32 + ?Sized>(mem: &M, addr: u32, value: $int) -> BoundsCheck<()> {
             match mem.copy_from_slice(addr, &value.to_le_bytes()) {
                 Ok(()) => Ok(()),
-                Err(mut e) => {
-                    e.pointee = MemoryAccessPointee::$pointee;
-                    Err(e)
-                }
+                Err(e) => Err(e),
             }
         }
     )*};
 }
 
 unaligned_integer_accesses! {
-    i16 => I16 : unaligned_i16_load / unaligned_i16_store;
-    i32 => I32 : unaligned_i32_load / unaligned_i32_store;
-    i64 => I64 : unaligned_i64_load / unaligned_i64_store;
+    i16 : unaligned_i16_load / unaligned_i16_store;
+    i32 : unaligned_i32_load / unaligned_i32_store;
+    i64 : unaligned_i64_load / unaligned_i64_store;
 }
 
 /// A [WebAssembly linear memory] with a 32-bit address space.
@@ -221,14 +208,14 @@ pub trait Memory32 {
     /// # Errors
     ///
     /// Returns an error if the range of addresses `addr..(addr + dst.len())` is not in bounds.
-    fn copy_to_slice(&self, addr: u32, dst: &mut [u8]) -> AccessResult<()>;
+    fn copy_to_slice(&self, addr: u32, dst: &mut [u8]) -> BoundsCheck<()>;
 
     /// Copies bytes from the given slice into linear memory starting at the specified address.
     ///
     /// # Errors
     ///
     /// Returns an error if the range of addresses `addr..(addr + dst.len())` is not in bounds.
-    fn copy_from_slice(&self, addr: u32, src: &[u8]) -> AccessResult<()>;
+    fn copy_from_slice(&self, addr: u32, src: &[u8]) -> BoundsCheck<()>;
 
     /// Allocates a new boxed slice, and copies the contents of this linear memory at the range of addresses into it.
     ///
@@ -262,54 +249,53 @@ pub trait Memory32 {
         let mut slice =
             alloc::vec![0u8; usize::try_from(end_addr - start_addr + 1).unwrap_or(usize::MAX)];
 
-        self.copy_to_slice(start_addr, &mut slice)?;
-        Ok(slice.into_boxed_slice())
+        match self.copy_to_slice(start_addr, &mut slice) {
+            Ok(()) => Ok(slice.into_boxed_slice()),
+            Err(BoundsCheckError) => Err(AccessError::with_size(slice.len())),
+        }
     }
 
     /// Loads the value of the byte stored at the given address.
-    fn i8_load(&self, addr: u32) -> AccessResult<i8> {
+    fn i8_load(&self, addr: u32) -> BoundsCheck<i8> {
         let mut dst = 0u8;
         match self.copy_to_slice(addr, core::slice::from_mut(&mut dst)) {
             Ok(()) => Ok(dst as i8),
-            Err(mut err) => {
-                err.pointee = MemoryAccessPointee::I8;
-                Err(err)
-            }
+            Err(e) => Err(e),
         }
     }
 
     /// Loads a potentially aligned 32-bit integer from the given address.
-    fn i16_load<const A: u8>(&self, addr: u32) -> AccessResult<i16> {
+    fn i16_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i16> {
         unaligned_i16_load(self, addr)
     }
 
     /// Loads a potentially aligned 32-bit integer from the given address.
-    fn i32_load<const A: u8>(&self, addr: u32) -> AccessResult<i32> {
+    fn i32_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i32> {
         unaligned_i32_load(self, addr)
     }
 
     /// Loads a potentially aligned 64-bit integer from the given address.
-    fn i64_load<const A: u8>(&self, addr: u32) -> AccessResult<i64> {
+    fn i64_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i64> {
         unaligned_i64_load(self, addr)
     }
 
     /// Writes into the byte at the given address.
-    fn i8_store(&self, addr: u32, value: i8) -> AccessResult<()> {
+    fn i8_store(&self, addr: u32, value: i8) -> BoundsCheck<()> {
         self.copy_from_slice(addr, &[value as u8])
     }
 
     /// Stores a potentially aligned 16-bit integer into the given address.
-    fn i16_store<const A: u8>(&self, addr: u32, value: i16) -> AccessResult<()> {
+    fn i16_store<const ALIGN: u8>(&self, addr: u32, value: i16) -> BoundsCheck<()> {
         unaligned_i16_store(self, addr, value)
     }
 
     /// Stores a potentially aligned 32-bit integer into the given address.
-    fn i32_store<const A: u8>(&self, addr: u32, value: i32) -> AccessResult<()> {
+    fn i32_store<const ALIGN: u8>(&self, addr: u32, value: i32) -> BoundsCheck<()> {
         unaligned_i32_store(self, addr, value)
     }
 
     /// Stores a potentially aligned 64-bit integer into the given address.
-    fn i64_store<const A: u8>(&self, addr: u32, value: i64) -> AccessResult<()> {
+    fn i64_store<const ALIGN: u8>(&self, addr: u32, value: i64) -> BoundsCheck<()> {
         unaligned_i64_store(self, addr, value)
     }
 }

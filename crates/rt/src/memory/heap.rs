@@ -57,28 +57,21 @@ impl HeapMemory32 {
         self.allocation.get_mut().as_mut_slice()
     }
 
-    fn modify_addresses<R>(
+    fn modify_addresses<T, E>(
         &self,
         addr: u32,
         len: usize,
-        f: impl FnOnce(&mut [u8]) -> R,
-    ) -> crate::memory::AccessResult<R> {
-        #[inline(never)]
-        fn out_of_bounds(addr: u32, len: usize) -> crate::memory::MemoryAccessError {
-            crate::memory::MemoryAccessError {
-                address: addr,
-                pointee: crate::memory::MemoryAccessPointee::other_with_size(len),
-            }
-        }
-
+        op: impl FnOnce(&mut [u8]) -> T,
+        err: impl FnOnce(usize) -> E,
+    ) -> Result<T, E> {
         self.modify(move |a| {
             let start_addr = addr as usize;
             match a
                 .as_mut_slice()
                 .get_mut(start_addr..start_addr.wrapping_add(len))
             {
-                Some(slice) => Ok(f(slice)),
-                None => Err(out_of_bounds(addr, len)),
+                Some(slice) => Ok(op(slice)),
+                None => Err(err(len)),
             }
         })
     }
@@ -100,12 +93,22 @@ impl crate::memory::Memory32 for HeapMemory32 {
         })
     }
 
-    fn copy_to_slice(&self, addr: u32, dst: &mut [u8]) -> crate::memory::AccessResult<()> {
-        self.modify_addresses(addr, dst.len(), |slice| dst.copy_from_slice(slice))
+    fn copy_to_slice(&self, addr: u32, dst: &mut [u8]) -> crate::memory::BoundsCheck<()> {
+        self.modify_addresses(
+            addr,
+            dst.len(),
+            |slice| dst.copy_from_slice(slice),
+            |_| crate::memory::BoundsCheckError,
+        )
     }
 
-    fn copy_from_slice(&self, addr: u32, src: &[u8]) -> crate::memory::AccessResult<()> {
-        self.modify_addresses(addr, src.len(), |slice| slice.copy_from_slice(src))
+    fn copy_from_slice(&self, addr: u32, src: &[u8]) -> crate::memory::BoundsCheck<()> {
+        self.modify_addresses(
+            addr,
+            src.len(),
+            |slice| slice.copy_from_slice(src),
+            |_| crate::memory::BoundsCheckError,
+        )
     }
 }
 

@@ -2,7 +2,7 @@
 //!
 //! Calls to these functions are generated as part of the `wasm2rs` translation process.
 
-use crate::memory::{Memory32, MemoryAccessError, MemoryAccessPointee};
+use crate::memory::{AccessError, AccessResult, BoundsCheckError, Memory32};
 use crate::trap::Trap;
 
 /// This implements the [`memory.size`] instruction.
@@ -31,7 +31,7 @@ pub fn grow<M: Memory32 + ?Sized>(mem: &M, delta: i32) -> i32 {
 ///
 /// [active data segment initialization]: https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
 /// [`memory.init`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
-pub fn init<const IDX: u32, M, TR>(
+pub fn init<const MEMORY: u32, M, TR>(
     mem: &M,
     data: &[u8],
     memory_offset: i32,
@@ -49,22 +49,25 @@ where
         data.get(offset..)?.get(..length)
     }
 
-    let result = if let Some(src) = get_data_segment(data, segment_offset as u32, length as u32) {
-        mem.copy_from_slice(memory_offset as u32, src)
-    } else {
-        Err(MemoryAccessError {
-            address: memory_offset as u32,
-            pointee: MemoryAccessPointee::Other {
-                size: u16::try_from(length as u32)
-                    .ok()
-                    .and_then(core::num::NonZeroU16::new),
-            },
-        })
-    };
+    let address = memory_offset as u32;
+    let size = length as u32;
+    get_data_segment(data, segment_offset as u32, size)
+        .ok_or(BoundsCheckError)
+        .and_then(|src| mem.copy_from_slice(address, src))
+        .map_err(|BoundsCheckError| AccessError::Other { size }.trap(MEMORY, address.into(), trap))
+}
 
-    match result {
-        Ok(()) => Ok(()),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+/// Calculates an address from adding static offset to a dynamic address operand.
+///
+/// This implements the calculation of the [*effective address*] for WebAssembly memory instructions.
+///
+/// [*effective address*]: https://webassembly.github.io/spec/core/syntax/instructions.html#memory-instructions
+const fn address<const OFFSET: u32>(addr: i32) -> AccessResult<u32> {
+    // TODO: See if `i32::overflowing_add` or `i64` arithmetic works better here
+    if let Some(effective) = OFFSET.checked_add(addr as u32) {
+        Ok(effective)
+    } else {
+        Err(AccessError::AddressOverflow { offset: OFFSET })
     }
 }
 
@@ -77,15 +80,22 @@ where
 #[doc(alias = "i32.load8_u")]
 #[doc(alias = "i64.load8_s")]
 #[doc(alias = "i64.load8_u")]
-pub fn i8_load<const IDX: u32, M, TR>(mem: &M, addr: i32, trap: &TR) -> Result<i8, TR::Repr>
+pub fn i8_load<const OFFSET: u32, const MEMORY: u32, M, TR>(
+    mem: &M,
+    addr: i32,
+    trap: &TR,
+) -> Result<i8, TR::Repr>
 where
     M: Memory32 + ?Sized,
     TR: Trap + ?Sized,
 {
-    match mem.i8_load(addr as u32) {
-        Ok(value) => Ok(value),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    fn load<const OFFSET: u32>(mem: &(impl Memory32 + ?Sized), addr: i32) -> AccessResult<i8> {
+        mem.i8_load(address::<OFFSET>(addr)?)
+            .map_err(|BoundsCheckError| AccessError::I8)
     }
+
+    load::<OFFSET>(mem, addr)
+        .map_err(|err| err.trap(MEMORY, u64::from(addr as u32) + u64::from(OFFSET), trap))
 }
 
 /// This implements the [`iXX.load16_s` and `iXX.load16_u`] family of instructions.
@@ -97,7 +107,7 @@ where
 #[doc(alias = "i32.load16_u")]
 #[doc(alias = "i64.load16_s")]
 #[doc(alias = "i64.load16_u")]
-pub fn i16_load<const A: u8, const IDX: u32, M, TR>(
+pub fn i16_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
     mem: &M,
     addr: i32,
     trap: &TR,
@@ -106,10 +116,16 @@ where
     M: Memory32 + ?Sized,
     TR: Trap + ?Sized,
 {
-    match mem.i16_load::<A>(addr as u32) {
-        Ok(value) => Ok(value),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    fn load<const OFFSET: u32, const ALIGN: u8>(
+        mem: &(impl Memory32 + ?Sized),
+        addr: i32,
+    ) -> AccessResult<i16> {
+        mem.i16_load::<ALIGN>(address::<OFFSET>(addr)?)
+            .map_err(|BoundsCheckError| AccessError::I16)
     }
+
+    load::<OFFSET, ALIGN>(mem, addr)
+        .map_err(|err| err.trap(MEMORY, u64::from(addr as u32) + u64::from(OFFSET), trap))
 }
 
 /// This implements the [`i32.load`] instruction.
@@ -118,7 +134,7 @@ where
 ///
 /// [`i32.load`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i32.load")]
-pub fn i32_load<const A: u8, const IDX: u32, M, TR>(
+pub fn i32_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
     mem: &M,
     addr: i32,
     trap: &TR,
@@ -127,10 +143,16 @@ where
     M: Memory32 + ?Sized,
     TR: Trap + ?Sized,
 {
-    match mem.i32_load::<A>(addr as u32) {
-        Ok(value) => Ok(value),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    fn load<const OFFSET: u32, const ALIGN: u8>(
+        mem: &(impl Memory32 + ?Sized),
+        addr: i32,
+    ) -> AccessResult<i32> {
+        mem.i32_load::<ALIGN>(address::<OFFSET>(addr)?)
+            .map_err(|BoundsCheckError| AccessError::I32)
     }
+
+    load::<OFFSET, ALIGN>(mem, addr)
+        .map_err(|err| err.trap(MEMORY, u64::from(addr as u32) + u64::from(OFFSET), trap))
 }
 
 /// This implements the [`i64.load`], `i64.load32_s` and `i64.load32_u` instructions.
@@ -141,7 +163,7 @@ where
 #[doc(alias = "i64.load")]
 #[doc(alias = "i64.load32_s")]
 #[doc(alias = "i64.load32_u")]
-pub fn i64_load<const A: u8, const IDX: u32, M, TR>(
+pub fn i64_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
     mem: &M,
     addr: i32,
     trap: &TR,
@@ -150,10 +172,16 @@ where
     M: Memory32 + ?Sized,
     TR: Trap + ?Sized,
 {
-    match mem.i64_load::<A>(addr as u32) {
-        Ok(value) => Ok(value),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    fn load<const OFFSET: u32, const ALIGN: u8>(
+        mem: &(impl Memory32 + ?Sized),
+        addr: i32,
+    ) -> AccessResult<i64> {
+        mem.i64_load::<ALIGN>(address::<OFFSET>(addr)?)
+            .map_err(|BoundsCheckError| AccessError::I64)
     }
+
+    load::<OFFSET, ALIGN>(mem, addr)
+        .map_err(|err| err.trap(MEMORY, u64::from(addr as u32) + u64::from(OFFSET), trap))
 }
 
 /// This implements the [`iXX.store8`] family of instructions.
@@ -163,7 +191,7 @@ where
 /// [`iXX.store8`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i32.store16")]
 #[doc(alias = "i64.store16")]
-pub fn i8_store<const IDX: u32, M, TR>(
+pub fn i8_store<const OFFSET: u32, const MEMORY: u32, M, TR>(
     mem: &M,
     addr: i32,
     value: i8,
@@ -173,10 +201,17 @@ where
     M: Memory32 + ?Sized,
     TR: Trap + ?Sized,
 {
-    match mem.i8_store(addr as u32, value) {
-        Ok(()) => Ok(()),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    fn store<const OFFSET: u32>(
+        mem: &(impl Memory32 + ?Sized),
+        addr: i32,
+        value: i8,
+    ) -> AccessResult<()> {
+        mem.i8_store(address::<OFFSET>(addr)?, value)
+            .map_err(|BoundsCheckError| AccessError::I8)
     }
+
+    store::<OFFSET>(mem, addr, value)
+        .map_err(|err| err.trap(MEMORY, u64::from(addr as u32) + u64::from(OFFSET), trap))
 }
 
 /// This implements the [`iXX.store16`] family of instructions.
@@ -186,7 +221,7 @@ where
 /// [`iXX.store16`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i32.store16")]
 #[doc(alias = "i64.store16")]
-pub fn i16_store<const A: u8, const IDX: u32, M, TR>(
+pub fn i16_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
     mem: &M,
     addr: i32,
     value: i16,
@@ -196,10 +231,17 @@ where
     M: Memory32 + ?Sized,
     TR: Trap + ?Sized,
 {
-    match mem.i16_store::<A>(addr as u32, value) {
-        Ok(()) => Ok(()),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    fn store<const OFFSET: u32, const ALIGN: u8>(
+        mem: &(impl Memory32 + ?Sized),
+        addr: i32,
+        value: i16,
+    ) -> AccessResult<()> {
+        mem.i16_store::<ALIGN>(address::<OFFSET>(addr)?, value)
+            .map_err(|BoundsCheckError| AccessError::I16)
     }
+
+    store::<OFFSET, ALIGN>(mem, addr, value)
+        .map_err(|err| err.trap(MEMORY, u64::from(addr as u32) + u64::from(OFFSET), trap))
 }
 
 /// This implements the [`i32.store`] and `i64.store32` instructions.
@@ -208,7 +250,7 @@ where
 ///
 /// [`i32.store`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i32.store")]
-pub fn i32_store<const A: u8, const IDX: u32, M, TR>(
+pub fn i32_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
     mem: &M,
     addr: i32,
     value: i32,
@@ -218,10 +260,17 @@ where
     M: Memory32 + ?Sized,
     TR: Trap + ?Sized,
 {
-    match mem.i32_store::<A>(addr as u32, value) {
-        Ok(()) => Ok(()),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    fn store<const OFFSET: u32, const ALIGN: u8>(
+        mem: &(impl Memory32 + ?Sized),
+        addr: i32,
+        value: i32,
+    ) -> AccessResult<()> {
+        mem.i32_store::<ALIGN>(address::<OFFSET>(addr)?, value)
+            .map_err(|BoundsCheckError| AccessError::I32)
     }
+
+    store::<OFFSET, ALIGN>(mem, addr, value)
+        .map_err(|err| err.trap(MEMORY, u64::from(addr as u32) + u64::from(OFFSET), trap))
 }
 
 /// This implements the [`i64.store`] instruction.
@@ -230,7 +279,7 @@ where
 ///
 /// [`i64.store`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i64.store")]
-pub fn i64_store<const A: u8, const IDX: u32, M, TR>(
+pub fn i64_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
     mem: &M,
     addr: i32,
     value: i64,
@@ -240,8 +289,15 @@ where
     M: Memory32 + ?Sized,
     TR: Trap + ?Sized,
 {
-    match mem.i64_store::<A>(addr as u32, value) {
-        Ok(()) => Ok(()),
-        Err(err) => Err(err.trap(IDX, mem.size().into(), trap)),
+    fn store<const OFFSET: u32, const ALIGN: u8>(
+        mem: &(impl Memory32 + ?Sized),
+        addr: i32,
+        value: i64,
+    ) -> AccessResult<()> {
+        mem.i64_store::<ALIGN>(address::<OFFSET>(addr)?, value)
+            .map_err(|BoundsCheckError| AccessError::I64)
     }
+
+    store::<OFFSET, ALIGN>(mem, addr, value)
+        .map_err(|err| err.trap(MEMORY, u64::from(addr as u32) + u64::from(OFFSET), trap))
 }
