@@ -4,7 +4,7 @@ use std::fmt::Write;
 pub(in crate::translation) fn write(
     out: &mut crate::buffer::Writer,
     expr: &wasmparser::ConstExpr,
-) -> wasmparser::Result<()> {
+) -> crate::Result<()> {
     use wasmparser::Operator;
 
     out.write_str("{ ");
@@ -34,7 +34,8 @@ pub(in crate::translation) fn write(
             }
             Operator::End => {
                 let _ = write!(out, "s_{} }}", stack_height - 1);
-                return ops.ensure_end();
+                ops.ensure_end()?;
+                return Ok(());
             }
             bad => {
                 todo!("validation did not detect invalid constant expression containing {bad:?}")

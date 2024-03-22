@@ -4,7 +4,7 @@ pub fn write(
     buffer_pool: &crate::buffer::Pool,
     section: wasmparser::MemorySectionReader,
     start_index: u32,
-) -> wasmparser::Result<crate::translation::GeneratedLines> {
+) -> crate::Result<crate::translation::GeneratedLines> {
     let mut field_out = crate::buffer::Writer::new(buffer_pool);
     let mut init_out = crate::buffer::Writer::new(buffer_pool);
 

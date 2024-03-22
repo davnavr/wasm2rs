@@ -1,10 +1,11 @@
+use anyhow::Context;
 use std::fmt::Write;
 
 pub fn write(
     buffer_pool: &crate::buffer::Pool,
     section: wasmparser::GlobalSectionReader,
     start_index: u32,
-) -> wasmparser::Result<crate::translation::GeneratedLines> {
+) -> crate::Result<crate::translation::GeneratedLines> {
     let mut field_out = crate::buffer::Writer::new(buffer_pool);
     let mut init_out = crate::buffer::Writer::new(buffer_pool);
 
@@ -27,7 +28,8 @@ pub fn write(
             init_out.write_str("embedder::rt::global::Global::new(");
         }
 
-        crate::translation::const_expr::write(&mut init_out, &global.init_expr)?;
+        crate::translation::const_expr::write(&mut init_out, &global.init_expr)
+            .with_context(|| format!("could not translate value for global #{index}"))?;
 
         if global.ty.mutable {
             init_out.write_str(")");

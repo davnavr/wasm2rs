@@ -39,7 +39,7 @@ pub fn write(
     buffer_pool: &crate::buffer::Pool,
     section: wasmparser::ExportSectionReader,
     types: &wasmparser::types::Types,
-) -> wasmparser::Result<crate::translation::GeneratedLines> {
+) -> crate::Result<crate::translation::GeneratedLines> {
     let mut impl_out = crate::buffer::Writer::new(buffer_pool);
 
     impl_out.write_str("    // Exports\n");

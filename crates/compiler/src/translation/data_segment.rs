@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::fmt::Write;
 
 const PREFER_LITERAL_LENGTH: usize = 64;
@@ -51,7 +52,9 @@ pub fn write(
                     crate::translation::display::MemId(memory_index)
                 );
 
-                crate::translation::const_expr::write(&mut init_out, &offset_expr)?;
+                crate::translation::const_expr::write(&mut init_out, &offset_expr).with_context(
+                    || format!("could not translate offset for data segment #{index}"),
+                )?;
 
                 let _ = writeln!(init_out, ", 0, {}i32, &embedder)?;", data.data.len());
             }

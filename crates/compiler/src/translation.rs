@@ -184,7 +184,7 @@ struct ModuleContents<'a> {
 fn parse_wasm_sections<'a>(
     wasm: &'a [u8],
     features: &wasmparser::WasmFeatures,
-) -> wasmparser::Result<ModuleContents<'a>> {
+) -> crate::Result<ModuleContents<'a>> {
     let mut validator = wasmparser::Validator::new_with_features(*features);
     let mut sections = Vec::new();
     let mut functions = Vec::new();
@@ -330,6 +330,7 @@ impl Translation<'_> {
         wasm: &[u8],
         output: &mut dyn std::io::Write,
     ) -> crate::Result<()> {
+        use anyhow::Context;
         use rayon::prelude::*;
 
         let ModuleContents {
@@ -367,17 +368,21 @@ impl Translation<'_> {
                     .validator
                     .into_validator(func_validator_allocation_pool.take_allocations());
 
+                let index = validator.index();
+
                 function::write_definition(
                     &mut out,
                     &mut validator,
                     &func.body,
                     &types,
                     &import_counts,
-                )?;
+                )
+                .with_context(|| format!("failed to translate function #{index}"))?;
+
                 func_validator_allocation_pool.return_allocations(validator.into_allocations());
                 Ok(out.finish())
             })
-            .collect::<wasmparser::Result<Vec<_>>>()?;
+            .collect::<crate::Result<Vec<_>>>()?;
 
         // Generate globals, exports, memories, tables, and other things
         let mut item_lines = Vec::new();
@@ -391,20 +396,14 @@ impl Translation<'_> {
             let contents = sections
                 .into_par_iter()
                 .map(|section| match section {
-                    KnownSection::Import(imports) => {
-                        import::write(buffer_pool, imports, &types).map_err(Into::into)
-                    }
+                    KnownSection::Import(imports) => import::write(buffer_pool, imports, &types),
                     KnownSection::Memory(memories) => {
                         memory::write(buffer_pool, memories, import_counts.memories)
-                            .map_err(Into::into)
                     }
                     KnownSection::Global(globals) => {
                         global::write(buffer_pool, globals, import_counts.globals)
-                            .map_err(Into::into)
                     }
-                    KnownSection::Export(exports) => {
-                        export::write(buffer_pool, exports, &types).map_err(Into::into)
-                    }
+                    KnownSection::Export(exports) => export::write(buffer_pool, exports, &types),
                     KnownSection::Data(data) => {
                         data_segment::write(buffer_pool, data, self.data_segment_writer)
                     }

@@ -1,4 +1,5 @@
 use crate::translation::display::{LocalId, ValType};
+use anyhow::Context;
 use std::fmt::Write;
 
 pub(in crate::translation) const TRAP_TRAIT: &str = "embedder::rt::trap::Trap";
@@ -50,7 +51,7 @@ fn write_local_variables(
     validator: &mut Validator,
     mut locals_reader: wasmparser::LocalsReader<'_>,
     param_count: u32,
-) -> wasmparser::Result<()> {
+) -> crate::Result<()> {
     let local_group_count = locals_reader.get_count();
     let mut local = LocalId(param_count);
     for _ in 0..local_group_count {
@@ -427,12 +428,13 @@ pub(in crate::translation) fn write_definition(
     body: &wasmparser::FunctionBody,
     types: &wasmparser::types::Types, // TODO: Remove types parameter, see if validator by itself can be used
     import_counts: &crate::translation::ImportCounts,
-) -> wasmparser::Result<()> {
+) -> crate::Result<()> {
     let func_type =
         wasmparser::WasmModuleResources::type_of_function(validator.resources(), validator.index())
             .expect("could not get function type");
 
-    let func_result_count = u32::try_from(func_type.results().len()).unwrap();
+    let func_result_count =
+        u32::try_from(func_type.results().len()).with_context(|| "too many results in function")?;
 
     let _ = write!(
         out,
@@ -459,7 +461,7 @@ pub(in crate::translation) fn write_definition(
 
         let current_frame = validator
             .get_control_frame(0)
-            .expect("control frame stack was unexpectedly empty");
+            .with_context(|| "control frame stack was unexpectedly empty")?;
 
         if current_frame.unreachable && !matches!(op, Operator::End | Operator::Else) {
             // Although code is unreachable, WASM spec still requires it to be validated
@@ -530,7 +532,7 @@ pub(in crate::translation) fn write_definition(
                     .1
                     .len()
                     .try_into()
-                    .expect("too many block results");
+                    .with_context(|| "too many block results")?;
 
                 BranchKind::Block.write_control_flow(out, validator, result_count);
                 let _ = writeln!(out, "}} else {{");
@@ -541,7 +543,7 @@ pub(in crate::translation) fn write_definition(
                         .1
                         .len()
                         .try_into()
-                        .expect("too many block results");
+                        .with_context(|| "too many block results")?;
 
                     // Generate code to write to result variables
                     if !current_frame.unreachable {
@@ -585,10 +587,13 @@ pub(in crate::translation) fn write_definition(
 
                     let label = Label(validator.control_stack_height() - relative_depth);
                     if frame.kind == wasmparser::FrameKind::Loop {
-                        let operands_start =
-                            u32::try_from(frame.height).expect("operand stack too high");
+                        let operands_start = u32::try_from(frame.height)
+                            .with_context(|| "operand stack too high")?;
 
-                        for i in 0..u32::try_from(block_parameters.len()).unwrap() {
+                        let block_params = u32::try_from(block_parameters.len())
+                            .with_context(|| "block has too many parameters")?;
+
+                        for i in 0..block_params {
                             let operand = StackValue(operands_start + i);
                             let _ = writeln!(out, "_b_{}{operand} = {operand};", label.0);
                         }
@@ -1235,7 +1240,7 @@ pub(in crate::translation) fn write_definition(
                 let popped = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {popped:#} = (({popped} as u32) as u64) as i64;",);
             }
-            _ => todo!("translate {op:?}"),
+            _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
         }
 
         validator.op(op_offset, &op)?;
