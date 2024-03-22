@@ -28,6 +28,8 @@ fn main() {
 
     println!("cargo:rerun-if-changed=src/simple.wat");
     println!("cargo:rerun-if-changed=src/memory.wat");
+    println!("cargo:rerun-if-changed=src/imports.wat");
     compile_wasm(include_str!("./src/simple.wat"), "simple");
     compile_wasm(include_str!("./src/memory.wat"), "memory");
+    compile_wasm(include_str!("./src/imports.wat"), "imports");
 }
