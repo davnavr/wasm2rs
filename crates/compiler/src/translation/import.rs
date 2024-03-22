@@ -75,7 +75,7 @@ pub(in crate::translation) fn write(
                 // Emit code to check imported memory against limits
                 let _ = writeln!(
                     init_out,
-                    "let imported = embedder.imports().{import_module}().{import_name}();"
+                    "let import = embedder.imports().{import_module}().{import_name}();"
                 );
 
                 init_out.write_str("        let min = import.size();\n");
@@ -84,7 +84,7 @@ pub(in crate::translation) fn write(
 
                 let _ = writeln!(
                     init_out,
-                    "          return Err({}(&embedder, {}::MemoryLimitsCheck {{",
+                    "          return Err({}::trap(&embedder, {}::MemoryLimitsCheck {{",
                     crate::translation::function::TRAP_TRAIT,
                     crate::translation::function::TRAP_CODE,
                 );
@@ -105,7 +105,7 @@ pub(in crate::translation) fn write(
 
                 let _ = writeln!(
                     init_out,
-                    "          return Err({}(&embedder, {}::MemoryLimitsCheck {{",
+                    "          return Err({}::trap(&embedder, {}::MemoryLimitsCheck {{",
                     crate::translation::function::TRAP_TRAIT,
                     crate::translation::function::TRAP_CODE,
                 );
