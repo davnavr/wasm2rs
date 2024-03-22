@@ -15,7 +15,7 @@ pub fn write(
 
         let _ = write!(field_out, "    {id}: ");
         if global.ty.mutable {
-            let _ = write!(field_out, "embedder::rt::Global<{val_type}>");
+            let _ = write!(field_out, "embedder::rt::global::Global<{val_type}>");
         } else {
             let _ = write!(field_out, "{val_type}");
         }
@@ -24,7 +24,7 @@ pub fn write(
 
         let _ = write!(init_out, "let {id} = ");
         if global.ty.mutable {
-            init_out.write_str("embedder::rt::Global::new(");
+            init_out.write_str("embedder::rt::global::Global::new(");
         }
 
         crate::translation::const_expr::write(&mut init_out, &global.init_expr)?;
