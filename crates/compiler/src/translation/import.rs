@@ -65,7 +65,7 @@ pub(in crate::translation) fn write(
                     let _ = write!(impl_out, "{}", crate::translation::display::LocalId(i));
                 }
 
-                impl_out.write_str(")? }\n");
+                impl_out.write_str(") }\n");
 
                 function_index += 1;
             }
