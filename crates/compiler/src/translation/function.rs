@@ -383,6 +383,7 @@ pub(in crate::translation) fn write_definition(
     validator: &mut Validator,
     body: &wasmparser::FunctionBody,
     types: &wasmparser::types::Types,
+    import_counts: &crate::translation::ImportCounts,
 ) -> wasmparser::Result<()> {
     let func_type =
         wasmparser::WasmModuleResources::type_of_function(validator.resources(), validator.index())
@@ -581,6 +582,38 @@ pub(in crate::translation) fn write_definition(
                     LocalId(local_index),
                     PoppedValue::pop(validator, 0)
                 );
+            }
+            Operator::GlobalGet { global_index } => {
+                let _ = write!(
+                    out,
+                    "let {} = ",
+                    StackValue(validator.operand_stack_height()),
+                );
+
+                let id = crate::translation::display::GlobalId(global_index);
+                let global_type = types.global_at(global_index);
+                if !global_type.mutable {
+                    // TODO: How to clone global value for non-Copy types?
+                    let _ = write!(out, "self.{id}");
+                } else {
+                    let _ = write!(out, "embedder::rt::global::Global::get(&self.{id})");
+                }
+
+                if import_counts.is_global_import(global_index) {
+                    todo!("global imports not yet supported")
+                }
+
+                out.write_str(";\n");
+            }
+            Operator::GlobalSet { global_index } => {
+                let id = crate::translation::display::GlobalId(global_index);
+                let _ = write!(out, "embedder::rt::global::Global::get(&self.{id})");
+
+                if import_counts.is_global_import(global_index) {
+                    todo!("global imports not yet supported")
+                }
+
+                out.write_str(";\n");
             }
             Operator::I32Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);

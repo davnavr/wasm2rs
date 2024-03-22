@@ -155,12 +155,23 @@ struct FunctionValidator<'a> {
     body: wasmparser::FunctionBody<'a>,
 }
 
+#[derive(Clone, Copy, Default)]
+struct ImportCounts {
+    memories: u32,
+    globals: u32,
+}
+
+impl ImportCounts {
+    fn is_global_import(&self, index: u32) -> bool {
+        index < self.globals
+    }
+}
+
 struct ModuleContents<'a> {
     sections: Vec<KnownSection<'a>>,
     functions: Vec<FunctionValidator<'a>>,
     types: wasmparser::types::Types,
-    memory_import_count: u32,
-    global_import_count: u32,
+    import_counts: ImportCounts,
     start_function: Option<u32>,
 }
 
@@ -205,8 +216,10 @@ fn parse_wasm_sections<'a>(
                 return Ok(ModuleContents {
                     sections,
                     functions,
-                    memory_import_count: types.memory_count() - memory_definition_count,
-                    global_import_count: types.global_count() - global_definition_count,
+                    import_counts: ImportCounts {
+                        memories: types.memory_count() - memory_definition_count,
+                        globals: types.global_count() - global_definition_count,
+                    },
                     start_function,
                     types,
                 })
@@ -239,8 +252,7 @@ impl Translation<'_> {
             sections,
             functions,
             types,
-            memory_import_count,
-            global_import_count,
+            import_counts,
             start_function,
         } = parse_wasm_sections(wasm, self.wasm_features)?;
 
@@ -271,7 +283,13 @@ impl Translation<'_> {
                     .validator
                     .into_validator(func_validator_allocation_pool.take_allocations());
 
-                function::write_definition(&mut out, &mut validator, &func.body, &types)?;
+                function::write_definition(
+                    &mut out,
+                    &mut validator,
+                    &func.body,
+                    &types,
+                    &import_counts,
+                )?;
                 func_validator_allocation_pool.return_allocations(validator.into_allocations());
                 Ok(out.finish())
             })
@@ -290,11 +308,12 @@ impl Translation<'_> {
                 .into_par_iter()
                 .map(|section| match section {
                     KnownSection::Memory(memories) => {
-                        memory::write(buffer_pool, memories, memory_import_count)
+                        memory::write(buffer_pool, memories, import_counts.memories)
                             .map_err(Into::into)
                     }
                     KnownSection::Global(globals) => {
-                        global::write(buffer_pool, globals, global_import_count).map_err(Into::into)
+                        global::write(buffer_pool, globals, import_counts.globals)
+                            .map_err(Into::into)
                     }
                     KnownSection::Export(exports) => {
                         export::write(buffer_pool, exports, &types).map_err(Into::into)
@@ -389,11 +408,11 @@ impl Translation<'_> {
         crate::buffer::write_all_vectored(output, &init_lines, &mut io_buffers)?;
         writeln!(output, "      let instantiated = Self {{")?;
 
-        for i in memory_import_count..types.memory_count() {
+        for i in import_counts.memories..types.memory_count() {
             writeln!(output, "        {},", display::MemId(i))?;
         }
 
-        for i in global_import_count..types.global_count() {
+        for i in import_counts.globals..types.global_count() {
             writeln!(output, "        {},", display::GlobalId(i))?;
         }
 
