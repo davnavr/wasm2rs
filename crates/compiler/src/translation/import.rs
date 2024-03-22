@@ -78,7 +78,8 @@ pub(in crate::translation) fn write(
                     "let import = embedder.imports().{import_module}().{import_name}();"
                 );
 
-                init_out.write_str("        let min = import.size();\n");
+                init_out
+                    .write_str("        let min = embedder::rt::memory::Memory32::size(import);\n");
 
                 let _ = writeln!(init_out, "        if min < {} {{", mem_type.initial,);
 
@@ -100,7 +101,9 @@ pub(in crate::translation) fn write(
                 init_out.write_str("          }));\n        }\n");
 
                 let maximum = mem_type.maximum.unwrap_or(u32::MAX.into());
-                init_out.write_str("        let max = import.limit();\n");
+                init_out.write_str(
+                    "        let max = embedder::rt::memory::Memory32::limit(import);\n",
+                );
                 let _ = writeln!(init_out, "        if max < {maximum} {{",);
 
                 let _ = writeln!(
