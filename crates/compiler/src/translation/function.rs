@@ -640,15 +640,28 @@ pub(in crate::translation) fn write_definition(
 
                 let id = crate::translation::display::GlobalId(global_index);
                 let global_type = types.global_at(global_index);
+                let is_imported = import_counts.is_global_import(global_index);
                 if !global_type.mutable {
+                    if is_imported {
+                        out.write_str("*");
+                    }
+
                     // TODO: How to clone global value for non-Copy types?
                     let _ = write!(out, "self.{id}");
                 } else {
-                    let _ = write!(out, "embedder::rt::global::Global::get(&self.{id})");
-                }
+                    out.write_str("embedder::rt::global::Global::get(");
 
-                if import_counts.is_global_import(global_index) {
-                    todo!("global imports not yet supported")
+                    if !is_imported {
+                        out.write_str("&");
+                    }
+
+                    let _ = write!(out, "self.{id}");
+
+                    if is_imported {
+                        out.write_str("()");
+                    }
+
+                    out.write_str(")");
                 }
 
                 out.write_str(";\n");
