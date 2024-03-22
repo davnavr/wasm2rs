@@ -57,6 +57,43 @@ where
         .map_err(|BoundsCheckError| AccessError::Other { size }.trap(MEMORY, address.into(), trap))
 }
 
+/// This implements the [`memory.copy`] instruction.
+///
+/// For more information, see the documentation for the [`Memory32::grow()`] method.
+///
+/// [`memory.copy`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+pub fn copy<const DST_MEM: u32, const SRC_MEM: u32, Dst, Src, Tr>(
+    dst: &Dst,
+    src: &Src,
+    dst_addr: i32,
+    src_addr: i32,
+    len: i32,
+    trap: &Tr,
+) -> Result<(), Tr::Repr>
+where
+    Dst: Memory32 + ?Sized,
+    Src: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
+{
+    let dst_addr = dst_addr as u32;
+    let src_addr = src_addr as u32;
+    let size = len as u32;
+    match dst.copy_from(src, dst_addr, src_addr, size) {
+        Ok(()) => Ok(()),
+        Err(BoundsCheckError) => {
+            let (mem, address) = match src_addr.checked_add(size) {
+                None => (SRC_MEM, u64::from(src_addr) + u64::from(size)),
+                Some(addr) if src.size() * crate::memory::PAGE_SIZE <= addr => {
+                    (SRC_MEM, addr.into())
+                }
+                _ => (DST_MEM, u64::from(dst_addr) + u64::from(size)),
+            };
+
+            Err(AccessError::Other { size }.trap(mem, address, trap))
+        }
+    }
+}
+
 /// Calculates an address from adding static offset to a dynamic address operand.
 ///
 /// This implements the calculation of the [*effective address*] for WebAssembly memory instructions.

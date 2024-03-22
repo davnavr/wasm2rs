@@ -172,6 +172,36 @@ unaligned_integer_accesses! {
     i64 : unaligned_i64_load / unaligned_i64_store;
 }
 
+fn default_copy_from<Dst, Src>(
+    dst: &Dst,
+    src: &Src,
+    dst_addr: u32,
+    src_addr: u32,
+    len: u32,
+) -> BoundsCheck<()>
+where
+    Dst: Memory32 + ?Sized,
+    Src: Memory32 + ?Sized,
+{
+    /// Limit on the number of bytes to copy at a time.
+    const BUFFER_SIZE: u32 = 512;
+
+    let mut buffer = [0u8; BUFFER_SIZE as usize];
+    let mut written = 0u32;
+    while let Some(buffer @ [_, ..]) = buffer.get_mut(..BUFFER_SIZE.min(len - written) as usize) {
+        dst.copy_to_slice(dst_addr + written, buffer)?;
+        src.copy_from_slice(src_addr + written, buffer)?;
+
+        // `buffer.len() <= BUFFER_SIZE <= u32::MAX`
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            written += buffer.len() as u32;
+        }
+    }
+
+    Ok(())
+}
+
 /// A [WebAssembly linear memory] with a 32-bit address space.
 ///
 /// Some read and write operations take a constant alignment operation `A`, where the alignment is
@@ -216,6 +246,18 @@ pub trait Memory32 {
     ///
     /// Returns an error if the range of addresses `addr..(addr + dst.len())` is not in bounds.
     fn copy_from_slice(&self, addr: u32, src: &[u8]) -> BoundsCheck<()>;
+
+    /// Copies bytes from the given linear memory into `self`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `addr + len` is not in bounds in either of the memories.
+    fn copy_from<Src>(&self, src: &Src, dst_addr: u32, src_addr: u32, len: u32) -> BoundsCheck<()>
+    where
+        Src: Memory32 + ?Sized,
+    {
+        default_copy_from(self, src, dst_addr, src_addr, len)
+    }
 
     /// Allocates a new boxed slice, and copies the contents of this linear memory at the range of addresses into it.
     ///
