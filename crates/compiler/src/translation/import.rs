@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-const IMPORTS_OBJECT: &str = "self._embedder.imports()";
+const IMPORTS_OBJECT: &str = "self.embedder.imports()";
 const LIMITS_ENUM: &str = "embedder::rt::trap::LimitsCheck";
 
 pub(in crate::translation) fn write(

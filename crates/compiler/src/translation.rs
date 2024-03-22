@@ -385,7 +385,7 @@ impl Translation<'_> {
                 "\n  #[derive(Debug)]\n",
                 "  #[non_exhaustive]\n",
                 "  $vis struct Instance {\n",
-                "    _embedder: embedder::State,\n"
+                "    embedder: embedder::State,\n"
             )
             .as_bytes(),
         )?;
@@ -400,7 +400,7 @@ impl Translation<'_> {
         }
 
         output
-            .write_all(b"    pub fn embedder(&self) -> &embedder::State { &self._embedder }\n\n")?;
+            .write_all(b"    pub fn embedder(&self) -> &embedder::State { &self.embedder }\n\n")?;
 
         // Writes the instantiate function.
         //
@@ -433,8 +433,7 @@ impl Translation<'_> {
             writeln!(output, "        {},", display::GlobalId(i))?;
         }
 
-        // TODO: Rename _embedder to just be embedder
-        writeln!(output, "        _embedder: embedder,\n      }};\n")?;
+        writeln!(output, "        embedder,\n      }};\n")?;
 
         if let Some(start_index) = start_function {
             writeln!(output, "      self.{}()?;", display::FuncId(start_index))?;
