@@ -34,6 +34,11 @@ pub struct State<I = ()> {
 }
 
 impl<I> State<I> {
+    /// Intiializes the embedder state with the given `imports`.
+    pub fn new(imports: I) -> Self {
+        Self { imports }
+    }
+
     /// Initializes the WebAssembly module's main memory.
     pub fn initialize_mem_0<const IDX: u32, const MIN: u32, const MAX: u32>(
         &self,
