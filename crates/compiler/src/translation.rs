@@ -5,6 +5,7 @@ mod data_segment;
 mod display;
 mod export;
 mod function;
+mod global;
 mod memory;
 
 #[derive(Default)]
@@ -144,6 +145,7 @@ impl<'a> Translation<'a> {
 
 enum KnownSection<'a> {
     Memory(wasmparser::MemorySectionReader<'a>),
+    Global(wasmparser::GlobalSectionReader<'a>),
     Export(wasmparser::ExportSectionReader<'a>),
     Data(wasmparser::DataSectionReader<'a>),
 }
@@ -157,8 +159,9 @@ struct ModuleContents<'a> {
     sections: Vec<KnownSection<'a>>,
     functions: Vec<FunctionValidator<'a>>,
     types: wasmparser::types::Types,
-    start_function: Option<u32>,
     memory_import_count: u32,
+    global_import_count: u32,
+    start_function: Option<u32>,
 }
 
 fn parse_wasm_sections<'a>(
@@ -168,8 +171,10 @@ fn parse_wasm_sections<'a>(
     let mut validator = wasmparser::Validator::new_with_features(*features);
     let mut sections = Vec::new();
     let mut functions = Vec::new();
-    let mut start_function = None;
+
     let mut memory_definition_count = 0;
+    let mut global_definition_count = 0;
+    let mut start_function = None;
 
     for result in wasmparser::Parser::new(0).parse_all(wasm) {
         use wasmparser::{Payload, ValidPayload};
@@ -180,6 +185,10 @@ fn parse_wasm_sections<'a>(
             Payload::MemorySection(memories) => {
                 memory_definition_count = memories.count();
                 sections.push(KnownSection::Memory(memories));
+            }
+            Payload::GlobalSection(globals) => {
+                global_definition_count = globals.count();
+                sections.push(KnownSection::Global(globals));
             }
             Payload::ExportSection(exports) => sections.push(KnownSection::Export(exports)),
             Payload::StartSection { func, range: _ } => start_function = Some(func),
@@ -196,8 +205,9 @@ fn parse_wasm_sections<'a>(
                 return Ok(ModuleContents {
                     sections,
                     functions,
-                    start_function,
                     memory_import_count: types.memory_count() - memory_definition_count,
+                    global_import_count: types.global_count() - global_definition_count,
+                    start_function,
                     types,
                 })
             }
@@ -229,8 +239,9 @@ impl Translation<'_> {
             sections,
             functions,
             types,
-            start_function,
             memory_import_count,
+            global_import_count,
+            start_function,
         } = parse_wasm_sections(wasm, self.wasm_features)?;
 
         let new_func_validator_allocation_pool;
@@ -281,6 +292,9 @@ impl Translation<'_> {
                     KnownSection::Memory(memories) => {
                         memory::write(buffer_pool, memories, memory_import_count)
                             .map_err(Into::into)
+                    }
+                    KnownSection::Global(globals) => {
+                        global::write(buffer_pool, globals, global_import_count).map_err(Into::into)
                     }
                     KnownSection::Export(exports) => {
                         export::write(buffer_pool, exports, &types).map_err(Into::into)
@@ -355,19 +369,32 @@ impl Translation<'_> {
             crate::buffer::write_all_vectored(output, impl_lines, &mut io_buffers)?;
         }
 
-        // Write instantiate function
+        // Writes the instantiate function.
+        //
+        // This should follow the steps described in the [`specification`]:
+        //
+        // 0. Allocate the defined tables, memories, and globals in that order.
+        //
+        // 1. Initialize globals and evaluate their intiailization expressions to produce their
+        // values. Validation ensures only imported globals can be accessed at this step.
+        //
+        // 2. Write element segments to the tables.
+        //
+        // 3. Write data segments to the memories.
+        //
+        // [specification]: https://webassembly.github.io/spec/core/exec/modules.html#instantiation
         output.write_all(
             b"    $vis fn instantiate(embedder: embedder::State) -> embedder::Result<Self> {\n",
         )?;
         crate::buffer::write_all_vectored(output, &init_lines, &mut io_buffers)?;
         writeln!(output, "      let instantiated = Self {{")?;
 
-        for i in 0..types.memory_count() {
-            writeln!(
-                output,
-                "        {},",
-                display::MemId(i + memory_import_count)
-            )?;
+        for i in memory_import_count..types.memory_count() {
+            writeln!(output, "        {},", display::MemId(i))?;
+        }
+
+        for i in global_import_count..types.global_count() {
+            writeln!(output, "        {},", display::GlobalId(i))?;
         }
 
         writeln!(output, "        _embedder: embedder,\n      }};\n")?;
