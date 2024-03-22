@@ -378,6 +378,7 @@ fn main() {
                         }
                     }
                 }
+                WastDirective::AssertInvalid { .. } => (), // We aren't testing the implementation of `wasmparser`
                 _ => return Err("unsupported directive was skipped".into()),
             }
 
