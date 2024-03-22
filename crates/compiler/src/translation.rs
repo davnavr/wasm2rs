@@ -399,6 +399,9 @@ impl Translation<'_> {
             crate::buffer::write_all_vectored(output, impl_lines, &mut io_buffers)?;
         }
 
+        output
+            .write_all(b"    pub fn embedder(&self) -> &embedder::State { &self._embedder }\n\n")?;
+
         // Writes the instantiate function.
         //
         // This should follow the steps described in the [`specification`]:
@@ -430,6 +433,7 @@ impl Translation<'_> {
             writeln!(output, "        {},", display::GlobalId(i))?;
         }
 
+        // TODO: Rename _embedder to just be embedder
         writeln!(output, "        _embedder: embedder,\n      }};\n")?;
 
         if let Some(start_index) = start_function {
