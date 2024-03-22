@@ -567,6 +567,53 @@ pub(in crate::translation) fn write_definition(
 
                 kind.write_control_flow(out, validator, func_result_count);
             }
+            Operator::Call { function_index } => {
+                let signature = wasmparser::WasmModuleResources::type_of_function(
+                    validator.resources(),
+                    function_index,
+                )
+                .expect("could not get callee type");
+
+                let result_count = u32::try_from(signature.results().len()).unwrap_or(u32::MAX);
+                let param_count = u32::try_from(signature.params().len()).unwrap_or(u32::MAX);
+
+                // Writes the results, the first (the leftmost) result is the one that needs to be popped last.
+                if result_count > 0 {
+                    out.write_str("let ");
+
+                    if result_count > 1 {
+                        out.write_str("(");
+                    }
+
+                    for depth in (0..result_count).rev() {
+                        if depth > 0 {
+                            out.write_str(", ");
+                        }
+
+                        let _ = write!(out, "{:#}", PoppedValue::pop(validator, depth));
+                    }
+
+                    if result_count > 1 {
+                        out.write_str(")");
+                    }
+
+                    out.write_str(" = ");
+                }
+
+                let _ = write!(out, "self.{}(", FuncId(function_index));
+
+                // Writes the parameters, the first (the leftmost) parameter is popped last.
+                for depth in (0..param_count).rev() {
+                    if depth > 0 {
+                        out.write_str(", ");
+                    }
+
+                    let _ = write!(out, "{}", PoppedValue::pop(validator, depth));
+                }
+
+                out.write_str(")?;");
+            }
+            // Operator::CallIndirect { type_index, table_index, table_byte } => { todo!() }
             Operator::LocalGet { local_index } => {
                 let _ = writeln!(
                     out,
