@@ -422,7 +422,7 @@ fn main() {
 
             let _ = writeln!(
                 &mut rs_file,
-                "    let _inst = {module_ident}::Instance::instantiate(Default::default()).unwrap();"
+                "  let _inst = {module_ident}::Instance::instantiate(Default::default()).unwrap();"
             );
 
             for assertion in module.tests.into_iter() {
@@ -434,7 +434,7 @@ fn main() {
 
                 impl std::fmt::Display for AssertLocation<'_> {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        writeln!(f, "{}:{}:{}", self.path.display(), self.line, self.column)
+                        write!(f, "{}:{}:{}", self.path.display(), self.line, self.column)
                     }
                 }
 
