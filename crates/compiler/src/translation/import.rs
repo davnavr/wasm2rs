@@ -17,6 +17,7 @@ pub(in crate::translation) fn write(
 
     let mut function_index = 0u32;
     let mut memory_index = 0u32;
+    let mut global_index = 0u32;
     for result in section {
         use wasmparser::TypeRef as ImportKind;
 
@@ -77,7 +78,7 @@ pub(in crate::translation) fn write(
                     "let imported = embedder.imports().{import_module}().{import_name}();"
                 );
 
-                let _ = init_out.write_str("let min = import.size();");
+                init_out.write_str("let min = import.size();");
 
                 let _ = writeln!(init_out, "        if min < {} {{", mem_type.initial,);
 
@@ -99,7 +100,7 @@ pub(in crate::translation) fn write(
                 impl_out.write_str("          }});        }}\n");
 
                 let maximum = mem_type.maximum.unwrap_or(u32::MAX.into());
-                let _ = init_out.write_str("let max = import.limit();");
+                init_out.write_str("let max = import.limit();");
                 let _ = writeln!(init_out, "        if max < {maximum} {{",);
 
                 let _ = writeln!(
@@ -133,6 +134,34 @@ pub(in crate::translation) fn write(
                 impl_out.write_str("    }\n");
 
                 memory_index += 1;
+            }
+            ImportKind::Global(global_type) => {
+                let _ = write!(
+                    impl_out,
+                    "    fn {}(&self) -> &",
+                    crate::translation::display::GlobalId(global_index)
+                );
+
+                if global_type.mutable {
+                    impl_out.write_str("embedder::rt::global::Global<");
+                }
+
+                let _ = write!(
+                    impl_out,
+                    "{}",
+                    crate::translation::display::ValType(global_type.content_type)
+                );
+
+                if global_type.mutable {
+                    impl_out.write_str(">");
+                }
+
+                let _ = writeln!(
+                    impl_out,
+                    " {{ {IMPORTS_OBJECT}.{import_module}().{import_name}() }}"
+                );
+
+                global_index += 1;
             }
             bad => todo!("importing {bad:?} is not yet supported"),
         }
