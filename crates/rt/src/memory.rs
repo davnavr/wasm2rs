@@ -215,7 +215,8 @@ mod private {
 ///
 /// [WebAssembly linear memory]: https://webassembly.github.io/spec/core/syntax/modules.html#memories
 pub trait Memory32 {
-    /// Allows attempts to perform reflection with `self`.
+    /// Implementation detail to allow attempts to perform reflection with `self`.
+    #[doc(hidden)]
     fn try_as_any(&self, _: private::Hidden) -> Option<&dyn core::any::Any> {
         None
     }
