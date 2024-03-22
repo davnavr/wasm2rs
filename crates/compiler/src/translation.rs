@@ -6,6 +6,7 @@ mod display;
 mod export;
 mod function;
 mod global;
+mod import;
 mod memory;
 
 #[derive(Default)]
@@ -144,6 +145,7 @@ impl<'a> Translation<'a> {
 }
 
 enum KnownSection<'a> {
+    Import(wasmparser::ImportSectionReader<'a>),
     Memory(wasmparser::MemorySectionReader<'a>),
     Global(wasmparser::GlobalSectionReader<'a>),
     Export(wasmparser::ExportSectionReader<'a>),
@@ -191,8 +193,10 @@ fn parse_wasm_sections<'a>(
         use wasmparser::{Payload, ValidPayload};
 
         let payload = result?;
+        // TODO: Call the validator in each match case instead
         let validated_payload = validator.payload(&payload)?;
         match payload {
+            Payload::ImportSection(imports) => sections.push(KnownSection::Import(imports)),
             Payload::MemorySection(memories) => {
                 memory_definition_count = memories.count();
                 sections.push(KnownSection::Memory(memories));
@@ -307,6 +311,9 @@ impl Translation<'_> {
             let contents = sections
                 .into_par_iter()
                 .map(|section| match section {
+                    KnownSection::Import(imports) => {
+                        import::write(buffer_pool, imports, &types).map_err(Into::into)
+                    }
                     KnownSection::Memory(memories) => {
                         memory::write(buffer_pool, memories, import_counts.memories)
                             .map_err(Into::into)

@@ -141,6 +141,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "crossbeam-queue",
+ "indexmap",
  "rayon",
  "wasmparser",
 ]
