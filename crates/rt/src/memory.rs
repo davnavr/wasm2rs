@@ -202,6 +202,12 @@ where
     Ok(())
 }
 
+mod private {
+    /// Implementation detail to allow downcasting an arbitrary `Memory32` implementation.
+    #[derive(Debug)]
+    pub struct Hidden;
+}
+
 /// A [WebAssembly linear memory] with a 32-bit address space.
 ///
 /// Some read and write operations take a constant alignment operation `A`, where the alignment is
@@ -209,6 +215,11 @@ where
 ///
 /// [WebAssembly linear memory]: https://webassembly.github.io/spec/core/syntax/modules.html#memories
 pub trait Memory32 {
+    /// Allows attempts to perform reflection with `self`.
+    fn try_as_any(&self, _: private::Hidden) -> Option<&dyn core::any::Any> {
+        None
+    }
+
     /// Returns the size of the linear memory, in terms of the [`PAGE_SIZE`].
     fn size(&self) -> u32;
 
