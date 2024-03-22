@@ -65,12 +65,12 @@ pub(in crate::translation) fn write(
                     let _ = write!(impl_out, "{}", crate::translation::display::LocalId(i));
                 }
 
-                impl_out.write_str(")? }}\n");
+                impl_out.write_str(")? }\n");
 
                 function_index += 1;
             }
             ImportKind::Memory(mem_type) => {
-                impl_out.write_str("      {\n        ");
+                init_out.write_str("      {\n        ");
 
                 // Emit code to check imported memory against limits
                 let _ = writeln!(
@@ -78,7 +78,7 @@ pub(in crate::translation) fn write(
                     "let imported = embedder.imports().{import_module}().{import_name}();"
                 );
 
-                init_out.write_str("let min = import.size();");
+                init_out.write_str("        let min = import.size();\n");
 
                 let _ = writeln!(init_out, "        if min < {} {{", mem_type.initial,);
 
@@ -97,10 +97,10 @@ pub(in crate::translation) fn write(
                     mem_type.initial
                 );
 
-                impl_out.write_str("          }});        }}\n");
+                init_out.write_str("          }));\n        }\n");
 
                 let maximum = mem_type.maximum.unwrap_or(u32::MAX.into());
-                init_out.write_str("let max = import.limit();");
+                init_out.write_str("        let max = import.limit();\n");
                 let _ = writeln!(init_out, "        if max < {maximum} {{",);
 
                 let _ = writeln!(
@@ -117,12 +117,12 @@ pub(in crate::translation) fn write(
                     "            limits: {LIMITS_ENUM}::Maximum {{ expected: {maximum}, actual: max }},",
                 );
 
-                impl_out.write_str("          }});        }}\n      }\n");
+                init_out.write_str("          }));\n        }\n      }\n");
 
                 // Write the method used to access the memory
                 let _ = writeln!(
                     impl_out,
-                    "    fn {}(&self) -> embedder::Memory{memory_index} {{",
+                    "{}(&self) -> embedder::Memory{memory_index} {{",
                     crate::translation::display::MemId(memory_index)
                 );
 
@@ -138,7 +138,7 @@ pub(in crate::translation) fn write(
             ImportKind::Global(global_type) => {
                 let _ = write!(
                     impl_out,
-                    "    fn {}(&self) -> &",
+                    "{}(&self) -> &",
                     crate::translation::display::GlobalId(global_index)
                 );
 
