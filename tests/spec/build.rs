@@ -17,6 +17,7 @@ fn main() {
     const FILES: &[&str] = &["address.wast", "int_exprs.wast", "int_literals.wast"];
 
     let mut file_buffer = String::with_capacity(0x20000);
+    let func_validator_allocation_pool = wasm2rs::FuncValidatorAllocationPool::default();
     let buffer_pool = wasm2rs::buffer::Pool::default();
     // TODO: See if using rayon can help here
     for wast_name in FILES {
@@ -397,6 +398,7 @@ fn main() {
 
             let translation_result = wasm2rs::Translation::new()
                 .buffer_pool(&buffer_pool)
+                .func_validator_allocation_pool(&func_validator_allocation_pool)
                 .generated_macro_name(module_ident)
                 .translate_from_buffer(&module.contents, &mut mod_file);
 

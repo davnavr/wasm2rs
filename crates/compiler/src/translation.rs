@@ -38,6 +38,7 @@ pub struct Translation<'a> {
     data_segment_writer: DataSegmentWriter<'a>,
     wasm_features: &'a wasmparser::WasmFeatures,
     buffer_pool: Option<&'a crate::buffer::Pool>,
+    func_validator_allocation_pool: Option<&'a crate::FuncValidatorAllocationPool>,
 }
 
 impl Default for Translation<'_> {
@@ -79,6 +80,7 @@ impl<'a> Translation<'a> {
             data_segment_writer: &|_, _| Ok(None),
             wasm_features: &Self::DEFAULT_SUPPORTED_FEATURES,
             buffer_pool: None,
+            func_validator_allocation_pool: None,
         }
     }
 
@@ -110,6 +112,24 @@ impl<'a> Translation<'a> {
     /// [`Pool`]: crate::buffer::Pool
     pub fn buffer_pool(&mut self, pool: &'a crate::buffer::Pool) -> &mut Self {
         self.buffer_pool = Some(pool);
+        self
+    }
+
+    /// Specifies a pool to take [`FuncValidatorAllocations`] from during translation.
+    ///
+    /// This is useful if multiple WebAssembly modules are being translated with the same
+    /// [`Translation`] options.
+    ///
+    /// If not set, a new [`FuncValidatorAllocationPool`] is created for every translation of one
+    /// WebAssembly module.
+    ///
+    /// [`FuncValidatorAllocations`]: wasmparser::FuncValidatorAllocations
+    /// [`FuncValidatorAllocationPool`]: crate::FuncValidatorAllocationPool
+    pub fn func_validator_allocation_pool(
+        &mut self,
+        pool: &'a crate::FuncValidatorAllocationPool,
+    ) -> &mut Self {
+        self.func_validator_allocation_pool = Some(pool);
         self
     }
 
@@ -213,8 +233,14 @@ impl Translation<'_> {
             memory_import_count,
         } = parse_wasm_sections(wasm, self.wasm_features)?;
 
-        let func_validator_allocation_pool =
-            crossbeam_queue::SegQueue::<wasmparser::FuncValidatorAllocations>::new();
+        let new_func_validator_allocation_pool;
+        let func_validator_allocation_pool = match self.func_validator_allocation_pool {
+            Some(existing) => existing,
+            None => {
+                new_func_validator_allocation_pool = crate::FuncValidatorAllocationPool::default();
+                &new_func_validator_allocation_pool
+            }
+        };
 
         let new_buffer_pool;
         let buffer_pool = match self.buffer_pool {
@@ -230,21 +256,15 @@ impl Translation<'_> {
             .into_par_iter()
             .map(|func| {
                 let mut out = crate::buffer::Writer::new(buffer_pool);
-                let mut validator = func.validator.into_validator(
-                    if let Some(allocs) = func_validator_allocation_pool.pop() {
-                        allocs
-                    } else {
-                        Default::default()
-                    },
-                );
+                let mut validator = func
+                    .validator
+                    .into_validator(func_validator_allocation_pool.take_allocations());
 
                 function::write_definition(&mut out, &mut validator, &func.body, &types)?;
-                func_validator_allocation_pool.push(validator.into_allocations());
+                func_validator_allocation_pool.return_allocations(validator.into_allocations());
                 Ok(out.finish())
             })
             .collect::<wasmparser::Result<Vec<_>>>()?;
-
-        std::mem::drop(func_validator_allocation_pool);
 
         // Generate globals, exports, memories, tables, and other things
         let mut item_lines = Vec::new();

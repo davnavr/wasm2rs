@@ -8,12 +8,14 @@
 #![deny(clippy::exhaustive_enums)]
 
 mod error;
+mod func_validator_allocation_pool;
 mod translation;
 
 pub mod buffer;
 pub mod rust;
 
 pub use error::Error;
+pub use func_validator_allocation_pool::FuncValidatorAllocationPool;
 pub use translation::{DataSegmentWriter, Translation};
 
 /// Result type used for translation operations.
