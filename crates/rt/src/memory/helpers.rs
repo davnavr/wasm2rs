@@ -59,7 +59,41 @@ where
 
 /// This implements the [`memory.copy`] instruction.
 ///
-/// For more information, see the documentation for the [`Memory32::grow()`] method.
+/// For more information, see the documentation for the [`Memory32::copy_within()`] method.
+///
+/// [`memory.copy`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+pub fn copy_within<const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
+    dst_addr: i32,
+    src_addr: i32,
+    len: i32,
+    trap: &Tr,
+) -> Result<(), Tr::Repr>
+where
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
+{
+    let dst_addr = dst_addr as u32;
+    let src_addr = src_addr as u32;
+    let size = len as u32;
+    match mem.copy_within(dst_addr, src_addr, size) {
+        Ok(()) => Ok(()),
+        Err(BoundsCheckError) => {
+            let address = match src_addr.checked_add(size) {
+                None => u64::from(src_addr) + u64::from(size),
+                Some(addr) if mem.size() * crate::memory::PAGE_SIZE <= addr => addr.into(),
+                _ => u64::from(dst_addr) + u64::from(size),
+            };
+
+            Err(AccessError::Other { size }.trap(MEMORY, address, trap))
+        }
+    }
+}
+
+/// This implements the [`memory.copy`] instruction in the case where the source and destination
+/// memories differ.
+///
+/// For more information, see the documentation for the [`Memory32::copy_from()`] method.
 ///
 /// [`memory.copy`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn copy<const DST_MEM: u32, const SRC_MEM: u32, Dst, Src, Tr>(

@@ -258,16 +258,27 @@ pub trait Memory32 {
     /// Returns an error if the range of addresses `addr..(addr + dst.len())` is not in bounds.
     fn copy_from_slice(&self, addr: u32, src: &[u8]) -> BoundsCheck<()>;
 
+    /// Moves a range of bytes in this linear memory to another location.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `src_addr + len` or `dst_addr + len` is not in bounds.
+    fn copy_within(&self, dst_addr: u32, src_addr: u32, len: u32) -> BoundsCheck<()> {
+        default_copy_from(self, self, dst_addr, src_addr, len)
+    }
+
     /// Copies bytes from the given linear memory into `self`.
     ///
     /// # Errors
     ///
-    /// Returns an error if `addr + len` is not in bounds in either of the memories.
+    /// Returns an error if `src_addr + len` is not in bounds in the source memory, or if
+    /// `dst_addr + len` is not in bounds in `self`.
     fn copy_from<Src>(&self, src: &Src, dst_addr: u32, src_addr: u32, len: u32) -> BoundsCheck<()>
     where
         Self: Sized,
         Src: Memory32 + ?Sized,
     {
+        // TODO: Could specialize if `self == src`
         default_copy_from(self, src, dst_addr, src_addr, len)
     }
 
