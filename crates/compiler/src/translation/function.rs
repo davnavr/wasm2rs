@@ -606,8 +606,13 @@ pub(in crate::translation) fn write_definition(
                 out.write_str(";\n");
             }
             Operator::GlobalSet { global_index } => {
+                let new_value = PoppedValue::pop(validator, 0);
+
                 let id = crate::translation::display::GlobalId(global_index);
-                let _ = write!(out, "embedder::rt::global::Global::get(&self.{id})");
+                let _ = write!(
+                    out,
+                    "embedder::rt::global::Global::set(&self.{id}, {new_value})"
+                );
 
                 if import_counts.is_global_import(global_index) {
                     todo!("global imports not yet supported")
