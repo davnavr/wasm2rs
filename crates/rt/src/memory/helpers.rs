@@ -71,7 +71,7 @@ pub fn copy<const DST_MEM: u32, const SRC_MEM: u32, Dst, Src, Tr>(
     trap: &Tr,
 ) -> Result<(), Tr::Repr>
 where
-    Dst: Memory32 + ?Sized,
+    Dst: Memory32,
     Src: Memory32 + ?Sized,
     Tr: Trap + ?Sized,
 {
@@ -150,11 +150,11 @@ pub fn i16_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
     trap: &Tr,
 ) -> Result<i16, Tr::Repr>
 where
-    Mem: Memory32 + ?Sized,
+    Mem: Memory32,
     Tr: Trap + ?Sized,
 {
     fn load<const OFFSET: u32, const ALIGN: u8>(
-        mem: &(impl Memory32 + ?Sized),
+        mem: &impl Memory32,
         addr: i32,
     ) -> AccessResult<i16> {
         mem.i16_load::<ALIGN>(address::<OFFSET>(addr)?)
@@ -177,11 +177,11 @@ pub fn i32_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
     trap: &Tr,
 ) -> Result<i32, Tr::Repr>
 where
-    Mem: Memory32 + ?Sized,
+    Mem: Memory32,
     Tr: Trap + ?Sized,
 {
     fn load<const OFFSET: u32, const ALIGN: u8>(
-        mem: &(impl Memory32 + ?Sized),
+        mem: &impl Memory32,
         addr: i32,
     ) -> AccessResult<i32> {
         mem.i32_load::<ALIGN>(address::<OFFSET>(addr)?)
@@ -206,11 +206,11 @@ pub fn i64_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
     trap: &Tr,
 ) -> Result<i64, Tr::Repr>
 where
-    Mem: Memory32 + ?Sized,
+    Mem: Memory32,
     Tr: Trap + ?Sized,
 {
     fn load<const OFFSET: u32, const ALIGN: u8>(
-        mem: &(impl Memory32 + ?Sized),
+        mem: &impl Memory32,
         addr: i32,
     ) -> AccessResult<i64> {
         mem.i64_load::<ALIGN>(address::<OFFSET>(addr)?)
@@ -235,14 +235,10 @@ pub fn i8_store<const OFFSET: u32, const MEMORY: u32, Mem, Tr>(
     trap: &Tr,
 ) -> Result<(), Tr::Repr>
 where
-    Mem: Memory32 + ?Sized,
+    Mem: Memory32,
     Tr: Trap + ?Sized,
 {
-    fn store<const OFFSET: u32>(
-        mem: &(impl Memory32 + ?Sized),
-        addr: i32,
-        value: i8,
-    ) -> AccessResult<()> {
+    fn store<const OFFSET: u32>(mem: &impl Memory32, addr: i32, value: i8) -> AccessResult<()> {
         mem.i8_store(address::<OFFSET>(addr)?, value)
             .map_err(|BoundsCheckError| AccessError::I8)
     }
@@ -265,11 +261,11 @@ pub fn i16_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>
     trap: &Tr,
 ) -> Result<(), Tr::Repr>
 where
-    Mem: Memory32 + ?Sized,
+    Mem: Memory32,
     Tr: Trap + ?Sized,
 {
     fn store<const OFFSET: u32, const ALIGN: u8>(
-        mem: &(impl Memory32 + ?Sized),
+        mem: &impl Memory32,
         addr: i32,
         value: i16,
     ) -> AccessResult<()> {
@@ -294,11 +290,11 @@ pub fn i32_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>
     trap: &Tr,
 ) -> Result<(), Tr::Repr>
 where
-    Mem: Memory32 + ?Sized,
+    Mem: Memory32,
     Tr: Trap + ?Sized,
 {
     fn store<const OFFSET: u32, const ALIGN: u8>(
-        mem: &(impl Memory32 + ?Sized),
+        mem: &impl Memory32,
         addr: i32,
         value: i32,
     ) -> AccessResult<()> {
@@ -323,11 +319,11 @@ pub fn i64_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>
     trap: &Tr,
 ) -> Result<(), Tr::Repr>
 where
-    Mem: Memory32 + ?Sized,
+    Mem: Memory32,
     Tr: Trap + ?Sized,
 {
     fn store<const OFFSET: u32, const ALIGN: u8>(
-        mem: &(impl Memory32 + ?Sized),
+        mem: &impl Memory32,
         addr: i32,
         value: i64,
     ) -> AccessResult<()> {

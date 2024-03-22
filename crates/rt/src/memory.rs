@@ -254,6 +254,7 @@ pub trait Memory32 {
     /// Returns an error if `addr + len` is not in bounds in either of the memories.
     fn copy_from<Src>(&self, src: &Src, dst_addr: u32, src_addr: u32, len: u32) -> BoundsCheck<()>
     where
+        Self: Sized,
         Src: Memory32 + ?Sized,
     {
         default_copy_from(self, src, dst_addr, src_addr, len)
@@ -307,37 +308,58 @@ pub trait Memory32 {
     }
 
     /// Loads a potentially aligned 32-bit integer from the given address.
-    fn i16_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i16> {
+    fn i16_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i16>
+    where
+        Self: Sized,
+    {
         unaligned_i16_load(self, addr)
     }
 
     /// Loads a potentially aligned 32-bit integer from the given address.
-    fn i32_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i32> {
+    fn i32_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i32>
+    where
+        Self: Sized,
+    {
         unaligned_i32_load(self, addr)
     }
 
     /// Loads a potentially aligned 64-bit integer from the given address.
-    fn i64_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i64> {
+    fn i64_load<const ALIGN: u8>(&self, addr: u32) -> BoundsCheck<i64>
+    where
+        Self: Sized,
+    {
         unaligned_i64_load(self, addr)
     }
 
     /// Writes into the byte at the given address.
-    fn i8_store(&self, addr: u32, value: i8) -> BoundsCheck<()> {
+    fn i8_store(&self, addr: u32, value: i8) -> BoundsCheck<()>
+    where
+        Self: Sized,
+    {
         self.copy_from_slice(addr, &[value as u8])
     }
 
     /// Stores a potentially aligned 16-bit integer into the given address.
-    fn i16_store<const ALIGN: u8>(&self, addr: u32, value: i16) -> BoundsCheck<()> {
+    fn i16_store<const ALIGN: u8>(&self, addr: u32, value: i16) -> BoundsCheck<()>
+    where
+        Self: Sized,
+    {
         unaligned_i16_store(self, addr, value)
     }
 
     /// Stores a potentially aligned 32-bit integer into the given address.
-    fn i32_store<const ALIGN: u8>(&self, addr: u32, value: i32) -> BoundsCheck<()> {
+    fn i32_store<const ALIGN: u8>(&self, addr: u32, value: i32) -> BoundsCheck<()>
+    where
+        Self: Sized,
+    {
         unaligned_i32_store(self, addr, value)
     }
 
     /// Stores a potentially aligned 64-bit integer into the given address.
-    fn i64_store<const ALIGN: u8>(&self, addr: u32, value: i64) -> BoundsCheck<()> {
+    fn i64_store<const ALIGN: u8>(&self, addr: u32, value: i64) -> BoundsCheck<()>
+    where
+        Self: Sized,
+    {
         unaligned_i64_store(self, addr, value)
     }
 }
