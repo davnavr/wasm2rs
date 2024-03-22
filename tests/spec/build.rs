@@ -360,6 +360,31 @@ fn main() {
             Ok(())
         };
 
+        struct AssertLocation<'a> {
+            line: usize,
+            column: usize,
+            path: &'a std::path::Path,
+        }
+
+        impl<'a> AssertLocation<'a> {
+            fn into_text(path: &'a std::path::Path, span: wast::token::Span, text: &str) -> Self {
+                let (line, column) = span.linecol_in(text);
+                Self { line, column, path }
+            }
+        }
+
+        impl std::fmt::Display for AssertLocation<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}:{}:{}",
+                    self.path.display(),
+                    self.line.saturating_add(1),
+                    self.column.saturating_add(1)
+                )
+            }
+        }
+
         for directive in wast.directives {
             let span = directive.span();
             if let Err(err) = write_directive(directive) {
@@ -369,10 +394,9 @@ fn main() {
                     span
                 };
 
-                let (line, col) = err_span.linecol_in(wast_text);
                 println!(
-                    "cargo:warning={}:{line}:{col} : {}",
-                    wast_path.display(),
+                    "cargo:warning={} : {}",
+                    AssertLocation::into_text(&wast_path, err_span, wast_text),
                     err.message
                 );
             }
@@ -426,26 +450,8 @@ fn main() {
             );
 
             for assertion in module.tests.into_iter() {
-                struct AssertLocation<'a> {
-                    line: usize,
-                    column: usize,
-                    path: &'a std::path::Path,
-                }
-
-                impl std::fmt::Display for AssertLocation<'_> {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(f, "{}:{}:{}", self.path.display(), self.line, self.column)
-                    }
-                }
-
-                let assertion_location = {
-                    let (line, column) = assertion.assert_span.linecol_in(wast_text);
-                    AssertLocation {
-                        line,
-                        column,
-                        path: &wast_path,
-                    }
-                };
+                let assertion_location =
+                    AssertLocation::into_text(&wast_path, assertion.assert_span, wast_text);
 
                 struct PrintValues<'a>(&'a [SpecValue]);
 
