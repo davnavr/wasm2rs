@@ -55,3 +55,11 @@ fn unreachable_panic() {
     let inst = wasm::Instance::instantiate(Default::default()).unwrap();
     inst.unreachable_instruction().unwrap();
 }
+
+#[test]
+fn immutable_global() {
+    let inst = wasm::Instance::instantiate(Default::default()).unwrap();
+    assert_eq!(inst.size_of_kibibyte(), Ok(1024));
+
+    inst.increment_counter().unwrap();
+}
