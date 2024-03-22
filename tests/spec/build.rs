@@ -129,6 +129,7 @@ fn main() {
         enum SpecFunctionResults {
             Values(Vec<SpecValue>),
             Trap(SpecTrapReason),
+            Ignore,
         }
 
         impl SpecFunctionResults {
@@ -270,6 +271,29 @@ fn main() {
                         spec_module_list.push(module);
                     }
                 }
+                WastDirective::Invoke(invoke) => {
+                    let wat = CurrentWat::get_current(&mut current_wat, invoke.span)?;
+
+                    if invoke.module.is_some() {
+                        return Err(AssertTranslationError::with_span(
+                            invoke.span,
+                            "invoke with named module is not yet supported",
+                        ));
+                    }
+
+                    wat.tests.push(SpecTest {
+                        export_name: invoke.name,
+                        kind: SpecTestKind::Function {
+                            arguments: invoke
+                                .args
+                                .into_iter()
+                                .map(TryFrom::try_from)
+                                .collect::<Result<_, _>>()?,
+                            results: SpecFunctionResults::Ignore,
+                        },
+                        assert_span: invoke.span,
+                    });
+                }
                 WastDirective::AssertReturn {
                     span,
                     exec,
@@ -281,7 +305,7 @@ fn main() {
                             if invoke.module.is_some() {
                                 return Err(AssertTranslationError::with_span(
                                     span,
-                                    "assertion with named module is not yet supported",
+                                    "assert_return with named module is not yet supported",
                                 ));
                             } else {
                                 wat.tests.push(SpecTest {
@@ -504,6 +528,14 @@ fn main() {
                         let _ = writeln!(&mut rs_file, "    Ok(values) => panic!(\"expected trap {reason}, but got {{values:?}} at {assertion_location}\"),");
                         let _ = writeln!(&mut rs_file, "    Err(err) => assert!(matches!(err.code(), wasm2rs_rt::trap::TrapCode::{reason} {{ .. }}), \"incorrect trap code, expected {reason} but got {{}} at {assertion_location}\", err.code())");
                         let _ = writeln!(&mut rs_file, "  }}");
+                    }
+                    SpecFunctionResults::Ignore => {
+                        let _ = writeln!(
+                            &mut rs_file,
+                            "  let _ = _inst.{}({:#});",
+                            wasm2rs::rust::SafeIdent::from(assertion.export_name),
+                            PrintValues(&arguments),
+                        );
                     }
                 }
             }
