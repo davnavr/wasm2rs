@@ -69,28 +69,28 @@ impl<I> Trap for State<I> {
 #[macro_export]
 macro_rules! embedder_with_import {
     {
-        $vis:vis mod $embedder:ident($imports:ty) $(use {
-            $($import_namespace:ty as $import_alias:ident),*
+        $vis:vis mod $embedder:ident($imports:tt) $(use {
+            $($import_namespace:tt as $import_alias:ident),*
         })?
     } => {
         $vis mod $embedder {
             pub use $crate::embedder::{rt, Memory0, Result};
 
             /// Contains the imports accessed by the WebAssembly module.
-            pub type Imports = $imports;
+            pub type Imports = super::$imports;
 
             /// State for the embedder of the WebAssembly module.
             pub type State = $crate::embedder::State<Imports>;
 
             $($(
                 #[allow(missing_docs)]
-                pub type $import_alias = $import_namespace;
+                pub type $import_alias = super::$import_namespace;
             )*)?
         }
     };
     {
-        $vis:vis mod ($imports:ty) $(use {
-            $($import_namespace:ty as $import_alias:ident),*
+        $vis:vis mod ($imports:tt) $(use {
+            $($import_namespace:tt as $import_alias:ident),*
         })?
     } => {
         $crate::embedder_with_import! {
