@@ -6,6 +6,35 @@ mod trap_value;
 
 pub use trap_value::TrapValue;
 
+/// Describes which limits a memory or table did not match.
+///
+/// For memories, the limits are expressed as the number of pages.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+#[allow(missing_docs)]
+pub enum LimitsCheck {
+    Minimum { expected: u32, actual: u32 },
+    Maximum { expected: u32, actual: u32 },
+}
+
+impl core::fmt::Display for LimitsCheck {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("expected ")?;
+
+        match self {
+            Self::Minimum { .. } => f.write_str("minimum")?,
+            Self::Maximum { .. } => f.write_str("maximum")?,
+        }
+
+        let (Self::Minimum { expected, actual } | Self::Maximum { expected, actual }) = self;
+
+        write!(f, " of {expected}, but got {actual}")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for LimitsCheck {}
+
 /// Indicates why a trap occured.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
@@ -31,12 +60,22 @@ pub enum TrapCode {
     IntegerOverflow,
     //UnalignedAtomicOperation
     //NullReference
+    // TODO: Rename MemoryInstantiation to MemoryAllocation
     /// Instantiating a module failed because linear memory could not be allocated.
     MemoryInstantiation {
         /// The index of the memory that could not be instantiated.
         memory: u32,
         /// The error describing why the memory could not be allocated.
         error: crate::memory::AllocationError,
+    },
+    /// Instantiating a module failed because a linear memory did not have matching [`limits`].
+    ///
+    /// [`limits`]: crate::memory::Memory32::limit
+    MemoryLimitsCheck {
+        /// The index of the memory whose limits did not match.
+        memory: u32,
+        /// Describes which limit the memory did not match.
+        limits: LimitsCheck,
     },
 }
 
@@ -66,6 +105,9 @@ impl core::fmt::Display for TrapCode {
             Self::MemoryInstantiation { memory, error } => {
                 write!(f, "instantiation of memory #{memory} failed: {error}")
             }
+            Self::MemoryLimitsCheck { memory, limits } => {
+                write!(f, "for memory #{memory}: {limits} pages")
+            }
         }
     }
 }
@@ -76,6 +118,7 @@ impl std::error::Error for TrapCode {
         match self {
             Self::MemoryBoundsCheck { source, .. } => Some(source),
             Self::MemoryInstantiation { error, .. } => Some(error),
+            Self::MemoryLimitsCheck { limits, .. } => Some(limits),
             _ => None,
         }
     }
