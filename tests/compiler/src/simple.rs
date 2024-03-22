@@ -62,4 +62,6 @@ fn immutable_global() {
     assert_eq!(inst.size_of_kibibyte(), Ok(1024));
 
     inst.increment_counter().unwrap();
+    inst.increment_counter().unwrap();
+    assert_eq!(inst.counter().get(), 2);
 }

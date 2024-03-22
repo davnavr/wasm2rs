@@ -78,7 +78,7 @@
   (func (export "size_of_kibibyte") (result i32)
     global.get $kibibyte)
 
-  (global $counter (mut i32) (i32.const 0))
+  (global $counter (export "counter") (mut i32) (i32.const 0))
   (func (export "increment_counter")
     global.get $counter
     i32.const 1

@@ -67,6 +67,20 @@ pub fn write(
                     index.0
                 );
             }
+            ExternalKind::Global => {
+                let index = crate::translation::display::GlobalId(export.index);
+                let global_type = types.global_at(index.0);
+                let value_type = crate::translation::display::ValType(global_type.content_type);
+
+                let _ = write!(impl_out, "(&self) -> &");
+                if global_type.mutable {
+                    let _ = write!(impl_out, "embedder::rt::global::Global<{value_type}>");
+                } else {
+                    let _ = write!(impl_out, "{value_type}");
+                }
+
+                let _ = writeln!(impl_out, "  {{ &self.{index} }}");
+            }
             _ => todo!("unsupported export: {export:?}"),
         }
     }
