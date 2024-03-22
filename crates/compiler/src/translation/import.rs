@@ -104,7 +104,7 @@ pub(in crate::translation) fn write(
                 init_out.write_str(
                     "        let max = embedder::rt::memory::Memory32::limit(import);\n",
                 );
-                let _ = writeln!(init_out, "        if max < {maximum} {{",);
+                let _ = writeln!(init_out, "        if max > {maximum} {{",);
 
                 let _ = writeln!(
                     init_out,
