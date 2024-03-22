@@ -39,14 +39,14 @@ impl<I> State<I> {
         &self,
     ) -> Result<Memory0> {
         #[cfg(not(feature = "alloc"))]
-        return Err(self.trap(TrapCode::MemoryInstantiation {
+        return Err(self.trap(TrapCode::MemoryAllocation {
             memory: IDX,
             error: crate::memory::AllocationError::with_size(MIN),
         }));
 
         #[cfg(feature = "alloc")]
         return Memory0::with_limits(MIN, MAX)
-            .map_err(|error| self.trap(TrapCode::MemoryInstantiation { memory: IDX, error }));
+            .map_err(|error| self.trap(TrapCode::MemoryAllocation { memory: IDX, error }));
     }
 
     /// Gets access to the module's imports.

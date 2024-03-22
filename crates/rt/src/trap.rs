@@ -60,10 +60,9 @@ pub enum TrapCode {
     IntegerOverflow,
     //UnalignedAtomicOperation
     //NullReference
-    // TODO: Rename MemoryInstantiation to MemoryAllocation
     /// Instantiating a module failed because linear memory could not be allocated.
-    MemoryInstantiation {
-        /// The index of the memory that could not be instantiated.
+    MemoryAllocation {
+        /// The index of the memory that could not be allocated.
         memory: u32,
         /// The error describing why the memory could not be allocated.
         error: crate::memory::AllocationError,
@@ -102,11 +101,11 @@ impl core::fmt::Display for TrapCode {
             } => write!(f, "at address {address:#X} into memory #{memory}: {source}"),
             Self::IntegerDivisionByZero => f.write_str("integer division by zero"),
             Self::IntegerOverflow => f.write_str("integer overflow"),
-            Self::MemoryInstantiation { memory, error } => {
-                write!(f, "instantiation of memory #{memory} failed: {error}")
+            Self::MemoryAllocation { memory, error } => {
+                write!(f, "{error} #{memory}")
             }
             Self::MemoryLimitsCheck { memory, limits } => {
-                write!(f, "for memory #{memory}: {limits} pages")
+                write!(f, "{limits} pages in memory #{memory}")
             }
         }
     }
@@ -117,7 +116,7 @@ impl std::error::Error for TrapCode {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::MemoryBoundsCheck { source, .. } => Some(source),
-            Self::MemoryInstantiation { error, .. } => Some(error),
+            Self::MemoryAllocation { error, .. } => Some(error),
             Self::MemoryLimitsCheck { limits, .. } => Some(limits),
             _ => None,
         }
