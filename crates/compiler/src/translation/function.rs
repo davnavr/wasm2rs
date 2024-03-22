@@ -754,18 +754,36 @@ pub(in crate::translation) fn write_definition(
                 );
             }
             //Operator::MemoryFill
-            //Operator::MemoryCopy
+            Operator::MemoryCopy { dst_mem, src_mem } => {
+                let length = PoppedValue::pop(validator, 0);
+                let src_addr = PoppedValue::pop(validator, 1);
+                let dst_addr = PoppedValue::pop(validator, 2);
+                let dst = MemId(dst_mem);
+                let src = MemId(src_mem);
+                if dst_mem == src_mem {
+                    let _ = writeln!(out,
+                        "{}::copy_within::<{src_mem}, _, _>(&self.{src}, {dst_addr}, {src_addr}, {length}, &self._embedder)?;",
+                        paths::MEMORY);
+                } else {
+                    let _ = writeln!(out,
+                        "{}::copy::<{dst_mem}, {src_mem}, _, _, _>(&self.{dst}, &self.{src}, {dst_addr}, {src_addr}, {length}, &self._embedder)?;",
+                        paths::MEMORY);
+                }
+            }
             Operator::MemoryInit { data_index, mem } => {
                 let length = PoppedValue::pop(validator, 0);
                 let data_offset = PoppedValue::pop(validator, 1);
                 let mem_offset = PoppedValue::pop(validator, 2);
                 let _ = writeln!(
                     out,
-                    "{}::init::<{mem}, _, _>::(&self.{}, {}, {mem_offset}, {data_offset}, {length}, &self._embedder)?;",
+                    "{}::init::<{mem}, _, _>(&self.{}, {}, {mem_offset}, {data_offset}, {length}, &self._embedder)?;",
                     paths::MEMORY,
                     MemId(mem),
                     crate::translation::display::DataId(data_index),
                 );
+            }
+            Operator::DataDrop { data_index } => {
+                let _ = writeln!(out, "// data.drop {data_index}");
             }
             Operator::I32Const { value } => {
                 let _ = writeln!(
