@@ -19,11 +19,21 @@ pub type Memory0 = crate::memory::EmptyMemory;
 /// An `Err` indicates that a trap has occured.
 pub type Result<T> = ::core::result::Result<T, crate::trap::TrapValue>;
 
+/// By default, it is assumed a WebAssembly module has no imports.
+///
+/// Use the [`embedder_with_import!`] macro to define a new embedder if imports need to be
+/// provided to a WebAssembly module.
+///
+/// [`embedder_with_import!`]: crate::embedder_with_import!
+pub type Imports = ();
+
 /// The default embedder state.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct State;
+pub struct State<I = ()> {
+    imports: I,
+}
 
-impl State {
+impl<I> State<I> {
     /// Initializes the WebAssembly module's main memory.
     pub fn initialize_mem_0<const IDX: u32, const MIN: u32, const MAX: u32>(
         &self,
@@ -38,9 +48,14 @@ impl State {
         return Memory0::with_limits(MIN, MAX)
             .map_err(|error| self.trap(TrapCode::MemoryInstantiation { memory: IDX, error }));
     }
+
+    /// Gets access to the module's imports.
+    pub fn imports(&self) -> &I {
+        &self.imports
+    }
 }
 
-impl Trap for State {
+impl<I> Trap for State<I> {
     type Repr = crate::trap::TrapValue;
 
     #[inline(never)]
@@ -49,4 +64,39 @@ impl Trap for State {
     }
 }
 
-// TODO: Helper macro to make a new embedder module
+/// Defines a new embedder module using the given type as the struct used to contain all of a
+/// WebAssembly module's imports.
+#[macro_export]
+macro_rules! embedder_with_import {
+    {
+        $vis:vis mod $embedder:ident($imports:ty) $(use {
+            $($import_namespace:ty as $import_alias:ident),*
+        })?
+    } => {
+        $vis mod $embedder {
+            pub use $crate::embedder::{rt, Memory0, Result};
+
+            /// Contains the imports accessed by the WebAssembly module.
+            pub type Imports = $imports;
+
+            /// State for the embedder of the WebAssembly module.
+            pub type State = $crate::embedder::State<Imports>;
+
+            $($(
+                #[allow(missing_docs)]
+                pub type $import_alias = $import_namespace;
+            )*)?
+        }
+    };
+    {
+        $vis:vis mod ($imports:ty) $(use {
+            $($import_namespace:ty as $import_alias:ident),*
+        })?
+    } => {
+        $crate::embedder_with_import! {
+            $vis mod embedder($imports) $(use {
+                $($import_namespace as $import_alias),*
+            })?
+        }
+    };
+}
