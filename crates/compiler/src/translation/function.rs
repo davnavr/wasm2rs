@@ -1,4 +1,4 @@
-use crate::translation::display::{FuncId, LocalId, MemId, ValType};
+use crate::translation::display::{LocalId, ValType};
 use std::fmt::Write;
 
 pub(in crate::translation) const TRAP_TRAIT: &str = "embedder::rt::trap::Trap";
@@ -321,6 +321,44 @@ mod paths {
     pub(super) const MEMORY: &str = "embedder::rt::memory";
 }
 
+macro_rules! access_structs {
+    ($($name:ident($id:path) | $checker:ident;)*) => {$(
+        struct $name {
+            id: $id,
+            imported: bool,
+        }
+
+        impl $name {
+            fn new(index: u32, import_counts: &crate::translation::ImportCounts) -> Self {
+                Self {
+                    id: $id(index),
+                    imported: import_counts.$checker(index),
+                }
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                if !self.imported {
+                    f.write_str("&")?;
+                }
+
+                write!(f, "self.{}", self.id)?;
+
+                if self.imported {
+                    f.write_str("()")?;
+                }
+
+                Ok(())
+            }
+        }
+    )*};
+}
+
+access_structs! {
+    MemAccess(crate::translation::display::MemId) | is_memory_import;
+}
+
 enum Signedness {
     Signed,
     Unsigned,
@@ -332,16 +370,17 @@ fn write_i8_load(
     memarg: &wasmparser::MemArg,
     signed: Signedness,
     destination: ValType,
+    import_counts: &crate::translation::ImportCounts,
 ) {
     let address = PoppedValue::pop(validator, 0);
     let _ = write!(
         out,
-        "let {} = {}::i8_load::<{}, {}, _, _>(&self.{}, {address}, &self._embedder)?",
+        "let {} = {}::i8_load::<{}, {}, _, _>({}, {address}, &self._embedder)?",
         StackValue(validator.operand_stack_height() - 1),
         paths::MEMORY,
         memarg.offset,
         memarg.memory,
-        MemId(memarg.memory),
+        MemAccess::new(memarg.memory, import_counts),
     );
 
     if let Signedness::Unsigned = signed {
@@ -357,17 +396,18 @@ fn write_i16_load(
     memarg: &wasmparser::MemArg,
     signed: Signedness,
     destination: ValType,
+    import_counts: &crate::translation::ImportCounts,
 ) {
     let address = PoppedValue::pop(validator, 0);
     let _ = write!(
         out,
-        "let {} = {}::i16_load::<{}, {}, {}, _, _>(&self.{}, {address}, &self._embedder)?",
+        "let {} = {}::i16_load::<{}, {}, {}, _, _>({}, {address}, &self._embedder)?",
         StackValue(validator.operand_stack_height() - 1),
         paths::MEMORY,
         memarg.offset,
         memarg.align,
         memarg.memory,
-        MemId(memarg.memory),
+        MemAccess::new(memarg.memory, import_counts),
     );
 
     if let Signedness::Unsigned = signed {
@@ -394,7 +434,11 @@ pub(in crate::translation) fn write_definition(
 
     let func_result_count = u32::try_from(func_type.results().len()).unwrap();
 
-    let _ = write!(out, "\n    fn {}", FuncId(validator.index()));
+    let _ = write!(
+        out,
+        "\n    fn {}",
+        crate::translation::display::FuncId(validator.index())
+    );
     write_definition_signature(out, func_type);
     out.write_str(" {\n");
 
@@ -601,11 +645,15 @@ pub(in crate::translation) fn write_definition(
                     out.write_str(" = ");
                 }
 
-                let _ = write!(out, "self.{}(", FuncId(function_index));
+                let _ = write!(
+                    out,
+                    "self.{}(",
+                    crate::translation::display::FuncId(function_index)
+                );
 
                 // Writes the parameters, the first (the leftmost) parameter is popped last.
                 for depth in (0..param_count).rev() {
-                    if depth > 0 {
+                    if depth < param_count - 1 {
                         out.write_str(", ");
                     }
 
@@ -648,6 +696,10 @@ pub(in crate::translation) fn write_definition(
 
                     // TODO: How to clone global value for non-Copy types?
                     let _ = write!(out, "self.{id}");
+
+                    if is_imported {
+                        out.write_str("()");
+                    }
                 } else {
                     out.write_str("embedder::rt::global::Global::get(");
 
@@ -669,15 +721,23 @@ pub(in crate::translation) fn write_definition(
             Operator::GlobalSet { global_index } => {
                 let new_value = PoppedValue::pop(validator, 0);
 
-                let id = crate::translation::display::GlobalId(global_index);
+                out.write_str("embedder::rt::global::Global::set(");
+
+                if !import_counts.is_global_import(global_index) {
+                    out.write_str("&");
+                }
+
                 let _ = write!(
                     out,
-                    "embedder::rt::global::Global::set(&self.{id}, {new_value})"
+                    "self.{}",
+                    crate::translation::display::GlobalId(global_index)
                 );
 
                 if import_counts.is_global_import(global_index) {
-                    todo!("global imports not yet supported")
+                    out.write_str("()");
                 }
+
+                let _ = write!(out, ", {new_value})");
 
                 out.write_str(";\n");
             }
@@ -685,96 +745,152 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {MEMORY}::i32_load::<{}, {}, {}, _, _>(&self.{}, {address}, &self._embedder)?;",
+                    "let {} = {MEMORY}::i32_load::<{}, {}, {}, _, _>({}, {address}, &self._embedder)?;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::I64Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {MEMORY}::i64_load::<{}, {}, {}, _, _>(&self.{}, {address}, &self._embedder)?;",
+                    "let {} = {MEMORY}::i64_load::<{}, {}, {}, _, _>({}, {address}, &self._embedder)?;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::F32Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = f32::from_bits({MEMORY}::i32_load::<{}, {}, {}, _, _>(&self.{}, {address}, &self._embedder)? as u32);",
+                    "let {} = f32::from_bits({MEMORY}::i32_load::<{}, {}, {}, _, _>({}, {address}, &self._embedder)? as u32);",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::F64Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = f64::from_bits({MEMORY}::i64_load::<{}, {}, {}, _, _>(&self.{}, {address}, &self._embedder)? as u64);",
+                    "let {} = f64::from_bits({MEMORY}::i64_load::<{}, {}, {}, _, _>({}, {address}, &self._embedder)? as u64);",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::I32Load8S { memarg } => {
-                write_i8_load(out, validator, &memarg, Signedness::Signed, ValType::I32);
+                write_i8_load(
+                    out,
+                    validator,
+                    &memarg,
+                    Signedness::Signed,
+                    ValType::I32,
+                    import_counts,
+                );
             }
             Operator::I32Load8U { memarg } => {
-                write_i8_load(out, validator, &memarg, Signedness::Unsigned, ValType::I32);
+                write_i8_load(
+                    out,
+                    validator,
+                    &memarg,
+                    Signedness::Unsigned,
+                    ValType::I32,
+                    import_counts,
+                );
             }
             Operator::I32Load16S { memarg } => {
-                write_i16_load(out, validator, &memarg, Signedness::Signed, ValType::I32);
+                write_i16_load(
+                    out,
+                    validator,
+                    &memarg,
+                    Signedness::Signed,
+                    ValType::I32,
+                    import_counts,
+                );
             }
             Operator::I32Load16U { memarg } => {
-                write_i16_load(out, validator, &memarg, Signedness::Unsigned, ValType::I32);
+                write_i16_load(
+                    out,
+                    validator,
+                    &memarg,
+                    Signedness::Unsigned,
+                    ValType::I32,
+                    import_counts,
+                );
             }
             Operator::I64Load8S { memarg } => {
-                write_i8_load(out, validator, &memarg, Signedness::Signed, ValType::I64);
+                write_i8_load(
+                    out,
+                    validator,
+                    &memarg,
+                    Signedness::Signed,
+                    ValType::I64,
+                    import_counts,
+                );
             }
             Operator::I64Load8U { memarg } => {
-                write_i8_load(out, validator, &memarg, Signedness::Unsigned, ValType::I64);
+                write_i8_load(
+                    out,
+                    validator,
+                    &memarg,
+                    Signedness::Unsigned,
+                    ValType::I64,
+                    import_counts,
+                );
             }
             Operator::I64Load16S { memarg } => {
-                write_i16_load(out, validator, &memarg, Signedness::Signed, ValType::I64);
+                write_i16_load(
+                    out,
+                    validator,
+                    &memarg,
+                    Signedness::Signed,
+                    ValType::I64,
+                    import_counts,
+                );
             }
             Operator::I64Load16U { memarg } => {
-                write_i16_load(out, validator, &memarg, Signedness::Unsigned, ValType::I64);
+                write_i16_load(
+                    out,
+                    validator,
+                    &memarg,
+                    Signedness::Unsigned,
+                    ValType::I64,
+                    import_counts,
+                );
             }
             Operator::I64Load32S { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {MEMORY}::i32_load::<{}, {}, {}, _, _>(&self.{}, {address}, &self._embedder)? as i64;",
+                    "let {} = {MEMORY}::i32_load::<{}, {}, {}, _, _>({}, {address}, &self._embedder)? as i64;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::I64Load32U { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {} = {MEMORY}::i32_load::<{}, {}, {}, _, _>(&self.{}, {address}, &self._embedder)? as u32 as i64;",
+                    "let {} = {MEMORY}::i32_load::<{}, {}, {}, _, _>({}, {address}, &self._embedder)? as u32 as i64;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::I32Store { memarg } => {
@@ -782,11 +898,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i32_store::<{}, {}, {}, _, _>(&self.{}, {address}, {to_store}, &self._embedder)?;",
+                    "{MEMORY}::i32_store::<{}, {}, {}, _, _>({}, {address}, {to_store}, &self._embedder)?;",
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::I64Store { memarg } => {
@@ -794,11 +910,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i64_store::<{}, {}, {}, _, _>(&self.{}, {address}, {to_store}, &self._embedder)?;",
+                    "{MEMORY}::i64_store::<{}, {}, {}, _, _>({}, {address}, {to_store}, &self._embedder)?;",
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::I32Store8 { memarg } | Operator::I64Store8 { memarg } => {
@@ -806,10 +922,10 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i8_store::<{}, {}, _, _>(&self.{}, {address}, {to_store} as i8, &self._embedder)?;",
+                    "{MEMORY}::i8_store::<{}, {}, _, _>({}, {address}, {to_store} as i8, &self._embedder)?;",
                     memarg.offset,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::I32Store16 { memarg } | Operator::I64Store16 { memarg } => {
@@ -817,11 +933,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i16_store::<{}, {}, {}, _, _>(&self.{}, {address}, {to_store} as i16, &self._embedder)?;",
+                    "{MEMORY}::i16_store::<{}, {}, {}, _, _>({}, {address}, {to_store} as i16, &self._embedder)?;",
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::I64Store32 { memarg } => {
@@ -829,27 +945,27 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i32_store::<{}, {}, {}, _, _>(&self.{}, {address}, {to_store} as i32, &self._embedder)?;",
+                    "{MEMORY}::i32_store::<{}, {}, {}, _, _>({}, {address}, {to_store} as i32, &self._embedder)?;",
                     memarg.offset,
                     memarg.align,
                     memarg.memory,
-                    MemId(memarg.memory),
+                    MemAccess::new(memarg.memory, import_counts),
                 );
             }
             Operator::MemorySize { mem, mem_byte: _ } => {
                 let _ = writeln!(
                     out,
-                    "let {}: i32 = {MEMORY}::size(&self.{});",
+                    "let {}: i32 = {MEMORY}::size({});",
                     StackValue(validator.operand_stack_height()),
-                    MemId(mem),
+                    MemAccess::new(mem, import_counts),
                 );
             }
             Operator::MemoryGrow { mem, mem_byte: _ } => {
                 let operand = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {operand:#}: i32 = {MEMORY}::grow(&self.{}, {operand});",
-                    MemId(mem),
+                    "let {operand:#}: i32 = {MEMORY}::grow({}, {operand});",
+                    MemAccess::new(mem, import_counts),
                 );
             }
             //Operator::MemoryFill
@@ -857,15 +973,15 @@ pub(in crate::translation) fn write_definition(
                 let length = PoppedValue::pop(validator, 0);
                 let src_addr = PoppedValue::pop(validator, 1);
                 let dst_addr = PoppedValue::pop(validator, 2);
-                let dst = MemId(dst_mem);
-                let src = MemId(src_mem);
+                let dst = MemAccess::new(dst_mem, import_counts);
+                let src = MemAccess::new(src_mem, import_counts);
                 if dst_mem == src_mem {
                     let _ = writeln!(out,
-                        "{}::copy_within::<{src_mem}, _, _>(&self.{src}, {dst_addr}, {src_addr}, {length}, &self._embedder)?;",
+                        "{}::copy_within::<{src_mem}, _, _>({src}, {dst_addr}, {src_addr}, {length}, &self._embedder)?;",
                         paths::MEMORY);
                 } else {
                     let _ = writeln!(out,
-                        "{}::copy::<{dst_mem}, {src_mem}, _, _, _>(&self.{dst}, &self.{src}, {dst_addr}, {src_addr}, {length}, &self._embedder)?;",
+                        "{}::copy::<{dst_mem}, {src_mem}, _, _, _>({dst}, {src}, {dst_addr}, {src_addr}, {length}, &self._embedder)?;",
                         paths::MEMORY);
                 }
             }
@@ -875,9 +991,9 @@ pub(in crate::translation) fn write_definition(
                 let mem_offset = PoppedValue::pop(validator, 2);
                 let _ = writeln!(
                     out,
-                    "{}::init::<{mem}, _, _>(&self.{}, {}, {mem_offset}, {data_offset}, {length}, &self._embedder)?;",
+                    "{}::init::<{mem}, _, _>({}, {}, {mem_offset}, {data_offset}, {length}, &self._embedder)?;",
                     paths::MEMORY,
-                    MemId(mem),
+                    MemAccess::new(mem, import_counts),
                     crate::translation::display::DataId(data_index),
                 );
             }

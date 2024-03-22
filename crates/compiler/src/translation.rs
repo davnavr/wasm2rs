@@ -164,6 +164,10 @@ struct ImportCounts {
 }
 
 impl ImportCounts {
+    fn is_memory_import(&self, index: u32) -> bool {
+        index < self.memories
+    }
+
     fn is_global_import(&self, index: u32) -> bool {
         index < self.globals
     }

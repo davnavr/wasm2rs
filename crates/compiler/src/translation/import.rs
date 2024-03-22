@@ -122,7 +122,7 @@ pub(in crate::translation) fn write(
                 // Write the method used to access the memory
                 let _ = writeln!(
                     impl_out,
-                    "{}(&self) -> embedder::Memory{memory_index} {{",
+                    "{}(&self) -> &embedder::Memory{memory_index} {{",
                     crate::translation::display::MemId(memory_index)
                 );
 
