@@ -1,6 +1,9 @@
 use crate::translation::display::{FuncId, LocalId, MemId, ValType};
 use std::fmt::Write;
 
+pub(in crate::translation) const TRAP_TRAIT: &str = "embedder::rt::trap::Trap";
+pub(in crate::translation) const TRAP_CODE: &str = "embedder::rt::trap::TrapCode";
+
 pub(in crate::translation) fn write_definition_signature(
     out: &mut crate::buffer::Writer<'_>,
     sig: &wasmparser::FuncType,
@@ -382,7 +385,7 @@ pub(in crate::translation) fn write_definition(
     out: &mut crate::buffer::Writer<'_>,
     validator: &mut Validator,
     body: &wasmparser::FunctionBody,
-    types: &wasmparser::types::Types,
+    types: &wasmparser::types::Types, // TODO: Remove types parameter, see if validator by itself can be used
     import_counts: &crate::translation::ImportCounts,
 ) -> wasmparser::Result<()> {
     let func_type =
@@ -424,8 +427,6 @@ pub(in crate::translation) fn write_definition(
         const STATE: &str = "embedder::State";
         const MEMORY: &str = paths::MEMORY;
         const MATH: &str = "embedder::rt::math";
-        const TRAP_TRAIT: &str = "embedder::rt::trap::Trap";
-        const TRAP_CODE: &str = "embedder::rt::trap::TrapCode";
 
         match op {
             Operator::Unreachable => {

@@ -401,12 +401,15 @@ impl Translation<'_> {
         //
         // 0. Allocate the defined tables, memories, and globals in that order.
         //
-        // 1. Initialize globals and evaluate their intiailization expressions to produce their
+        // 1. Check that the imports are of the correct type. For `wasm2rs` only the limits of
+        // tables and modules have to be checkd.
+        //
+        // 2. Initialize globals and evaluate their intiailization expressions to produce their
         // values. Validation ensures only imported globals can be accessed at this step.
         //
-        // 2. Write element segments to the tables.
+        // 3. Write element segments to the tables.
         //
-        // 3. Write data segments to the memories.
+        // 4. Write data segments to the memories.
         //
         // [specification]: https://webassembly.github.io/spec/core/exec/modules.html#instantiation
         output.write_all(
