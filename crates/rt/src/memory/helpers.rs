@@ -11,7 +11,7 @@ use crate::trap::Trap;
 ///
 /// [`memory.size`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "memory.size")]
-pub fn size<M: Memory32 + ?Sized>(mem: &M) -> i32 {
+pub fn size<Mem: Memory32 + ?Sized>(mem: &Mem) -> i32 {
     mem.size() as i32
 }
 
@@ -21,7 +21,7 @@ pub fn size<M: Memory32 + ?Sized>(mem: &M) -> i32 {
 ///
 /// [`memory.grow`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "memory.grow")]
-pub fn grow<M: Memory32 + ?Sized>(mem: &M, delta: i32) -> i32 {
+pub fn grow<Mem: Memory32 + ?Sized>(mem: &Mem, delta: i32) -> i32 {
     mem.grow(delta as u32) as i32
 }
 
@@ -31,17 +31,17 @@ pub fn grow<M: Memory32 + ?Sized>(mem: &M, delta: i32) -> i32 {
 ///
 /// [active data segment initialization]: https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
 /// [`memory.init`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
-pub fn init<const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn init<const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     data: &[u8],
     memory_offset: i32,
     segment_offset: i32,
     length: i32,
-    trap: &TR,
-) -> Result<(), TR::Repr>
+    trap: &Tr,
+) -> Result<(), Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn get_data_segment(data: &[u8], offset: u32, length: u32) -> Option<&[u8]> {
         let offset = usize::try_from(offset).ok()?;
@@ -117,14 +117,14 @@ const fn address<const OFFSET: u32>(addr: i32) -> AccessResult<u32> {
 #[doc(alias = "i32.load8_u")]
 #[doc(alias = "i64.load8_s")]
 #[doc(alias = "i64.load8_u")]
-pub fn i8_load<const OFFSET: u32, const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn i8_load<const OFFSET: u32, const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     addr: i32,
-    trap: &TR,
-) -> Result<i8, TR::Repr>
+    trap: &Tr,
+) -> Result<i8, Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn load<const OFFSET: u32>(mem: &(impl Memory32 + ?Sized), addr: i32) -> AccessResult<i8> {
         mem.i8_load(address::<OFFSET>(addr)?)
@@ -144,14 +144,14 @@ where
 #[doc(alias = "i32.load16_u")]
 #[doc(alias = "i64.load16_s")]
 #[doc(alias = "i64.load16_u")]
-pub fn i16_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn i16_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     addr: i32,
-    trap: &TR,
-) -> Result<i16, TR::Repr>
+    trap: &Tr,
+) -> Result<i16, Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn load<const OFFSET: u32, const ALIGN: u8>(
         mem: &(impl Memory32 + ?Sized),
@@ -171,14 +171,14 @@ where
 ///
 /// [`i32.load`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i32.load")]
-pub fn i32_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn i32_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     addr: i32,
-    trap: &TR,
-) -> Result<i32, TR::Repr>
+    trap: &Tr,
+) -> Result<i32, Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn load<const OFFSET: u32, const ALIGN: u8>(
         mem: &(impl Memory32 + ?Sized),
@@ -200,14 +200,14 @@ where
 #[doc(alias = "i64.load")]
 #[doc(alias = "i64.load32_s")]
 #[doc(alias = "i64.load32_u")]
-pub fn i64_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn i64_load<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     addr: i32,
-    trap: &TR,
-) -> Result<i64, TR::Repr>
+    trap: &Tr,
+) -> Result<i64, Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn load<const OFFSET: u32, const ALIGN: u8>(
         mem: &(impl Memory32 + ?Sized),
@@ -228,15 +228,15 @@ where
 /// [`iXX.store8`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i32.store16")]
 #[doc(alias = "i64.store16")]
-pub fn i8_store<const OFFSET: u32, const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn i8_store<const OFFSET: u32, const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     addr: i32,
     value: i8,
-    trap: &TR,
-) -> Result<(), TR::Repr>
+    trap: &Tr,
+) -> Result<(), Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn store<const OFFSET: u32>(
         mem: &(impl Memory32 + ?Sized),
@@ -258,15 +258,15 @@ where
 /// [`iXX.store16`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i32.store16")]
 #[doc(alias = "i64.store16")]
-pub fn i16_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn i16_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     addr: i32,
     value: i16,
-    trap: &TR,
-) -> Result<(), TR::Repr>
+    trap: &Tr,
+) -> Result<(), Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn store<const OFFSET: u32, const ALIGN: u8>(
         mem: &(impl Memory32 + ?Sized),
@@ -287,15 +287,15 @@ where
 ///
 /// [`i32.store`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i32.store")]
-pub fn i32_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn i32_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     addr: i32,
     value: i32,
-    trap: &TR,
-) -> Result<(), TR::Repr>
+    trap: &Tr,
+) -> Result<(), Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn store<const OFFSET: u32, const ALIGN: u8>(
         mem: &(impl Memory32 + ?Sized),
@@ -316,15 +316,15 @@ where
 ///
 /// [`i64.store`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 #[doc(alias = "i64.store")]
-pub fn i64_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, M, TR>(
-    mem: &M,
+pub fn i64_store<const OFFSET: u32, const ALIGN: u8, const MEMORY: u32, Mem, Tr>(
+    mem: &Mem,
     addr: i32,
     value: i64,
-    trap: &TR,
-) -> Result<(), TR::Repr>
+    trap: &Tr,
+) -> Result<(), Tr::Repr>
 where
-    M: Memory32 + ?Sized,
-    TR: Trap + ?Sized,
+    Mem: Memory32 + ?Sized,
+    Tr: Trap + ?Sized,
 {
     fn store<const OFFSET: u32, const ALIGN: u8>(
         mem: &(impl Memory32 + ?Sized),
