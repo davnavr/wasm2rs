@@ -194,33 +194,78 @@ fn parse_wasm_sections<'a>(
     let mut start_function = None;
 
     for result in wasmparser::Parser::new(0).parse_all(wasm) {
-        use wasmparser::{Payload, ValidPayload};
+        use wasmparser::Payload;
 
         let payload = result?;
-        // TODO: Call the validator in each match case instead
-        let validated_payload = validator.payload(&payload)?;
         match payload {
-            Payload::ImportSection(imports) => sections.push(KnownSection::Import(imports)),
+            Payload::Version {
+                num,
+                encoding,
+                range,
+            } => {
+                validator.version(num, encoding, &range)?;
+            }
+            Payload::TypeSection(types) => {
+                validator.type_section(&types)?;
+            }
+            Payload::ImportSection(imports) => {
+                validator.import_section(&imports)?;
+                sections.push(KnownSection::Import(imports));
+            }
+            Payload::FunctionSection(section) => {
+                validator.function_section(&section)?;
+            }
+            Payload::TableSection(tables) => {
+                validator.table_section(&tables)?;
+                //sections.push(KnownSection::Table(tables));
+            }
             Payload::MemorySection(memories) => {
+                validator.memory_section(&memories)?;
                 memory_definition_count = memories.count();
                 sections.push(KnownSection::Memory(memories));
             }
+            Payload::TagSection(tags) => {
+                validator.tag_section(&tags)?;
+                //sections.push(KnownSection::Tag(tags));
+            }
             Payload::GlobalSection(globals) => {
+                validator.global_section(&globals)?;
                 global_definition_count = globals.count();
                 sections.push(KnownSection::Global(globals));
             }
-            Payload::ExportSection(exports) => sections.push(KnownSection::Export(exports)),
-            Payload::StartSection { func, range: _ } => start_function = Some(func),
-            Payload::DataSection(data) => sections.push(KnownSection::Data(data)),
-            _ => (),
-        }
-
-        match validated_payload {
-            ValidPayload::Ok | ValidPayload::Parser(_) => (),
-            ValidPayload::Func(validator, body) => {
-                functions.push(FunctionValidator { validator, body })
+            Payload::ExportSection(exports) => {
+                validator.export_section(&exports)?;
+                sections.push(KnownSection::Export(exports));
             }
-            ValidPayload::End(types) => {
+            Payload::StartSection { func, range } => {
+                validator.start_section(func, &range)?;
+                start_function = Some(func);
+            }
+            Payload::ElementSection(elements) => {
+                validator.element_section(&elements)?;
+                //sections.push(KnownSection::Elements(elements));
+            }
+            Payload::DataCountSection { count, range } => {
+                validator.data_count_section(count, &range)?
+            }
+            Payload::DataSection(data) => {
+                validator.data_section(&data)?;
+                sections.push(KnownSection::Data(data));
+            }
+            Payload::CodeSectionStart {
+                count,
+                range,
+                size: _,
+            } => validator.code_section_start(count, &range)?,
+            Payload::CodeSectionEntry(body) => functions.push(FunctionValidator {
+                validator: validator.code_section_entry(&body)?,
+                body,
+            }),
+            Payload::CustomSection(_section) => {
+                // Handling of custom `name`, 'producers' and DWARF sections is not yet implemented.
+            }
+            Payload::End(offset) => {
+                let types = validator.end(offset)?;
                 return Ok(ModuleContents {
                     sections,
                     functions,
@@ -230,8 +275,39 @@ fn parse_wasm_sections<'a>(
                     },
                     start_function,
                     types,
-                })
+                });
             }
+            // Component model is not yet supported
+            Payload::ModuleSection { parser: _, range } => validator.module_section(&range)?,
+            Payload::InstanceSection(section) => validator.instance_section(&section)?,
+            Payload::CoreTypeSection(section) => validator.core_type_section(&section)?,
+            Payload::ComponentSection { parser: _, range } => {
+                validator.component_section(&range)?
+            }
+            Payload::ComponentInstanceSection(section) => {
+                validator.component_instance_section(&section)?
+            }
+            Payload::ComponentAliasSection(section) => {
+                validator.component_alias_section(&section)?
+            }
+            Payload::ComponentTypeSection(section) => validator.component_type_section(&section)?,
+            Payload::ComponentCanonicalSection(section) => {
+                validator.component_canonical_section(&section)?
+            }
+            Payload::ComponentStartSection { start, range } => {
+                validator.component_start_section(&start, &range)?
+            }
+            Payload::ComponentImportSection(section) => {
+                validator.component_import_section(&section)?
+            }
+            Payload::ComponentExportSection(section) => {
+                validator.component_export_section(&section)?
+            }
+            Payload::UnknownSection {
+                id,
+                contents: _,
+                range,
+            } => validator.unknown_section(id, &range)?,
         }
     }
 
