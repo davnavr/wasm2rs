@@ -100,27 +100,30 @@ pub(in crate::translation) fn write(
 
                 init_out.write_str("          }));\n        }\n");
 
-                let maximum = mem_type.maximum.unwrap_or(u32::MAX.into());
-                init_out.write_str(
-                    "        let max = embedder::rt::memory::Memory32::limit(import);\n",
-                );
-                let _ = writeln!(init_out, "        if max > {maximum} {{",);
+                if let Some(maximum) = mem_type.maximum {
+                    init_out.write_str(
+                        "        let max = embedder::rt::memory::Memory32::limit(import);\n",
+                    );
+                    let _ = writeln!(init_out, "        if max > {maximum} {{",);
 
-                let _ = writeln!(
-                    init_out,
-                    "          return Err({}::trap(&embedder, {}::MemoryLimitsCheck {{",
-                    crate::translation::function::TRAP_TRAIT,
-                    crate::translation::function::TRAP_CODE,
-                );
+                    let _ = writeln!(
+                        init_out,
+                        "          return Err({}::trap(&embedder, {}::MemoryLimitsCheck {{",
+                        crate::translation::function::TRAP_TRAIT,
+                        crate::translation::function::TRAP_CODE,
+                    );
 
-                let _ = writeln!(init_out, "            memory: {memory_index},",);
+                    let _ = writeln!(init_out, "            memory: {memory_index},",);
 
-                let _ = writeln!(
-                    init_out,
-                    "            limits: {LIMITS_ENUM}::Maximum {{ expected: {maximum}, actual: max }},",
-                );
+                    let _ = writeln!(
+                        init_out,
+                        "            limits: {LIMITS_ENUM}::Maximum {{ expected: {maximum}, actual: max }},",
+                    );
 
-                init_out.write_str("          }));\n        }\n      }\n");
+                    init_out.write_str("          }));\n        }\n");
+                }
+
+                init_out.write_str("      }\n");
 
                 // Write the method used to access the memory
                 let _ = writeln!(
