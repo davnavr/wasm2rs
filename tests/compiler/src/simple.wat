@@ -1,9 +1,15 @@
 (module
-  (func (export "add_five") (param i32) (result i32)
+  (func $add_five (export "add_five") (param i32) (result i32)
     local.get 0
     i32.const 5
     i32.add
     return)
+
+  (func (export "add_fifteen") (param i32) (result i32)
+    local.get 0
+    call $add_five
+    call $add_five
+    call $add_five)
 
   (func (export "block_me_up") (param i32) (result i32)
     block (result i32 i32)

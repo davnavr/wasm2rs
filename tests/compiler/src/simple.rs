@@ -3,10 +3,11 @@ include!(concat!(env!("OUT_DIR"), "/simple.rs"));
 wasm!();
 
 #[test]
-fn add_five_works() {
+fn add_works() {
     let inst = wasm::Instance::instantiate(Default::default()).unwrap();
     assert_eq!(inst.add_five(37), Ok(42));
     assert_eq!(inst.add_five(u32::MAX as i32), Ok(4));
+    assert_eq!(inst.add_fifteen(10), Ok(25));
 }
 
 #[test]
