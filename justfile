@@ -13,9 +13,11 @@ fmt:
 test:
     cargo test --workspace
 
-# Runs all tests under the Miri interpreter; requires Rust nightly.
+# Runs all tests under the Miri interpreter; requires Rust nightly and nextest.
 test_miri:
-    cargo +nightly miri test --workspace
+    # miri - https://github.com/rust-lang/miri
+    # nextest -  https://github.com/nextest-rs/nextest
+    cargo +nightly miri nextest run --workspace
 
 # Generate documentation; requires Rust nightly.
 doc *FLAGS='--all-features':
