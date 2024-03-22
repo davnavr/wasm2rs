@@ -14,7 +14,12 @@ fn main() {
     let mut all_file = std::fs::File::create(&all_file_path)
         .unwrap_or_else(|e| panic!("could not create file {all_file_path:?}: {e}"));
 
-    const FILES: &[&str] = &["address.wast", "int_exprs.wast", "int_literals.wast"];
+    const FILES: &[&str] = &[
+        "address.wast",
+        "int_exprs.wast",
+        "int_literals.wast",
+        "memory_init.wast",
+    ];
 
     let mut file_buffer = String::with_capacity(0x20000);
     let func_validator_allocation_pool = wasm2rs::FuncValidatorAllocationPool::default();
