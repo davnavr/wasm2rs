@@ -61,8 +61,8 @@ impl HeapMemory32 {
         &self,
         addr: u32,
         len: usize,
-        op: impl FnOnce(&mut [u8]) -> T,
-        err: impl FnOnce(usize) -> E,
+        op: impl FnOnce(&mut [u8]) -> Result<T, E>,
+        err: E,
     ) -> Result<T, E> {
         self.modify(move |a| {
             let start_addr = addr as usize;
@@ -70,14 +70,18 @@ impl HeapMemory32 {
                 .as_mut_slice()
                 .get_mut(start_addr..start_addr.wrapping_add(len))
             {
-                Some(slice) => Ok(op(slice)),
-                None => Err(err(len)),
+                Some(slice) => op(slice),
+                None => Err(err),
             }
         })
     }
 }
 
 impl crate::memory::Memory32 for HeapMemory32 {
+    fn try_as_any(&self, _: crate::memory::private::Hidden) -> Option<&dyn core::any::Any> {
+        Some(self)
+    }
+
     fn limit(&self) -> u32 {
         self.limit
     }
@@ -97,8 +101,11 @@ impl crate::memory::Memory32 for HeapMemory32 {
         self.modify_addresses(
             addr,
             dst.len(),
-            |slice| dst.copy_from_slice(slice),
-            |_| crate::memory::BoundsCheckError,
+            |slice| {
+                dst.copy_from_slice(slice);
+                Ok(())
+            },
+            crate::memory::BoundsCheckError,
         )
     }
 
@@ -106,8 +113,76 @@ impl crate::memory::Memory32 for HeapMemory32 {
         self.modify_addresses(
             addr,
             src.len(),
-            |slice| slice.copy_from_slice(src),
-            |_| crate::memory::BoundsCheckError,
+            |slice| {
+                slice.copy_from_slice(src);
+                Ok(())
+            },
+            crate::memory::BoundsCheckError,
+        )
+    }
+
+    fn copy_within(
+        &self,
+        dst_addr: u32,
+        src_addr: u32,
+        len: u32,
+    ) -> crate::memory::BoundsCheck<()> {
+        self.modify(|mem| {
+            let dst_index = dst_addr as usize;
+            let src_index = src_addr as usize;
+            let size = len as usize;
+            let slice = mem.as_mut_slice();
+
+            // Check that the source is in bounds.
+            let src = src_index..(src_index.checked_add(size)?);
+            let _ = slice.get(src.clone())?;
+
+            // Check that the destination is also in bounds.
+            let dst = dst_index..(dst_index.checked_add(size)?);
+            let _ = slice.get(dst)?;
+
+            slice.copy_within(src, dst_index);
+            Some(())
+        })
+        .ok_or(crate::memory::BoundsCheckError)
+    }
+
+    fn copy_from<Src>(
+        &self,
+        src: &Src,
+        dst_addr: u32,
+        src_addr: u32,
+        len: u32,
+    ) -> crate::memory::BoundsCheck<()>
+    where
+        Src: crate::memory::Memory32 + ?Sized,
+    {
+        // Workaround for specialization being unstable in the current version of Rust.
+        // For where `Src` is statically known, this should be optimized.
+        if let Some(src) = src.try_as_any(crate::memory::private::Hidden) {
+            if let Some(src) = src.downcast_ref::<Self>() {
+                // Common case breaks if `self` and `src` are the same memory.
+                if core::ptr::eq::<Self>(self, src) {
+                    return crate::memory::Memory32::copy_within(self, dst_addr, src_addr, len);
+                }
+
+                // Fallthrough
+            } else if src.is::<crate::memory::EmptyMemory>() {
+                return if dst_addr == 0 && len == 0 && (src_addr as usize) <= self.len() {
+                    Ok(())
+                } else {
+                    Err(crate::memory::BoundsCheckError)
+                };
+            }
+
+            // Fallthrough to the common case.
+        }
+
+        self.modify_addresses(
+            dst_addr,
+            len as usize,
+            |dst| src.copy_to_slice(src_addr, dst),
+            crate::memory::BoundsCheckError,
         )
     }
 }
