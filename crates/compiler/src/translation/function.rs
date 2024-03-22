@@ -611,7 +611,7 @@ pub(in crate::translation) fn write_definition(
                     let _ = write!(out, "{}", PoppedValue::pop(validator, depth));
                 }
 
-                out.write_str(")?;");
+                out.write_str(")?;\n");
             }
             // Operator::CallIndirect { type_index, table_index, table_byte } => { todo!() }
             Operator::LocalGet { local_index } => {
