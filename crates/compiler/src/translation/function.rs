@@ -418,6 +418,48 @@ fn write_i16_load(
     let _ = writeln!(out, " as {destination};");
 }
 
+fn write_branch(
+    out: &mut crate::buffer::Writer,
+    validator: &Validator,
+    relative_depth: u32,
+    popped_before_branch: u32,
+    types: &wasmparser::types::Types,
+) -> crate::Result<()> {
+    if let Some(frame) = validator.get_control_frame(relative_depth as usize) {
+        // `validator` will handle bad labels
+        let (block_parameters, block_results) = get_block_type(types, &frame.block_type);
+
+        let label = Label(validator.control_stack_height() - relative_depth);
+        if frame.kind == wasmparser::FrameKind::Loop {
+            let operands_start =
+                u32::try_from(frame.height).with_context(|| "operand stack too high")?;
+
+            let block_params = u32::try_from(block_parameters.len())
+                .with_context(|| "block has too many parameters")?;
+
+            for i in 0..block_params {
+                let operand = operands_start + i;
+                let _ = writeln!(out, "_b_{}{} = {};", label.0, StackValue(operand), StackValue(operand - popped_before_branch));
+            }
+
+            let _ = writeln!(out, "continue {label};");
+        } else {
+            BranchKind::Branch(label).write_control_flow(
+                out,
+                validator,
+                block_results.len().try_into().unwrap(),
+            );
+        }
+    } else {
+        let _ = writeln!(
+            out,
+            "::core::unimplemented!(\"code generation bug, bad branch target\");"
+        );
+    }
+
+    Ok(())
+}
+
 /// Generates a [Rust function] definition corresponding to a [WebAssembly function body].
 ///
 /// [Rust function]: https://doc.rust-lang.org/reference/items/functions.html
@@ -514,7 +556,7 @@ pub(in crate::translation) fn write_definition(
                 );
 
                 let _ = writeln!(out, "loop {{");
-                inputs.write(out);
+                inputs.write(out); // TODO: Bug? Need to move let _b_#_s_# stuff *before* the start of the loop.
             }
             Operator::If { blockty } => {
                 let _ = BlockInputs::write_start(
@@ -579,34 +621,13 @@ pub(in crate::translation) fn write_definition(
                     );
                 }
             }
-            Operator::Br { relative_depth } => {
-                if let Some(frame) = validator.get_control_frame(relative_depth as usize) {
-                    // `validator` will handle bad labels
-                    let (block_parameters, block_results) =
-                        get_block_type(types, &frame.block_type);
+            Operator::Br { relative_depth } => write_branch(out, validator, relative_depth, 0, types)?,
+            Operator::BrTable { targets } => {
+                let i = PoppedValue::pop(validator, 0);
 
-                    let label = Label(validator.control_stack_height() - relative_depth);
-                    if frame.kind == wasmparser::FrameKind::Loop {
-                        let operands_start = u32::try_from(frame.height)
-                            .with_context(|| "operand stack too high")?;
-
-                        let block_params = u32::try_from(block_parameters.len())
-                            .with_context(|| "block has too many parameters")?;
-
-                        for i in 0..block_params {
-                            let operand = StackValue(operands_start + i);
-                            let _ = writeln!(out, "_b_{}{operand} = {operand};", label.0);
-                        }
-
-                        let _ = writeln!(out, "continue {label};");
-                    } else {
-                        BranchKind::Branch(label).write_control_flow(
-                            out,
-                            validator,
-                            block_results.len().try_into().unwrap(),
-                        );
-                    }
-                }
+                let _ = writeln!(out, "match {i} {{");
+                todo!();
+                out.write_str("}\n");
             }
             Operator::Return => {
                 let kind = if validator.control_stack_height() == 1 {
