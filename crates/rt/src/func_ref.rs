@@ -9,18 +9,14 @@ pub use raw::{RawFuncRef, RawFuncRefData, RawFuncRefVTable};
 use crate::trap::Trap;
 
 /// Error type used when a [`FuncRef`] did not have the correct signature.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct SignatureMismatchError {
     expected: &'static str,
 }
 
 impl core::fmt::Display for SignatureMismatchError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "expected function reference signature {:?}",
-            self.expected
-        )
+        write!(f, "expected signature {:?}", self.expected)
     }
 }
 
@@ -48,55 +44,73 @@ impl FuncRef {
 
     /// Attempts to cast this reference to some exact type.
     ///
+    /// This is an implementation detail used to support generated code. Prefer calling the
+    /// specialized `call_` functions instead, such as [`call_0()`]. [`call_1()`], etc.
+    ///
+    /// # Usage
+    ///
+    /// Generated code and the `call_` functions call `cast` to obtain a function pointer of the
+    /// form `unsafe fn(&RawFuncRefData, A0, A1, ..., &E) -> Result<(R0, R1, ...), E::Repr>`, where
+    /// `A0, A1, ...` are the function arguments, and `(R0, R1, ...)` are the tuple of the function
+    /// results.
+    ///
+    /// ## Safety
+    ///
+    /// The function pointer that is produced is safe to call only with the [`RawFuncRefData`]
+    /// corresponding to `self`.
+    ///
     /// # Errors
     ///
     /// A `Trap` occurs if the function reference is not of the correct type.
-    fn cast<'f, F, E>(&'f self, trap: &E) -> Result<&'f F, E::Repr>
+    pub fn cast<'f, C, E>(&'f self, trap: &E) -> Result<C, E::Repr>
     where
-        F: ?Sized + 'static,
-        E: Trap + ?Sized,
+        C: Copy + 'static,
+        E: Trap + 'static + ?Sized,
         E::Repr: 'static,
     {
         let data: &'f _ = self.func.data();
 
-        // SAFETY: ensured by caller.
-        let cast_ptr = unsafe { (self.func.vtable().cast)(data, core::any::TypeId::of::<F>()) };
+        // SAFETY: ensured by implementor of `convert` from `RawFuncRefVTable`.
+        let convert_result =
+            unsafe { (self.func.vtable().convert)(data, core::any::TypeId::of::<C>()) };
 
-        match cast_ptr {
+        match convert_result {
             None => Err(trap.trap(crate::trap::TrapCode::FuncRefSignatureMismatch(
                 SignatureMismatchError {
-                    expected: core::any::type_name::<F>(),
+                    expected: core::any::type_name::<C>(),
                 },
             ))),
-            Some(ptr) => Ok(if cfg!(debug_assertions) {
-                // TODO: Darn, can't downcast to ?Sized
-                match ptr.downcast_ref() {
-                    Some(casted) => casted,
-                    None => panic!(
-                        "bad cast, expected {:?} but got {:?}",
-                        core::any::type_name::<F>(),
+            Some(ptr) => {
+                if core::mem::size_of::<C>() == core::mem::size_of_val(&ptr) {
+                    // SAFETY: check above ensures sizes are the same.
+                    // SAFETY: implementor of `convert` from `RawFuncRefVTable` must return `C`.
+                    Ok(unsafe { core::mem::transmute_copy(&ptr) })
+                } else {
+                    panic!(
+                        "size mismatch when obtaining {:?} from {:?}",
+                        core::any::type_name::<C>(),
                         self.debug()
-                    ),
+                    );
                 }
-            } else {
-                // SAFETY: `cast` in `RawFuncRef` ensures the `ptr` is of the requested type.
-                unsafe { todo!() }
-            }),
+            }
         }
     }
 
-    /// Performs a function call with no arguments.
+    /// Obtains a closure to perform a function call with no arguments.
     ///
     /// # Errors
     ///
     /// A `Trap` occurs if the function reference is not of the correct type.
     pub fn call_0<R, E>(&self, trap: &E) -> Result<R, E::Repr>
     where
-        E: Trap + ?Sized,
+        R: 'static,
+        E: Trap + 'static + ?Sized,
         E::Repr: 'static,
     {
-        let func = self.cast::<dyn Fn() -> Result<R, E::Repr>, E>(trap)?;
-        func()
+        let func = self.cast::<unsafe fn(&RawFuncRefData, &E) -> Result<R, E::Repr>, E>(trap)?;
+
+        // SAFETY: the corresponding `self.func.data` is being passed as the argument.
+        unsafe { func(self.func.data(), trap) }
     }
 }
 

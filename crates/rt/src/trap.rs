@@ -103,6 +103,7 @@ impl core::fmt::Display for TrapCode {
             } => write!(f, "at address {address:#X} into memory #{memory}: {source}"),
             Self::IntegerDivisionByZero => f.write_str("integer division by zero"),
             Self::IntegerOverflow => f.write_str("integer overflow"),
+            Self::FuncRefSignatureMismatch(error) => write!(f, "function reference {error}"),
             Self::MemoryAllocation { memory, error } => {
                 write!(f, "{error} #{memory}")
             }
