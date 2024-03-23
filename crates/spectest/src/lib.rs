@@ -6,6 +6,7 @@
 pub use anyhow::{Error, Result};
 pub use wast;
 
+mod location;
 mod pools;
 mod test_case;
 
@@ -18,46 +19,6 @@ pub struct TestFile {
     pub input: std::path::PathBuf,
     /// Path the the `.rs` file to generate.
     pub output: std::path::PathBuf,
-}
-
-struct Location<'a> {
-    line: u32,
-    column: u32,
-    path: &'a std::path::Path,
-}
-
-impl<'a> Location<'a> {
-    fn new(path: &'a std::path::Path, span: wast::token::Span, text: &str) -> Self {
-        let (line, col) = span.linecol_in(text);
-        Self {
-            line: u32::try_from(line).unwrap_or(u32::MAX),
-            column: u32::try_from(col).unwrap_or(u32::MAX),
-            path,
-        }
-    }
-}
-
-impl std::fmt::Display for Location<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}:{}:{}",
-            self.path.display(),
-            u64::from(self.line).saturating_add(1),
-            u64::from(self.column).saturating_add(1)
-        )
-    }
-}
-
-struct FileContents<'a> {
-    path: &'a std::path::Path,
-    contents: &'a str,
-}
-
-impl<'a> FileContents<'a> {
-    fn location(&self, span: wast::token::Span) -> Location<'a> {
-        Location::new(self.path, span, self.contents)
-    }
 }
 
 fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Pools) -> Result<()> {
@@ -86,10 +47,7 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
     let wast = wast::parser::parse::<wast::Wast>(&wast_buf)
         .with_context(|| format!("could not parse test file {:?}", file.input))?;
 
-    let wast_contents = FileContents {
-        path: &file.input,
-        contents: &wast_text,
-    };
+    let wast_contents = location::Contents::new(&wast_text, &file.input);
     let mut test_cases = test_case::Builder::new(pools, &wast_contents);
 
     let mut emit_warning = |span: wast::token::Span, message: &dyn std::fmt::Display| {
