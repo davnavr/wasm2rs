@@ -9,10 +9,14 @@ resolver = "2"
 members = [
     "crates/compiler",
     "crates/rt",
+    "crates/spectest",
     "tests/compiler",
     "tests/spec",
 ]
 default-members = ["crates/compiler", "crates/rt"]
 
 [workspace.dependencies]
+anyhow = "1.0.81"
+crossbeam-queue = "0.3.11"
+rayon = "1.9.0"
 wasm2rs-rt = { path = "crates/rt" }

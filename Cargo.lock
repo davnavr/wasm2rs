@@ -176,6 +176,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm2rs-spectest"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "crossbeam-queue",
+ "rayon",
+ "wasm2rs",
+ "wast",
+]
+
+[[package]]
 name = "wasmparser"
 version = "0.201.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

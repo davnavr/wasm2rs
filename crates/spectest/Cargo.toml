@@ -1,0 +1,14 @@
+[package]
+name = "wasm2rs-spectest"
+edition.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[dependencies]
+anyhow = { workspace = true }
+crossbeam-queue = { workspace = true }
+rayon = { workspace = true }
+wasm2rs = { path = "../compiler/" }
+wast = "201.0.0"
