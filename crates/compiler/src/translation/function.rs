@@ -254,68 +254,53 @@ impl std::fmt::Display for Label {
     }
 }
 
-#[must_use]
-struct BlockInputs {
+/// Writes the start of a block.
+///
+/// The `operand_height` is the depth of the first result value pushed onto the stack at the
+/// end of the block.
+fn write_block_start(
+    out: &mut crate::buffer::Writer<'_>,
+    types: &wasmparser::types::Types,
     label: Label,
-    count: u32,
-    /// Operand stack height at which block stack inputs begin.
-    height: u32,
-}
+    operand_height: u32,
+    block_ty: wasmparser::BlockType,
+    is_loop: bool,
+) {
+    let (argument_types, result_types) = get_block_type(types, &block_ty);
+    let argument_count = u32::try_from(argument_types.len()).unwrap();
+    let result_count = u32::try_from(result_types.len()).unwrap();
+    let result_start_height = operand_height - argument_count;
 
-impl BlockInputs {
-    fn write(self, out: &mut crate::buffer::Writer<'_>) {
-        for i in 0..self.count {
-            let operand = StackValue(self.height + i);
-            let _ = writeln!(out, "let mut _b_{}{operand} = {operand};", self.label.0);
+    if is_loop {
+        for i in 0..argument_count {
+            let operand = StackValue(result_start_height + i);
+            let _ = writeln!(out, "let mut _b_{}{operand} = {operand};", label.0);
         }
     }
 
-    /// Writes the start of a block.
-    ///
-    /// The `operand_height` is the depth of the first result value pushed onto the stack at the
-    /// end of the block.
-    fn write_start(
-        out: &mut crate::buffer::Writer<'_>,
-        types: &wasmparser::types::Types,
-        label: Label,
-        operand_height: u32,
-        block_ty: wasmparser::BlockType,
-    ) -> Self {
-        let (argument_types, result_types) = get_block_type(types, &block_ty);
-        let argument_count = u32::try_from(argument_types.len()).unwrap();
-        let result_count = u32::try_from(result_types.len()).unwrap();
-        let result_start_height = operand_height - argument_count;
+    if result_count > 0 {
+        out.write_str("let ");
 
-        if result_count > 0 {
-            out.write_str("let ");
-
-            if result_count > 1 {
-                out.write_str("(");
-            }
-
-            for i in 0..result_count {
-                if i > 0 {
-                    out.write_str(", ");
-                }
-
-                let _ = write!(out, "{}", StackValue(i + result_start_height));
-            }
-
-            if result_count > 1 {
-                out.write_str(")");
-            }
-
-            out.write_str(" = ");
+        if result_count > 1 {
+            out.write_str("(");
         }
 
-        let _ = write!(out, " {label}: ");
+        for i in 0..result_count {
+            if i > 0 {
+                out.write_str(", ");
+            }
 
-        BlockInputs {
-            label,
-            count: argument_count,
-            height: result_start_height,
+            let _ = write!(out, "{}", StackValue(i + result_start_height));
         }
+
+        if result_count > 1 {
+            out.write_str(")");
+        }
+
+        out.write_str(" = ");
     }
+
+    let _ = write!(out, " {label}: ");
 }
 
 mod paths {
@@ -439,7 +424,13 @@ fn write_branch(
 
             for i in 0..block_params {
                 let operand = operands_start + i;
-                let _ = writeln!(out, "_b_{}{} = {};", label.0, StackValue(operand), StackValue(operand - popped_before_branch));
+                let _ = writeln!(
+                    out,
+                    "_b_{}{} = {};",
+                    label.0,
+                    StackValue(operand),
+                    StackValue(operand - popped_before_branch)
+                );
             }
 
             let _ = writeln!(out, "continue {label};");
@@ -536,35 +527,37 @@ pub(in crate::translation) fn write_definition(
             }
             Operator::Nop | Operator::Drop => (),
             Operator::Block { blockty } => {
-                let _ = BlockInputs::write_start(
+                write_block_start(
                     out,
                     types,
                     Label(validator.control_stack_height() + 1),
                     validator.operand_stack_height(),
                     blockty,
+                    false,
                 );
 
                 let _ = writeln!(out, "{{");
             }
             Operator::Loop { blockty } => {
-                let inputs = BlockInputs::write_start(
+                write_block_start(
                     out,
                     types,
                     Label(validator.control_stack_height() + 1),
                     validator.operand_stack_height(),
                     blockty,
+                    true,
                 );
 
                 let _ = writeln!(out, "loop {{");
-                inputs.write(out); // TODO: Bug? Need to move let _b_#_s_# stuff *before* the start of the loop.
             }
             Operator::If { blockty } => {
-                let _ = BlockInputs::write_start(
+                write_block_start(
                     out,
                     types,
                     Label(validator.control_stack_height() + 1),
                     validator.operand_stack_height() - 1,
                     blockty,
+                    false,
                 );
 
                 let _ = writeln!(out, "{{ if {} != 0i32 {{", PoppedValue::pop(validator, 0));
@@ -621,7 +614,9 @@ pub(in crate::translation) fn write_definition(
                     );
                 }
             }
-            Operator::Br { relative_depth } => write_branch(out, validator, relative_depth, 0, types)?,
+            Operator::Br { relative_depth } => {
+                write_branch(out, validator, relative_depth, 0, types)?
+            }
             Operator::BrTable { targets } => {
                 let i = PoppedValue::pop(validator, 0);
 
