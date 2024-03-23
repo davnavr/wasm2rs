@@ -626,6 +626,12 @@ pub(in crate::translation) fn write_definition(
             Operator::Br { relative_depth } => {
                 write_branch(out, validator, relative_depth, 0, types)?
             }
+            Operator::BrIf { relative_depth } => {
+                let cond = PoppedValue::pop(validator, 0);
+                let _ = write!(out, "if {cond} != 0i32 {{\n  ");
+                write_branch(out, validator, relative_depth, 1, types)?;
+                out.write_str("}\n");
+            }
             Operator::BrTable { ref targets } => {
                 if !targets.is_empty() {
                     let i = PoppedValue::pop(validator, 0);
