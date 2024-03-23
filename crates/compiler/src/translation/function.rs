@@ -1084,7 +1084,7 @@ pub(in crate::translation) fn write_definition(
             Operator::F32Const { value } => {
                 let _ = writeln!(
                     out,
-                    "let {} = {:#010X}f32;",
+                    "let {} = f32::from_bits({:#010X}u32);",
                     StackValue(validator.operand_stack_height()),
                     value.bits(),
                 );
@@ -1092,7 +1092,7 @@ pub(in crate::translation) fn write_definition(
             Operator::F64Const { value } => {
                 let _ = writeln!(
                     out,
-                    "let {} = {:#018X}f64;",
+                    "let {} = f64::from_bits({:#018X}u64);",
                     StackValue(validator.operand_stack_height()),
                     value.bits(),
                 );
