@@ -714,6 +714,15 @@ pub(in crate::translation) fn write_definition(
                     PoppedValue::pop(validator, 0)
                 );
             }
+            Operator::Select | Operator::TypedSelect { ty: _ } => {
+                let cond = PoppedValue::pop(validator, 0);
+                let val_2 = PoppedValue::pop(validator, 1);
+                let val_1 = PoppedValue::pop(validator, 2);
+                let _ = writeln!(
+                    out,
+                    "let {val_1:#} = if {cond} != 0i32 {{ {val_1} }} else {{ {val_2} }};"
+                );
+            }
             Operator::LocalGet { local_index } => {
                 let _ = writeln!(
                     out,
