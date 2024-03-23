@@ -34,8 +34,8 @@ impl std::fmt::Display for Location<'_> {
 /// Represents a path to a file and its contents.
 #[derive(Clone, Copy)]
 pub struct Contents<'a> {
-    path: &'a std::path::Path,
-    contents: &'a str,
+    pub path: &'a std::path::Path,
+    pub contents: &'a str,
 }
 
 impl<'a> Contents<'a> {

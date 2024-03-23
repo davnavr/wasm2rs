@@ -13,12 +13,6 @@ enum ArgumentValue {
     //F32(f32),
 }
 
-impl ArgumentValue {
-    fn try_convert_vec(args: Vec<wast::WastArg<'_>>) -> crate::Result<Vec<Self>> {
-        args.into_iter().map(Self::try_from).collect()
-    }
-}
-
 /// Renders the argument as a Rust expression.
 impl std::fmt::Display for ArgumentValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -43,6 +37,36 @@ impl TryFrom<wast::WastArg<'_>> for ArgumentValue {
             },
             WastArg::Component(value) => anyhow::bail!("unsupported argument {value:?}"),
         })
+    }
+}
+
+struct Arguments {
+    arguments: Vec<ArgumentValue>,
+}
+
+impl TryFrom<Vec<wast::WastArg<'_>>> for Arguments {
+    type Error = crate::Error;
+
+    fn try_from(args: Vec<wast::WastArg<'_>>) -> crate::Result<Self> {
+        args.into_iter()
+            .map(ArgumentValue::try_from)
+            .collect::<crate::Result<_>>()
+            .map(|arguments| Self { arguments })
+    }
+}
+
+/// Renders the arguments as a list of values within the parenthesis of a Rust function call.
+impl std::fmt::Display for Arguments {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("(")?;
+        for (i, arg) in self.arguments.iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+
+            write!(f, "{arg}")?;
+        }
+        f.write_str(")")
     }
 }
 
@@ -151,7 +175,7 @@ enum StatementKind<'wasm> {
     InvokeFunction {
         /// Name of the exported function to call.
         name: &'wasm str,
-        arguments: Vec<ArgumentValue>,
+        arguments: Arguments,
         /// If `Some`, indicates that the result is checked with an assertion.
         /// If `None`, then the function is called, but the return value is ignored.
         result: Option<ActionResult>,
@@ -175,4 +199,32 @@ pub struct Module<'wasm> {
     id: Option<&'wasm str>,
     span: wast::token::Span,
     statements: Vec<Statement<'wasm>>,
+}
+
+pub enum ModuleIdent<'wasm> {
+    Numbered(usize),
+    Named(wasm2rs::rust::AnyIdent<'wasm>),
+}
+
+impl<'wasm> Module<'wasm> {
+    pub fn into_ident(&self) -> ModuleIdent<'wasm> {
+        if let Some(id) = self.id {
+            ModuleIdent::Named(if let Some(valid) = wasm2rs::rust::Ident::new(id) {
+                valid.into()
+            } else {
+                wasm2rs::rust::MangledIdent(id).into()
+            })
+        } else {
+            ModuleIdent::Numbered(self.number)
+        }
+    }
+}
+
+impl std::fmt::Display for ModuleIdent<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Numbered(n) => write!(f, "module_{n}"),
+            Self::Named(named) => std::fmt::Display::fmt(named, f),
+        }
+    }
 }

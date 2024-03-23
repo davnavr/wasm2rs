@@ -1,4 +1,4 @@
-use crate::test_case::{ActionResult, ArgumentValue, Module, ResultValue, StatementKind};
+use crate::test_case::{ActionResult, Module, ResultValue, StatementKind};
 use anyhow::Context;
 
 type ModuleLookup<'wasm> = std::collections::HashMap<&'wasm str, usize>;
@@ -108,12 +108,14 @@ impl<'a, 'wasm> Builder<'a, 'wasm> {
         module.statements.push(crate::test_case::Statement {
             kind: StatementKind::InvokeFunction {
                 name: invoke.name,
-                arguments: ArgumentValue::try_convert_vec(invoke.args).with_context(|| {
-                    format!(
-                        "could not convert arguments in {}",
-                        self.file_contents.location(invoke.span)
-                    )
-                })?,
+                arguments: crate::test_case::Arguments::try_from(invoke.args).with_context(
+                    || {
+                        format!(
+                            "could not convert arguments in {}",
+                            self.file_contents.location(invoke.span)
+                        )
+                    },
+                )?,
                 result,
             },
             span: invoke.span,

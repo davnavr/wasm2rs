@@ -3,6 +3,8 @@
 #![deny(unsafe_code)]
 #![deny(clippy::cast_possible_truncation)]
 
+use std::io::Write;
+
 pub use anyhow::{Error, Result};
 pub use wast;
 
@@ -17,8 +19,15 @@ use anyhow::Context;
 pub struct TestFile {
     /// Path to the `.wast` file to read.
     pub input: std::path::PathBuf,
-    /// Path the the `.rs` file to generate.
-    pub output: std::path::PathBuf,
+    /// Path to the `.rs` file to generate that will contain all of the generated unit tests for
+    /// each WebAssembly module.
+    ///
+    /// The fill will automatically contain calls to the [`include!`] macro for each WebAssembly
+    /// module.
+    pub output_file: std::path::PathBuf,
+    /// Path to a directory that will contain additional `.rs` files generated for each
+    /// WebAssembly module encountered.
+    pub output_dir: std::path::PathBuf,
 }
 
 fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Pools) -> Result<()> {
@@ -111,19 +120,39 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
 
     let (test_modules, to_translate) = test_cases.finish();
 
+    let to_translate = to_translate.into_iter().zip(test_modules.iter());
+
     let invoke_wasm2rs = || -> crate::Result<()> {
         todo!("write and get the module name too so a zip is needed");
     };
 
     let (unit_tests, translation) = rayon::join(
-        || test_case::write_unit_tests(test_modules, &pools.buffers),
+        || {
+            test_case::write_unit_tests(
+                &test_modules,
+                &wast_contents,
+                &file.output_dir,
+                &pools.buffers,
+            )
+        },
         invoke_wasm2rs,
     );
+
+    translation?;
 
     // Done with the WAST text
     pools.strings.return_buffer(wast_text);
 
-    todo!()
+    // Finally, write the unit tests.
+    let mut output_file = std::fs::File::create(&file.output_file)
+        .with_context(|| format!("could not create output file at {:?}", &file.output_file))?;
+
+    wasm2rs::buffer::write_all_vectored(&mut output_file, &unit_tests, &mut Vec::new())
+        .with_context(|| format!("could not write unit tests into {:?}", &file.output_file))?;
+
+    output_file.flush()?;
+
+    Ok(())
 }
 
 /// Translates all of the given test files.
