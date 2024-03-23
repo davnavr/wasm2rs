@@ -19,6 +19,7 @@ extern crate std;
 extern crate alloc;
 
 pub mod embedder;
+pub mod func_ref;
 pub mod global;
 pub mod math;
 pub mod memory;
