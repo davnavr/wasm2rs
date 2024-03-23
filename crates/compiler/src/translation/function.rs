@@ -534,7 +534,7 @@ pub(in crate::translation) fn write_definition(
                     out.write_str("\n");
                 }
             }
-            Operator::Nop | Operator::Drop => (),
+            Operator::Nop => (),
             Operator::Block { blockty } => {
                 write_block_start(
                     out,
@@ -706,6 +706,14 @@ pub(in crate::translation) fn write_definition(
                 out.write_str(")?;\n");
             }
             // Operator::CallIndirect { type_index, table_index, table_byte } => { todo!() }
+            Operator::Drop => {
+                // TODO: Should `drop` call ::core::mem::drop() for FuncRef/ExternRef?
+                let _ = writeln!(
+                    out,
+                    "// ::core::mem::drop({});",
+                    PoppedValue::pop(validator, 0)
+                );
+            }
             Operator::LocalGet { local_index } => {
                 let _ = writeln!(
                     out,
