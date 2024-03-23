@@ -1174,6 +1174,16 @@ pub(in crate::translation) fn write_definition(
                     "let {c_1:#} = (({c_1} as u32) < ({c_2} as u32)) as i32;"
                 );
             }
+            Operator::F32Gt | Operator::F64Gt => {
+                // TODO: See if Rust's implementation of float comparison follows WebAssembly.
+                let z_2 = PoppedValue::pop(validator, 0);
+                let z_1 = PoppedValue::pop(validator, 1);
+                let _ = writeln!(out, "let {z_1:#} = ({z_1} > {z_2}) as i32;");
+            }
+            Operator::I32Ctz => {
+                let c = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {c:#} = i32::trailing_zeroes({c}) as i32;");
+            }
             Operator::I32Add => {
                 let result_value = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
@@ -1246,6 +1256,13 @@ pub(in crate::translation) fn write_definition(
                 let _ = writeln!(
                     out,
                     "let {c_1:#} = (({c_1} as u32) >> ({c_2} % 32)) as i32;"
+                );
+            }
+            Operator::I64Ctz => {
+                let c = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {c:#} = (i64::trailing_zeroes({c}) as i32) as i64;"
                 );
             }
             Operator::I64Add => {
