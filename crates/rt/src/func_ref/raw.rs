@@ -18,9 +18,28 @@ impl core::fmt::Debug for RawFuncRefData {
 pub struct RawFuncRefVTable {
     pub(in crate::func_ref) convert:
         unsafe fn(data: &RawFuncRefData, id: core::any::TypeId) -> Option<*const ()>,
+    // What return type to use?
+    //pub(in crate::func_ref) call_fallback: unsafe fn (data: &RawFuncRefData, arguments: &[&dyn core::any::Any]),
     pub(in crate::func_ref) clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef,
     pub(in crate::func_ref) drop: unsafe fn(data: RawFuncRefData),
     pub(in crate::func_ref) debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug,
+}
+
+impl RawFuncRefVTable {
+    // TODO: This should be public and needs documentation
+    pub(crate) const fn new(
+        convert: unsafe fn(data: &RawFuncRefData, id: core::any::TypeId) -> Option<*const ()>,
+        clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef,
+        drop: unsafe fn(data: RawFuncRefData),
+        debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug,
+    ) -> Self {
+        Self {
+            convert,
+            clone,
+            drop,
+            debug,
+        }
+    }
 }
 
 /// Provides an implementation for a [`FuncRef`].
@@ -33,7 +52,7 @@ pub struct RawFuncRef {
 
 impl RawFuncRef {
     /// Creates a new [`RawFuncRef`] from the given `data` with the given `vtable`.
-    pub fn new(data: RawFuncRefData, vtable: &'static RawFuncRefVTable) -> Self {
+    pub const fn new(data: RawFuncRefData, vtable: &'static RawFuncRefVTable) -> Self {
         Self { data, vtable }
     }
 

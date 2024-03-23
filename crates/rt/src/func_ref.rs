@@ -2,6 +2,7 @@
 //!
 //! [references to functions]: https://webassembly.github.io/spec/core/syntax/types.html#reference-types
 
+mod call_null;
 mod raw;
 
 pub use raw::{RawFuncRef, RawFuncRefData, RawFuncRefVTable};
@@ -33,7 +34,7 @@ impl FuncRef {
     /// # Safety
     ///
     /// The provided [`RawFuncRef`] must meet the requirements specified in its documentation.
-    pub unsafe fn from_raw(func: RawFuncRef) -> Self {
+    pub const unsafe fn from_raw(func: RawFuncRef) -> Self {
         Self { func }
     }
 
