@@ -745,6 +745,15 @@ pub(in crate::translation) fn write_definition(
                     PoppedValue::pop(validator, 0)
                 );
             }
+            Operator::LocalTee { local_index } => {
+                let arg = PoppedValue::pop(validator, 0);
+                // TODO: For `local.set` and `local.tee`, how will `funcref`/`externref` be copied?
+                let _ = writeln!(
+                    out,
+                    "{} = {arg};\nlet {arg:#} = {arg};",
+                    LocalId(local_index),
+                );
+            }
             Operator::GlobalGet { global_index } => {
                 let _ = write!(
                     out,
