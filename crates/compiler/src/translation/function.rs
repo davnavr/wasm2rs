@@ -403,6 +403,15 @@ fn write_i16_load(
     let _ = writeln!(out, " as {destination};");
 }
 
+/// Generates a Rust statement corresponding to a WebAssembly branch instruction.
+///
+/// The `relative_depth` is the [WebAssembly label] that specifies the target block to jump to.
+///
+/// The `popped_before_branch` parameter indicates how many operands are popped from the stack
+/// before the operands corresponding the target block's result types (or block's input types in
+/// the case of a `loop`) are popped.
+///
+/// [WebAssembly label]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions
 fn write_branch(
     out: &mut crate::buffer::Writer,
     validator: &Validator,
@@ -617,12 +626,25 @@ pub(in crate::translation) fn write_definition(
             Operator::Br { relative_depth } => {
                 write_branch(out, validator, relative_depth, 0, types)?
             }
-            Operator::BrTable { targets } => {
-                let i = PoppedValue::pop(validator, 0);
+            Operator::BrTable { ref targets } => {
+                if !targets.is_empty() {
+                    let i = PoppedValue::pop(validator, 0);
 
-                let _ = writeln!(out, "match {i} {{");
-                todo!();
-                out.write_str("}\n");
+                    let _ = writeln!(out, "match {i} {{");
+
+                    for (cond, result) in targets.targets().enumerate() {
+                        let label = result?;
+                        let _ = write!(out, "  {cond} => {{\n    ");
+                        write_branch(out, validator, label, 1, types)?;
+                        out.write_str("  }\n");
+                    }
+
+                    out.write_str("  _ => {\n    ");
+                    write_branch(out, validator, targets.default(), 1, types)?;
+                    out.write_str("  }\n}\n");
+                } else {
+                    write_branch(out, validator, targets.default(), 1, types)?;
+                }
             }
             Operator::Return => {
                 let kind = if validator.control_stack_height() == 1 {
