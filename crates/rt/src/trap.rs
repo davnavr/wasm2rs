@@ -59,6 +59,8 @@ pub enum TrapCode {
     /// An integer operation overflowed.
     IntegerOverflow,
     //UnalignedAtomicOperation
+    /// A function reference did not have the correct signature.
+    FuncRefSignatureMismatch(crate::func_ref::SignatureMismatchError),
     //NullReference
     /// Instantiating a module failed because linear memory could not be allocated.
     MemoryAllocation {

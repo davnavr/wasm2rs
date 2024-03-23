@@ -16,9 +16,11 @@ impl core::fmt::Debug for RawFuncRefData {
 /// A table of functions that specify the behavior of a [`RawFuncRef`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RawFuncRefVTable {
-    pub(in crate::func_ref) clone: unsafe fn(&RawFuncRefData) -> RawFuncRef,
-    pub(in crate::func_ref) drop: unsafe fn(RawFuncRefData),
-    pub(in crate::func_ref) debug: unsafe fn(&RawFuncRefData) -> &dyn core::fmt::Debug,
+    pub(in crate::func_ref) cast:
+        unsafe fn(data: &RawFuncRefData, id: core::any::TypeId) -> Option<&dyn core::any::Any>,
+    pub(in crate::func_ref) clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef,
+    pub(in crate::func_ref) drop: unsafe fn(data: RawFuncRefData),
+    pub(in crate::func_ref) debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug,
 }
 
 /// Provides an implementation for a [`FuncRef`].
