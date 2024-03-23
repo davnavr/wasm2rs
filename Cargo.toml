@@ -17,6 +17,7 @@ default-members = ["crates/compiler", "crates/rt"]
 
 [workspace.dependencies]
 anyhow = "1.0.81"
+bytes = "1.5.0"
 crossbeam-queue = "0.3.11"
 rayon = "1.9.0"
 wasm2rs-rt = { path = "crates/rt" }

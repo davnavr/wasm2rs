@@ -20,4 +20,5 @@ impl StringPool {
 
 pub struct Pools<'a> {
     pub strings: &'a StringPool,
+    pub buffers: &'a wasm2rs::buffer::Pool,
 }

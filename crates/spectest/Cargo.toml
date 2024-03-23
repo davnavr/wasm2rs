@@ -8,6 +8,7 @@ doctest = false
 
 [dependencies]
 anyhow = { workspace = true }
+bytes = { workspace = true }
 crossbeam-queue = { workspace = true }
 rayon = { workspace = true }
 wasm2rs = { path = "../compiler/" }

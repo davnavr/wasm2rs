@@ -48,19 +48,60 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
         .with_context(|| format!("could not parse test file {:?}", file.input))?;
 
     let wast_contents = location::Contents::new(&wast_text, &file.input);
-    let mut test_cases = test_case::Builder::new(pools, &wast_contents);
+    let mut test_cases = test_case::Builder::new(&wast_contents);
 
     let mut emit_warning = |span: wast::token::Span, message: &dyn std::fmt::Display| {
         warnings.push(format!("{} : {message}", wast_contents.location(span)))
     };
 
+    let mut skip_module = false;
     for directive in wast.directives {
-        use wast::WastDirective;
+        use wast::{WastDirective, WastExecute};
 
         match directive {
-            WastDirective::Wat(wat) => test_cases.module(wat)?,
-            WastDirective::Invoke(invoke) => test_cases.invoke(invoke)?,
-            WastDirective::AssertMalformed { .. } | WastDirective::AssertInvalid { .. } => (), // We aren't testing wasmparser
+            WastDirective::Wat(wat) => {
+                skip_module = false;
+                test_cases.module(wat)?;
+            }
+            WastDirective::Invoke(invoke) => {
+                if !skip_module {
+                    test_cases.invoke(invoke)?
+                }
+            }
+            WastDirective::AssertTrap {
+                span,
+                exec,
+                message,
+            } => match exec {
+                _ if skip_module => (),
+                WastExecute::Invoke(invoke) => test_cases
+                    .assert_trap_invoke(invoke, message)
+                    .with_context(|| format!("in {}", wast_contents.location(span)))?,
+                WastExecute::Get { .. } => anyhow::bail!(
+                    "{} : assert_trap with globals is not yet supported",
+                    wast_contents.location(span)
+                ),
+                WastExecute::Wat(_) => emit_warning(span, &"assertion of WAT is not supported"),
+            },
+            WastDirective::AssertReturn {
+                span,
+                exec,
+                results,
+            } => match exec {
+                _ if skip_module => (),
+                WastExecute::Invoke(invoke) => test_cases
+                    .assert_return_invoke(invoke, results)
+                    .with_context(|| format!("in {}", wast_contents.location(span)))?,
+                WastExecute::Get { .. } => anyhow::bail!(
+                    "{} : assert_return with globals is not yet supported",
+                    wast_contents.location(span)
+                ),
+                WastExecute::Wat(_) => emit_warning(span, &"assertion of WAT is not supported"),
+            },
+            WastDirective::AssertMalformed { .. } | WastDirective::AssertInvalid { .. } => {
+                // We aren't testing wasmparser
+                skip_module = true;
+            }
             _ => {
                 emit_warning(directive.span(), &"unsupported directive was skipped");
                 break;
@@ -68,7 +109,16 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
         }
     }
 
-    //test_cases
+    let (test_modules, to_translate) = test_cases.finish();
+
+    let invoke_wasm2rs = || -> crate::Result<()> {
+        todo!("write and get the module name too so a zip is needed");
+    };
+
+    let (unit_tests, translation) = rayon::join(
+        || test_case::write_unit_tests(test_modules, &pools.buffers),
+        invoke_wasm2rs,
+    );
 
     // Done with the WAST text
     pools.strings.return_buffer(wast_text);
@@ -82,9 +132,11 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
 pub fn translate(files: &[TestFile]) -> (Vec<String>, anyhow::Result<()>) {
     use rayon::prelude::*;
 
-    let string_pool = Default::default();
+    let string_pool = crate::pools::StringPool::default();
+    let buffer_pool = wasm2rs::buffer::Pool::default();
     let pools = pools::Pools {
         strings: &string_pool,
+        buffers: &buffer_pool,
     };
 
     let (warnings, result) = files

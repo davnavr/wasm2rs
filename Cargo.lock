@@ -180,6 +180,7 @@ name = "wasm2rs-spectest"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "crossbeam-queue",
  "rayon",
  "wasm2rs",

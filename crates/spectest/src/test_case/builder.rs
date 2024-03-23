@@ -1,11 +1,12 @@
-use crate::test_case::Module;
+use crate::test_case::{ActionResult, ArgumentValue, Module, ResultValue, StatementKind};
+use anyhow::Context;
 
 type ModuleLookup<'wasm> = std::collections::HashMap<&'wasm str, usize>;
 
 pub struct Builder<'a, 'wasm> {
-    pools: &'a crate::pools::Pools<'a>,
     file_contents: &'a crate::location::Contents<'wasm>,
     modules: Vec<Module<'wasm>>,
+    module_contents: Vec<wast::QuoteWat<'wasm>>,
     module_lookup: ModuleLookup<'wasm>,
 }
 
@@ -38,14 +39,11 @@ fn get_module<'a, 'wasm>(
 }
 
 impl<'a, 'wasm> Builder<'a, 'wasm> {
-    pub fn new(
-        pools: &'a crate::pools::Pools<'a>,
-        file_contents: &'a crate::location::Contents<'wasm>,
-    ) -> Self {
+    pub fn new(file_contents: &'a crate::location::Contents<'wasm>) -> Self {
         Self {
-            pools,
             file_contents,
             modules: Vec::new(),
+            module_contents: Vec::new(),
             module_lookup: Default::default(),
         }
     }
@@ -80,8 +78,45 @@ impl<'a, 'wasm> Builder<'a, 'wasm> {
             number,
             id: id.map(wast::token::Id::name),
             span,
-            definition: wat,
             statements: Vec::new(),
+        });
+
+        self.module_contents.push(wat);
+
+        Ok(())
+    }
+
+    fn invoke_with_results(
+        &mut self,
+        invoke: wast::WastInvoke<'wasm>,
+        result: Option<ActionResult>,
+    ) -> crate::Result<()> {
+        let module = get_module(
+            &invoke.module,
+            &mut self.modules,
+            &self.module_lookup,
+            invoke.span,
+            &self.file_contents,
+        )
+        .with_context(|| {
+            format!(
+                "could not find module for invoke in {}",
+                self.file_contents.location(invoke.span)
+            )
+        })?;
+
+        module.statements.push(crate::test_case::Statement {
+            kind: StatementKind::InvokeFunction {
+                name: invoke.name,
+                arguments: ArgumentValue::try_convert_vec(invoke.args).with_context(|| {
+                    format!(
+                        "could not convert arguments in {}",
+                        self.file_contents.location(invoke.span)
+                    )
+                })?,
+                result,
+            },
+            span: invoke.span,
         });
 
         Ok(())
@@ -89,18 +124,33 @@ impl<'a, 'wasm> Builder<'a, 'wasm> {
 
     /// Translates top-level `(invoke)` actions into a Rust function call.
     pub fn invoke(&mut self, invoke: wast::WastInvoke<'wasm>) -> crate::Result<()> {
-        let module = get_module(
-            &invoke.module,
-            &mut self.modules,
-            &self.module_lookup,
-            invoke.span,
-            &self.file_contents,
-        )?;
-
-        todo!();
-
-        Ok(())
+        self.invoke_with_results(invoke, None)
     }
 
-    //pub fn finish(&self) -> Vec<RustTestCasesToProcessInParallel> {}
+    /// Translates an `(assert_return)` assertion that calls a function and expects certain result
+    /// values.
+    pub fn assert_return_invoke(
+        &mut self,
+        invoke: wast::WastInvoke<'wasm>,
+        results: Vec<wast::WastRet<'wasm>>,
+    ) -> crate::Result<()> {
+        self.invoke_with_results(
+            invoke,
+            Some(ActionResult::Values(ResultValue::try_convert_vec(results)?)),
+        )
+    }
+
+    /// Translatesan `(assert_return)` assertion that calls a function and expects a trap.
+    pub fn assert_trap_invoke(
+        &mut self,
+        invoke: wast::WastInvoke<'wasm>,
+        message: &'wasm str,
+    ) -> crate::Result<()> {
+        self.invoke_with_results(invoke, Some(ActionResult::Trap(message.parse()?)))
+    }
+
+    pub fn finish(self) -> (Vec<Module<'wasm>>, Vec<wast::QuoteWat<'wasm>>) {
+        debug_assert_eq!(self.modules.len(), self.module_contents.len());
+        (self.modules, self.module_contents)
+    }
 }
