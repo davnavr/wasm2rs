@@ -1,5 +1,48 @@
 use std::fmt::Write;
 
+const ACTUAL_VARIABLE: &str = "actual";
+
+fn write_result_check(
+    out: &mut wasm2rs::buffer::Writer,
+    result: &crate::test_case::ResultValue,
+    location: &crate::location::Location<'_>,
+) {
+    use crate::test_case::ResultValue;
+    out.write_str("    assert!(");
+    match result {
+        ResultValue::I32(i) => {
+            let _ = write!(out, "{ACTUAL_VARIABLE} == {i}");
+        }
+        ResultValue::I64(i) => {
+            let _ = write!(out, "{ACTUAL_VARIABLE} == {i}");
+        }
+        ResultValue::F32Bits(bits) => {
+            let _ = write!(out, "f32::to_bits({ACTUAL_VARIABLE}) == {bits:#010X}u32");
+        }
+        ResultValue::F64Bits(bits) => {
+            let _ = write!(out, "f64::to_bits({ACTUAL_VARIABLE}) == {bits:#018X}u64");
+        }
+    }
+
+    out.write_str(", \"expected ");
+    match result {
+        ResultValue::I32(i) => {
+            let _ = write!(out, "{i} ({i:#010X})");
+        }
+        ResultValue::I64(i) => {
+            let _ = write!(out, "{i} ({i:018X})");
+        }
+        ResultValue::F32Bits(bits) => {
+            let _ = write!(out, "{} ({bits:#010X})", f32::from_bits(*bits));
+        }
+        ResultValue::F64Bits(bits) => {
+            let _ = write!(out, "{} ({bits:#018X})", f64::from_bits(*bits));
+        }
+    }
+
+    let _ = writeln!(out, " but got {ACTUAL_VARIABLE} at {location}\n\");");
+}
+
 pub fn write_unit_tests<'wasm>(
     modules: &[crate::test_case::Module<'wasm>],
     wast: &crate::location::Contents<'wasm>,
@@ -44,17 +87,54 @@ pub fn write_unit_tests<'wasm>(
                     arguments,
                     result,
                 } => {
+                    use crate::test_case::ActionResult;
+
+                    const RESULT_VARIABLE: &str = crate::test_case::Statement::RESULT_VARIABLE;
+
                     let _ = writeln!(
                         out,
-                        "    let {} = _inst.{}{arguments};",
-                        crate::test_case::Statement::RESULT_VARIABLE,
+                        "    let {RESULT_VARIABLE} = _inst.{}{arguments};",
                         wasm2rs::rust::SafeIdent::from(*name)
                     );
 
                     match result {
-                        Some(pattern) => {
-                            let _ = writeln!(out, "    assert_eq!({}, {pattern}, \"assertion failed at {module_location}\");",
-                            crate::test_case::Statement::RESULT_VARIABLE);
+                        Some(ActionResult::Trap(trap)) => {
+                            let _ = writeln!(out, "    assert!(matches!({RESULT_VARIABLE}, Err(e) if matches!(e.code(), {trap})), \"expected trap but got {{:?}} at {module_location}\", {RESULT_VARIABLE});",
+                            );
+                        }
+                        Some(ActionResult::Values(values)) => {
+                            out.write_str("    ");
+                            if values.is_empty() {
+                                let _ = writeln!(out, "assert_eq!({RESULT_VARIABLE}, Ok(()), \"unexpected trap {{:?}} at {module_location}\", {RESULT_VARIABLE});");
+                            } else {
+                                let _ = writeln!(out, "assert!({RESULT_VARIABLE}.is_ok(), \"unexpected trap {{:?}} at {module_location}\", {RESULT_VARIABLE});");
+
+                                out.write_str("    let ");
+
+                                if values.len() > 1 {
+                                    out.write_str("(");
+                                }
+
+                                for i in 0..values.len() {
+                                    if i > 0 {
+                                        out.write_str(", ");
+                                    }
+
+                                    let _ = write!(out, "actual_{i}");
+                                }
+
+                                if values.len() > 1 {
+                                    out.write_str(")");
+                                }
+
+                                let _ = writeln!(out, " = _result.unwrap();");
+
+                                for (i, result) in values.iter().enumerate() {
+                                    let _ =
+                                        writeln!(out, "    let {ACTUAL_VARIABLE} = actual_{i};");
+                                    write_result_check(&mut out, result, &module_location);
+                                }
+                            }
                         }
                         None => (),
                     }

@@ -74,6 +74,8 @@ impl std::fmt::Display for Arguments {
 enum ResultValue {
     I32(i32),
     I64(i64),
+    F32Bits(u32),
+    F64Bits(u64),
 }
 
 impl ResultValue {
@@ -82,26 +84,21 @@ impl ResultValue {
     }
 }
 
-/// Renders the result value as a Rust pattern.
-impl std::fmt::Display for ResultValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::I32(i) => write!(f, "{i}i32"),
-            Self::I64(i) => write!(f, "{i}i64"),
-        }
-    }
-}
-
 impl TryFrom<wast::WastRet<'_>> for ResultValue {
     type Error = crate::Error;
 
     fn try_from(result: wast::WastRet<'_>) -> crate::Result<Self> {
-        use wast::{core::WastRetCore, WastRet};
+        use wast::{
+            core::{NanPattern, WastRetCore},
+            WastRet,
+        };
 
         Ok(match result {
             WastRet::Core(result) => match result {
                 WastRetCore::I32(i) => Self::I32(i),
                 WastRetCore::I64(i) => Self::I64(i),
+                WastRetCore::F32(NanPattern::Value(f)) => Self::F32Bits(f.bits),
+                WastRetCore::F64(NanPattern::Value(f)) => Self::F64Bits(f.bits),
                 bad => anyhow::bail!("result {bad:?} is currently unsupported"),
             },
             WastRet::Component(value) => anyhow::bail!("unsupported result {value:?}"),
@@ -145,30 +142,6 @@ enum ActionResult {
     Trap(TrapReason),
 }
 
-/// Renders the result as a Rust pattern.
-impl std::fmt::Display for ActionResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Values(values) => match values.as_slice() {
-                [] => f.write_str("Ok(())"),
-                [one] => write!(f, "Ok({one})"),
-                _ => {
-                    f.write_str("Ok((")?;
-                    for (i, value) in values.iter().enumerate() {
-                        if i > 0 {
-                            f.write_str(", ")?;
-                        }
-
-                        write!(f, "{value}")?;
-                    }
-                    f.write_str("))")
-                }
-            },
-            Self::Trap(trap) => std::fmt::Display::fmt(trap, f),
-        }
-    }
-}
-
 enum StatementKind<'wasm> {
     /// Emits a Rust function call, storing the return values into a variable named
     /// [`Statement::RESULT_VARIABLE`].
@@ -182,7 +155,7 @@ enum StatementKind<'wasm> {
     },
 }
 
-struct Statement<'wasm> {
+pub struct Statement<'wasm> {
     kind: StatementKind<'wasm>,
     /// Refers to the location in the original `.wast` file that this [`Statement`] was
     /// generated from.
@@ -191,7 +164,7 @@ struct Statement<'wasm> {
 
 impl Statement<'_> {
     /// Name of the variable used to store the results of executing a [`Statement`].
-    const RESULT_VARIABLE: &'static str = "_result";
+    pub const RESULT_VARIABLE: &'static str = "_result";
 }
 
 pub struct Module<'wasm> {
