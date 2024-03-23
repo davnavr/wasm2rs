@@ -207,6 +207,10 @@ pub enum ModuleIdent<'wasm> {
 }
 
 impl<'wasm> Module<'wasm> {
+    pub fn span(&self) -> wast::token::Span {
+        self.span
+    }
+
     pub fn into_ident(&self) -> ModuleIdent<'wasm> {
         if let Some(id) = self.id {
             ModuleIdent::Named(if let Some(valid) = wasm2rs::rust::Ident::new(id) {

@@ -36,6 +36,8 @@ pub fn write_unit_tests<'wasm>(
         let _ = writeln!(out, "{module_location}\");");
 
         for statement in module.statements.iter() {
+            let _ = writeln!(out, "    // {}", wast.location(statement.span));
+
             match &statement.kind {
                 crate::test_case::StatementKind::InvokeFunction {
                     name,

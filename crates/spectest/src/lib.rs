@@ -27,10 +27,17 @@ pub struct TestFile {
     pub output_file: std::path::PathBuf,
     /// Path to a directory that will contain additional `.rs` files generated for each
     /// WebAssembly module encountered.
+    ///
+    /// This directory is assumed to already exists.
     pub output_dir: std::path::PathBuf,
 }
 
-fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Pools) -> Result<()> {
+fn translate_one(
+    file: &TestFile,
+    translation_options: &wasm2rs::Translation,
+    warnings: &mut Vec<String>,
+    pools: &pools::Pools,
+) -> Result<()> {
     let mut wast_file = std::fs::File::open(&file.input)
         .with_context(|| format!("could not open test file {:?}", file.input))?;
 
@@ -120,11 +127,32 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
 
     let (test_modules, to_translate) = test_cases.finish();
 
-    let to_translate = to_translate.into_iter().zip(test_modules.iter());
+    let invoke_wasm2rs =
+        |mut wat: wast::QuoteWat, module: &test_case::Module| -> crate::Result<()> {
+            let module_location = || wast_contents.location(module.span());
+            let wasm = wat
+                .encode()
+                .with_context(|| format!("could not encode module at {}", module_location()))?;
 
-    let invoke_wasm2rs = || -> crate::Result<()> {
-        todo!("write and get the module name too so a zip is needed");
-    };
+            let module_file_path = file.output_dir.join(format!("{}.rs", module.into_ident()));
+            let mut module_file = std::fs::File::create(&module_file_path).with_context(|| {
+                format!(
+                    "could not create module file at {module_file_path:?} for {}",
+                    module_location()
+                )
+            })?;
+
+            translation_options
+                .translate_from_buffer(&wasm, &mut module_file)
+                .with_context(|| {
+                    format!(
+                        "could not translate module at {} to {module_file_path:?}",
+                        module_location()
+                    )
+                })?;
+
+            Ok(())
+        };
 
     let (unit_tests, translation) = rayon::join(
         || {
@@ -135,7 +163,14 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
                 &pools.buffers,
             )
         },
-        invoke_wasm2rs,
+        || {
+            use rayon::prelude::*;
+
+            to_translate
+                .into_par_iter()
+                .zip(test_modules.as_slice())
+                .try_for_each(|(wat, module)| invoke_wasm2rs(wat, module))
+        },
     );
 
     translation?;
@@ -163,16 +198,25 @@ pub fn translate(files: &[TestFile]) -> (Vec<String>, anyhow::Result<()>) {
 
     let string_pool = crate::pools::StringPool::default();
     let buffer_pool = wasm2rs::buffer::Pool::default();
+    let func_validator_alloctions_pool = wasm2rs::FuncValidatorAllocationPool::default();
     let pools = pools::Pools {
         strings: &string_pool,
         buffers: &buffer_pool,
+    };
+
+    let translation = {
+        let mut options = wasm2rs::Translation::new();
+        options
+            .func_validator_allocation_pool(&func_validator_alloctions_pool)
+            .buffer_pool(&buffer_pool);
+        options
     };
 
     let (warnings, result) = files
         .par_iter()
         .map(|file| {
             let mut local_warnings = Vec::new();
-            let result = translate_one(file, &mut local_warnings, &pools);
+            let result = translate_one(file, &translation, &mut local_warnings, &pools);
             (local_warnings, result)
         })
         .collect::<(Vec<Vec<String>>, Result<()>)>();
