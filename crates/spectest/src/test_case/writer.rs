@@ -48,9 +48,23 @@ pub fn write_unit_tests<'wasm>(
     wast: &crate::location::Contents<'wasm>,
     output_dir: &std::path::Path,
     buffer_pool: &wasm2rs::buffer::Pool,
-) -> Vec<bytes::BytesMut> {
+) -> crate::Result<Vec<bytes::BytesMut>> {
     let mut out = wasm2rs::buffer::Writer::new(&buffer_pool);
     let _ = writeln!(out, "// Generated from {:?}\n", wast.path);
+
+    {
+        let file_name = wast
+            .path
+            .file_stem()
+            .ok_or_else(|| anyhow::anyhow!("unable to get file name for {:?}", wast.path))?
+            .to_string_lossy();
+
+        let _ = writeln!(
+            out,
+            "mod {} {{\n\n",
+            wasm2rs::rust::SafeIdent::from(file_name.as_ref())
+        );
+    }
 
     let mut module_path = std::path::PathBuf::from(output_dir);
     let mut module_name = String::new();
@@ -68,7 +82,7 @@ pub fn write_unit_tests<'wasm>(
 
         module_path.pop();
 
-        let _ = writeln!(out, "  wasm!(pub mod wasm)\n");
+        let _ = writeln!(out, "  wasm!(pub mod wasm);\n");
 
         out.write_str(concat!(
             "  #[test]\n  fn tests() {\n",
@@ -99,7 +113,7 @@ pub fn write_unit_tests<'wasm>(
 
                     match result {
                         Some(ActionResult::Trap(trap)) => {
-                            let _ = writeln!(out, "    assert!(matches!({RESULT_VARIABLE}, Err(e) if matches!(e.code(), {trap})), \"expected trap but got {{:?}} at {module_location}\", {RESULT_VARIABLE});",
+                            let _ = writeln!(out, "    assert!(matches!({RESULT_VARIABLE}, Err(ref e) if matches!(e.code(), {trap})), \"expected trap but got {{:?}} at {module_location}\", {RESULT_VARIABLE});",
                             );
                         }
                         Some(ActionResult::Values(values)) => {
@@ -145,5 +159,6 @@ pub fn write_unit_tests<'wasm>(
         out.write_str("  }\n}\n\n");
     }
 
-    out.finish()
+    out.write_str("\n}\n");
+    Ok(out.finish())
 }

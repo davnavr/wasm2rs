@@ -173,6 +173,8 @@ fn translate_one(
         },
     );
 
+    let unit_tests = unit_tests?;
+
     translation?;
 
     // Done with the WAST text
