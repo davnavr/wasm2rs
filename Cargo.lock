@@ -170,9 +170,9 @@ version = "0.1.0"
 name = "wasm2rs-spec-tests"
 version = "0.0.0"
 dependencies = [
- "wasm2rs",
+ "anyhow",
  "wasm2rs-rt",
- "wast",
+ "wasm2rs-spectest",
 ]
 
 [[package]]
