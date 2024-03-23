@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/memory.rs"));
 
-wasm!();
+wasm!(pub mod wasm);
 
 #[test]
 fn basic_read_writes() {

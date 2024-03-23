@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/simple.rs"));
 
-wasm!();
+wasm!(pub mod wasm);
 
 #[test]
 fn add_works() {

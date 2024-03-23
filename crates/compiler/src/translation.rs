@@ -528,19 +528,7 @@ impl Translation<'_> {
 
         writeln!(
             output,
-            "    (use $(:: $embedder_start:ident ::)? $($embedder_more:ident)::+) => {{ {}!{{mod wasm use $embedder}} }};",
-            self.generated_macro_name
-        )?;
-
-        writeln!(
-            output,
-            "    ($vis:vis) => {{ {}!{{$vis mod wasm}} }};",
-            self.generated_macro_name
-        )?;
-
-        writeln!(
-            output,
-            "    () => {{ {}!{{pub}} }};\n}}",
+            "    (use $(:: $embedder_start:ident ::)? $($embedder_more:ident)::+) => {{ {}!{{mod wasm use $embedder}} }};\n}}",
             self.generated_macro_name
         )?;
 
