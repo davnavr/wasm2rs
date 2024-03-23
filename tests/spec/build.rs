@@ -13,7 +13,13 @@ fn main() -> Result<()> {
         manifest_dir
     };
 
-    const TESTS: &[&str] = &["address", "int_exprs", "int_literals", "memory_init"];
+    const TESTS: &[&str] = &[
+        "address", // corresponds to ./testsuite/address.wast
+        "align",
+        "int_exprs",
+        "int_literals",
+        "memory_init",
+    ];
 
     let mut all_file = String::with_capacity(1024);
     let mut test_files = Vec::with_capacity(TESTS.len());

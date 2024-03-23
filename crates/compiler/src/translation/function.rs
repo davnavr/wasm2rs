@@ -922,6 +922,30 @@ pub(in crate::translation) fn write_definition(
                     MemAccess::new(memarg.memory, import_counts),
                 );
             }
+            Operator::F32Store { memarg } => {
+                let to_store = PoppedValue::pop(validator, 0);
+                let address = PoppedValue::pop(validator, 1);
+                let _ = writeln!(
+                    out,
+                    "{MEMORY}::i32_store::<{}, {}, {}, _, _>({}, {address}, {to_store}.to_bits() as i32, &self.embedder)?;",
+                    memarg.offset,
+                    memarg.align,
+                    memarg.memory,
+                    MemAccess::new(memarg.memory, import_counts),
+                );
+            }
+            Operator::F64Store { memarg } => {
+                let to_store = PoppedValue::pop(validator, 0);
+                let address = PoppedValue::pop(validator, 1);
+                let _ = writeln!(
+                    out,
+                    "{MEMORY}::i64_store::<{}, {}, {}, _, _>({}, {address}, {to_store}.to_bits() as i64, &self.embedder)?;",
+                    memarg.offset,
+                    memarg.align,
+                    memarg.memory,
+                    MemAccess::new(memarg.memory, import_counts),
+                );
+            }
             Operator::I32Store8 { memarg } | Operator::I64Store8 { memarg } => {
                 let to_store = PoppedValue::pop(validator, 0);
                 let address = PoppedValue::pop(validator, 1);
