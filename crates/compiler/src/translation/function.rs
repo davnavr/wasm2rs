@@ -1339,6 +1339,11 @@ pub(in crate::translation) fn write_definition(
                     "let {c_1:#} = (({c_1} as u64) >> ({c_2} % 64)) as i64;"
                 );
             }
+            Operator::F32Neg | Operator::F64Neg => {
+                // `::core::ops::Neg` on `f32` and `f64` do the same operation in Rust.
+                let z = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {z:#} = -z;");
+            }
             Operator::I32WrapI64 => {
                 let popped = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {popped:#} = {popped} as i32;");
