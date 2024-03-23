@@ -16,6 +16,8 @@ fn main() -> Result<()> {
     const TESTS: &[&str] = &[
         "address", // corresponds to ./testsuite/address.wast
         "align",
+        // "block", // TODO: blocked on `call_indirect` support.
+        // "br_if",
         "int_exprs",
         "int_literals",
         "memory_init",
