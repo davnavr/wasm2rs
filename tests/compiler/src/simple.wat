@@ -90,4 +90,16 @@
     i32.const 1
     i32.add
     global.set $counter)
+
+  (func $returnTypeOrder (result i32 i64 f32)
+    i32.const 0
+  	i64.const 0
+    f32.const 0)
+
+  (func $consumingReturnTypeOrder
+    (local i32 i64 f32)
+    call $returnTypeOrder
+    local.set 2
+    local.set 1
+    local.set 0)
 )
