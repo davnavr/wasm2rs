@@ -612,9 +612,9 @@ pub(in crate::translation) fn write_definition(
 
                     if result_count > 0 {
                         out.write_str(";");
-                    } else {
-                        out.write_str("\n");
                     }
+
+                    out.write_str("\n");
                 } else if !current_frame.unreachable {
                     BranchKind::ImplicitReturn.write_control_flow(
                         out,
