@@ -569,7 +569,7 @@ pub(in crate::translation) fn write_definition(
 
                 for i in 0..input_count {
                     let operand = StackValue(i + result_start_height);
-                    let _ = writeln!(out, "_b_{}{operand} = {operand};", label);
+                    let _ = writeln!(out, "let {operand} = _b_{}{operand};", label);
                 }
             }
             Operator::If { blockty } => {
