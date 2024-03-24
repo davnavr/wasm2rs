@@ -11,3 +11,7 @@ std = ["alloc"]
 alloc = []
 
 [dependencies]
+
+[[test]]
+name = "it"
+path = "tests/it/lib.rs"
