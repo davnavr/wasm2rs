@@ -18,6 +18,7 @@ fn main() -> Result<()> {
         "align",
         // "block", // TODO: blocked on `call_indirect` support.
         // "br_if",
+        "fac",
         "int_exprs",
         "int_literals",
         "memory_init",
