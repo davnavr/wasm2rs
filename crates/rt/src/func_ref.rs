@@ -9,15 +9,35 @@ pub use raw::{RawFuncRef, RawFuncRefData, RawFuncRefVTable};
 
 use crate::trap::Trap;
 
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+struct SignatureMismatchErrorData {
+    expected_name: fn() -> &'static str,
+    // actual_name: fn() -> &'static str,
+}
+
 /// Error type used when a [`FuncRef`] did not have the correct signature.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct SignatureMismatchError {
-    expected: &'static str,
+    data: &'static SignatureMismatchErrorData,
+}
+
+impl core::fmt::Debug for SignatureMismatchError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SignatureMismatchError")
+            .field("expected", &(self.data.expected_name)())
+            // .field("actual", &(self.data.actual_name)())
+            .finish()
+    }
 }
 
 impl core::fmt::Display for SignatureMismatchError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "expected signature {:?}", self.expected)
+        // write!(f, "signature mismatch: expected {:?}, but got {:?}", (self.data.expected_name)(), (self.data.actual_name)())
+        write!(
+            f,
+            "signature mismatch: expected {:?}",
+            (self.data.expected_name)()
+        )
     }
 }
 
@@ -78,7 +98,10 @@ impl FuncRef {
         match convert_result {
             None => Err(trap.trap(crate::trap::TrapCode::FuncRefSignatureMismatch(
                 SignatureMismatchError {
-                    expected: core::any::type_name::<C>(),
+                    data: &SignatureMismatchErrorData {
+                        expected_name: core::any::type_name::<C>,
+                        // actual_name: ,
+                    },
                 },
             ))),
             Some(ptr) => {
