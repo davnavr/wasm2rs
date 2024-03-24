@@ -23,4 +23,5 @@ pub mod func_ref;
 pub mod global;
 pub mod math;
 pub mod memory;
+pub mod stack;
 pub mod trap;

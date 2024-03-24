@@ -6,11 +6,13 @@ edition.workspace = true
 repository.workspace = true
 
 [features]
-default = ["std"]
+default = ["std", "stack-overflow-detection"]
 std = ["alloc"]
 alloc = []
+stack-overflow-detection = ["std", "dep:stacker"]
 
 [dependencies]
+stacker = { version = "0.1.15", optional = true }
 
 [[test]]
 name = "it"

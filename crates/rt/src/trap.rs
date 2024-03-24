@@ -82,6 +82,10 @@ pub enum TrapCode {
         /// Describes which limit the memory did not match.
         limits: LimitsCheck,
     },
+    /// The stack space was exhausted, usually due to an infinitely recursive function.
+    ///
+    /// See the documentation for [`Trap::trap_stack_overflow()`] for more information.
+    CallStackExhausted,
 }
 
 impl core::cmp::PartialEq<TrapCode> for &TrapCode {
@@ -121,6 +125,7 @@ impl core::fmt::Display for TrapCode {
             Self::MemoryLimitsCheck { memory, limits } => {
                 write!(f, "{limits} pages in memory #{memory}")
             }
+            Self::CallStackExhausted => f.write_str("call stack exhausted"),
         }
     }
 }
@@ -150,6 +155,18 @@ pub trait Trap {
     /// The `wasm2rs` compiler generates calls to this function for instructions that generate a
     /// trap.
     fn trap(&self, code: TrapCode) -> Self::Repr;
+
+    /// Generates a trap due to a stack overflow condition.
+    ///
+    /// This function is called by the [`stack::check_for_overflow()`] function if it believes a
+    /// stack overflow may occur. This function should avoid allocating too much space on the stack
+    /// in order to avoid aborting the process on stack overflow.
+    ///
+    /// [`stack::check_for_overflow()`]: crate::stack::check_for_overflow()
+    #[inline(always)]
+    fn trap_stack_overflow(&self) -> Self::Repr {
+        self.trap(TrapCode::CallStackExhausted)
+    }
 }
 
 impl<T: Trap + ?Sized> Trap for &T {
