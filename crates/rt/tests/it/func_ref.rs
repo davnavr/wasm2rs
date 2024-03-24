@@ -35,3 +35,15 @@ fn basic_closure_call() {
 
     assert_eq!(call_counter.get(), 1);
 }
+
+#[test]
+fn null_call() {
+    let trap = State::<()>::default();
+    let null = FuncRef::<TrapValue>::NULL;
+
+    let result = null.call_3::<i32, i32, i32, i32, _>(1, 2, 3, &trap);
+    assert!(
+        matches!(&result, Err(e) if matches!(e.code(), TrapCode::NullFunctionReference { .. })),
+        "null function reference should not be invoked, got {result:?}"
+    );
+}
