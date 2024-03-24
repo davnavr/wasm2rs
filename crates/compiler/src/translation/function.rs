@@ -145,10 +145,15 @@ impl std::fmt::Display for PoppedValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pop(v) => std::fmt::Display::fmt(&v, f),
-            Self::Underflow if f.alternate() => f.write_str("_"),
-            Self::Underflow => f.write_str(
-                "::core::unimplemented!(\"code generation bug, operand stack underflow occured\")",
-            ),
+            Self::Underflow => {
+                f.write_str("::core::")?;
+                f.write_str(if f.alternate() {
+                    "compile_error"
+                } else {
+                    "unimplemented"
+                })?;
+                f.write_str("!(\"code generation bug, operand stack underflow occured\")")
+            }
         }
     }
 }
@@ -265,7 +270,7 @@ fn write_block_start(
     operand_height: u32,
     block_ty: wasmparser::BlockType,
     is_loop: bool,
-) {
+) -> (u32, u32) {
     let (argument_types, result_types) = get_block_type(types, &block_ty);
     let argument_count = u32::try_from(argument_types.len()).unwrap();
     let result_count = u32::try_from(result_types.len()).unwrap();
@@ -301,6 +306,8 @@ fn write_block_start(
     }
 
     let _ = write!(out, " {label}: ");
+
+    (argument_count, result_start_height)
 }
 
 mod paths {
@@ -431,14 +438,13 @@ fn write_branch(
             let block_params = u32::try_from(block_parameters.len())
                 .with_context(|| "block has too many parameters")?;
 
-            for i in 0..block_params {
-                let operand = operands_start + i;
+            for i in (0..block_params).rev() {
                 let _ = writeln!(
                     out,
                     "_b_{}{} = {};",
                     label.0,
-                    StackValue(operand),
-                    StackValue(operand - popped_before_branch)
+                    StackValue(operands_start + i),
+                    PoppedValue::pop(validator, popped_before_branch + i),
                 );
             }
 
@@ -548,16 +554,22 @@ pub(in crate::translation) fn write_definition(
                 let _ = writeln!(out, "{{");
             }
             Operator::Loop { blockty } => {
-                write_block_start(
+                let label = validator.control_stack_height() + 1;
+                let (input_count, result_start_height) = write_block_start(
                     out,
                     types,
-                    Label(validator.control_stack_height() + 1),
+                    Label(label),
                     validator.operand_stack_height(),
                     blockty,
                     true,
                 );
 
                 let _ = writeln!(out, "loop {{");
+
+                for i in 0..input_count {
+                    let operand = StackValue(i + result_start_height);
+                    let _ = writeln!(out, "_b_{}{operand} = {operand};", label);
+                }
             }
             Operator::If { blockty } => {
                 write_block_start(
@@ -624,7 +636,7 @@ pub(in crate::translation) fn write_definition(
                 }
             }
             Operator::Br { relative_depth } => {
-                write_branch(out, validator, relative_depth, 0, types)?
+                write_branch(out, validator, relative_depth, 0, types)?;
             }
             Operator::BrIf { relative_depth } => {
                 let cond = PoppedValue::pop(validator, 0);
@@ -679,12 +691,13 @@ pub(in crate::translation) fn write_definition(
                         out.write_str("(");
                     }
 
+                    let result_start_height = validator.operand_stack_height() - param_count;
                     for depth in (0..result_count).rev() {
-                        if depth > 0 {
+                        if depth < result_count - 1 {
                             out.write_str(", ");
                         }
 
-                        let _ = write!(out, "{:#}", PoppedValue::pop(validator, depth));
+                        let _ = write!(out, "{:#}", StackValue(result_start_height + depth));
                     }
 
                     if result_count > 1 {
@@ -1172,6 +1185,19 @@ pub(in crate::translation) fn write_definition(
                 let _ = writeln!(
                     out,
                     "let {c_1:#} = (({c_1} as u32) < ({c_2} as u32)) as i32;"
+                );
+            }
+            Operator::I64GtS => {
+                let c_2 = PoppedValue::pop(validator, 0);
+                let c_1 = PoppedValue::pop(validator, 1);
+                let _ = writeln!(out, "let {c_1:#} = ({c_1} > {c_2}) as i32;");
+            }
+            Operator::I64GtU => {
+                let c_2 = PoppedValue::pop(validator, 0);
+                let c_1 = PoppedValue::pop(validator, 1);
+                let _ = writeln!(
+                    out,
+                    "let {c_1:#} = (({c_1} as u64) > ({c_2} as u64)) as i32;"
                 );
             }
             Operator::F32Gt | Operator::F64Gt => {
