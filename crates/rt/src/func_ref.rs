@@ -146,7 +146,7 @@ impl<E: 'static> FuncRef<E> {
     /// Attempts to cast this reference to some exact type.
     ///
     /// This is an implementation detail used to support generated code. Prefer calling the
-    /// specialized `call_` functions instead, such as [`call_0_1()`], [`call_1_1()`], etc.
+    /// specialized `call_` functions instead, such as [`call_0()`], [`call_1()`], etc.
     ///
     /// Generated code and the `call_` functions call [`cast()`] to obtain a function pointer of
     /// type `C` to the referrenced function. Refer to the documentation for
@@ -161,7 +161,8 @@ impl<E: 'static> FuncRef<E> {
     ///
     /// [`cast()`]: FuncRef::cast()
     /// [`NULL`]: FuncRef::NULL
-    /// [`call_0_1()`]: Self::call_0_1()
+    /// [`call_0()`]: Self::call_0()
+    /// [`call_1()`]: Self::call_1()
     pub fn cast<C>(&self) -> Result<(&RawFuncRefData, C), FuncRefCastError>
     where
         C: Clone
@@ -198,25 +199,51 @@ impl<E: 'static> FuncRef<E> {
             Ok((func.data(), casted))
         }
     }
+}
 
-    /// Obtains a closure to perform a function call with no arguments and at most one return value.
-    ///
-    /// # Errors
-    ///
-    /// A [`Trap`] occurs if the function reference is not of the correct type.
-    pub fn call_0_1<R, H>(&self, trap: &H) -> Result<R, E>
-    where
-        H: Trap<Repr = E> + ?Sized,
-        R: 'static,
-    {
-        match self.cast::<unsafe fn(&RawFuncRefData) -> Result<R, E>>() {
-            Ok((data, func)) => {
-                // SAFETY: only `data` is passed to the `func`.
-                unsafe { func(data) }
+macro_rules! call_helpers {
+    {$(
+        fn $description:literal $call_name:ident($($argument:ident: $param:ident),*);
+    )*} => {
+        /// Helper functions to perform calls without `unsafe` and [`cast()`].
+        ///
+        /// [`cast()`]: FuncRef::cast()
+        #[allow(clippy::too_many_arguments)]
+        impl<E: 'static> FuncRef<E> {$(
+            #[doc = "Calls the referenced function with "]
+            #[doc = $description]
+            #[doc = ".\n\nMultiple return values are represented by a tuple.\n\n"]
+            #[doc = "# Errors\n\n"]
+            #[doc = "A [`Trap`] occurs if the function reference is not of the correct type."]
+            pub fn $call_name<$($param,)* R, H>(&self $(, $argument: $param)* , trap: &H) -> Result<R, E>
+            where
+                $($param: 'static,)*
+                H: Trap<Repr = E> + ?Sized,
+                R: 'static,
+            {
+                match self.cast::<unsafe fn(&RawFuncRefData $(, $param)*) -> Result<R, E>>() {
+                    Ok((data, func)) => {
+                        // SAFETY: only `data` is passed to the `func`.
+                        unsafe { func(data $(, $argument)*) }
+                    }
+                    Err(err) => Err(err.trap_cold(trap)),
+                }
             }
-            Err(err) => Err(err.trap_cold(trap)),
-        }
-    }
+        )*}
+    };
+}
+
+call_helpers! {
+    fn "no arguments" call_0();
+    fn "one argument" call_1(a0: A0);
+    fn "two arguments" call_2(a0: A0, a1: A1);
+    fn "three arguments" call_3(a0: A0, a1: A1, a2: A2);
+    fn "four arguments" call_4(a0: A0, a1: A1, a2: A2, a3: A3);
+    fn "five arguments" call_5(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4);
+    fn "six arguments" call_6(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5);
+    fn "seven arguments" call_7(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6);
+    fn "eight arguments" call_8(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7);
+    fn "nine arguments" call_9(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8);
 }
 
 impl<E> Clone for FuncRef<E> {
