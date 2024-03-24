@@ -438,12 +438,13 @@ fn write_branch(
             let block_params = u32::try_from(block_parameters.len())
                 .with_context(|| "block has too many parameters")?;
 
-            for i in (0..block_params).rev() {
+            for i in 0..block_params {
+                dbg!(block_params, operands_start, i);
                 let _ = writeln!(
                     out,
                     "_b_{}{} = {};",
                     label.0,
-                    StackValue(operands_start + i),
+                    StackValue(operands_start + (block_params - i - 1)),
                     PoppedValue::pop(validator, popped_before_branch + i),
                 );
             }
@@ -642,7 +643,7 @@ pub(in crate::translation) fn write_definition(
                 let cond = PoppedValue::pop(validator, 0);
                 let _ = write!(out, "if {cond} != 0i32 {{\n  ");
                 write_branch(out, validator, relative_depth, 1, types)?;
-                out.write_str("}\n");
+                out.write_str("} // br_if\n");
             }
             Operator::BrTable { ref targets } => {
                 if !targets.is_empty() {
