@@ -7,6 +7,15 @@ pub union RawFuncRefData {
     pub inline: [core::mem::MaybeUninit<u8>; core::mem::size_of::<*mut ()>()],
 }
 
+impl RawFuncRefData {
+    /// Creates [`inline`]d data with all bytes uninitialized.
+    ///
+    /// [`inline`]: RawFuncRefData::inline
+    pub const UNINIT: Self = Self {
+        inline: [core::mem::MaybeUninit::uninit(); core::mem::size_of::<*mut ()>()],
+    };
+}
+
 impl core::fmt::Debug for RawFuncRefData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("RawFuncRefData").finish_non_exhaustive()
