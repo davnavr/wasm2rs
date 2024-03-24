@@ -692,8 +692,8 @@ pub(in crate::translation) fn write_definition(
                     }
 
                     let result_start_height = validator.operand_stack_height() - param_count;
-                    for depth in (0..result_count).rev() {
-                        if depth < result_count - 1 {
+                    for depth in 0..result_count {
+                        if depth > 0 {
                             out.write_str(", ");
                         }
 
