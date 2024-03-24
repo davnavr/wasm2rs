@@ -97,6 +97,13 @@ impl std::error::Error for FuncRefCastError {
     }
 }
 
+struct FuncRefPhantom<'a, E: 'static> {
+    /// Allows a [`FuncRef`] to reference things that live for at least `'a`.
+    _lifetime: &'a (),
+    /// A [`FuncRef`] doesn't own an `E`, but it is a function that can return an `E`.
+    _error: fn() -> E,
+}
+
 /// Represents a WebAssembly [**`funcref`**].
 ///
 /// The type parameter `E` is the type of values for any errors are returned as a result of calling
@@ -105,7 +112,7 @@ impl std::error::Error for FuncRefCastError {
 /// [**`funcref`**]: https://webassembly.github.io/spec/core/exec/runtime.html#values
 pub struct FuncRef<'a, E: 'static> {
     func: Option<RawFuncRef>,
-    _marker: core::marker::PhantomData<(&'a (), fn() -> E)>,
+    _marker: core::marker::PhantomData<FuncRefPhantom<'a, E>>,
 }
 
 impl<E: 'static> Default for FuncRef<'_, E> {
