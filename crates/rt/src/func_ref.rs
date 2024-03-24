@@ -103,18 +103,18 @@ impl std::error::Error for FuncRefCastError {
 /// the function, and is namely used to report WebAssembly [`Trap`]s.
 ///
 /// [**`funcref`**]: https://webassembly.github.io/spec/core/exec/runtime.html#values
-pub struct FuncRef<E: 'static> {
+pub struct FuncRef<'a, E: 'static> {
     func: Option<RawFuncRef>,
-    _marker: core::marker::PhantomData<fn() -> E>,
+    _marker: core::marker::PhantomData<(&'a (), fn() -> E)>,
 }
 
-impl<E: 'static> Default for FuncRef<E> {
+impl<E: 'static> Default for FuncRef<'_, E> {
     fn default() -> Self {
         Self::NULL
     }
 }
 
-impl<E: 'static> FuncRef<E> {
+impl<E: 'static> FuncRef<'_, E> {
     /// Gets the [`null`] function reference.
     ///
     /// [`null`]: https://webassembly.github.io/spec/core/exec/runtime.html#values
@@ -136,6 +136,8 @@ impl<E: 'static> FuncRef<E> {
     ///
     /// The provided [`RawFuncRef`] must meet the requirements specified in its documentation. For
     /// more information, see the documentation for [`RawFuncRefVTable::new()`].
+    ///
+    /// Additionally, the [`RawFuncRefData`] may only contain references of the lifetime `'a`.
     pub const unsafe fn from_raw(func_ref: RawFuncRef) -> Self {
         Self {
             func: Some(func_ref),
@@ -201,25 +203,6 @@ impl<E: 'static> FuncRef<E> {
     }
 }
 
-#[cfg(feature = "alloc")]
-struct TypeName<T> {
-    _marker: core::marker::PhantomData<fn() -> T>,
-}
-
-#[cfg(feature = "alloc")]
-impl<T> TypeName<T> {
-    const INSTANCE: Self = Self {
-        _marker: core::marker::PhantomData,
-    };
-}
-
-#[cfg(feature = "alloc")]
-impl<T> core::fmt::Debug for TypeName<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        core::fmt::Debug::fmt(&core::any::type_name::<T>(), f)
-    }
-}
-
 macro_rules! helpers {
     {$(
         fn $description:literal $call:ident ($($argument:ident: $param:ident),*)
@@ -231,7 +214,7 @@ macro_rules! helpers {
         /// [`cast()`]: FuncRef::cast()
         /// [`from_raw()`]: FuncRef::from_raw()
         #[allow(clippy::too_many_arguments)]
-        impl<E: 'static> FuncRef<E> {$(
+        impl<'a, E: 'static> FuncRef<'a, E> {$(
             #[doc = "Calls the referenced function with "]
             #[doc = $description]
             #[doc = ".\n\nMultiple return values are represented by a tuple.\n\n"]
@@ -260,15 +243,26 @@ macro_rules! helpers {
             pub fn $from_closure<$($param,)* R, C>(closure: C) -> Self
             where
                 $($param: 'static,)*
-                C: Clone + Fn($($param),*) -> Result<R, E> + 'static,
+                C: Clone + Fn($($param),*) -> Result<R, E> + 'a,
                 R: 'static,
             {
-                trait Constants<$($param,)* R, E>: Sized {
+                struct Debug {
+                    type_name: fn() -> &'static str
+                }
+
+                impl core::fmt::Debug for Debug {
+                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        core::fmt::Debug::fmt(&(self.type_name)(), f)
+                    }
+                }
+
+                trait Constants<'a, $($param,)* R, E>: Sized {
                     type FuncPtr: Clone + Copy + Send + Sync + core::marker::Unpin
                         + core::panic::UnwindSafe + core::panic::RefUnwindSafe + 'static;
 
                     const IS_INLINE: bool;
                     const SIGNATURE: FuncRefSignature;
+                    const DEBUG: Debug;
                     const VTABLE: RawFuncRefVTable;
 
                     unsafe fn from_data(data: &RawFuncRefData) -> &Self {
@@ -305,11 +299,11 @@ macro_rules! helpers {
                     }
                 }
 
-                impl<$($param,)* R, C, E> Constants<$($param,)* R, E> for C
+                impl<'a, $($param,)* R, C, E> Constants<'a, $($param,)* R, E> for C
                 where
                     $($param: 'static,)*
                     R: 'static,
-                    C: Clone + Fn($($param),*) -> Result<R, E> + 'static,
+                    C: Clone + Fn($($param),*) -> Result<R, E> + 'a,
                     E: 'static,
                 {
                     type FuncPtr = unsafe fn(&RawFuncRefData $(, $param)*) -> Result<R, E>;
@@ -321,6 +315,8 @@ macro_rules! helpers {
                     };
 
                     const SIGNATURE: FuncRefSignature = FuncRefSignature::of::<Self::FuncPtr>();
+
+                    const DEBUG: Debug = Debug { type_name: core::any::type_name::<C> };
 
                     const VTABLE: RawFuncRefVTable = {
                         let invoke: Self::FuncPtr = |data $(, $argument)*| {
@@ -354,7 +350,7 @@ macro_rules! helpers {
                         };
 
                         let debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug = |_| {
-                            &TypeName::<C>::INSTANCE
+                            &Self::DEBUG
                         };
 
                         RawFuncRefVTable::new(
@@ -389,7 +385,7 @@ helpers! {
     fn "nine arguments" call_9(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8) / from_closure_9;
 }
 
-impl<E> Clone for FuncRef<E> {
+impl<E> Clone for FuncRef<'_, E> {
     fn clone(&self) -> Self {
         match &self.func {
             None => Self::NULL,
@@ -404,7 +400,7 @@ impl<E> Clone for FuncRef<E> {
     }
 }
 
-impl<E> core::fmt::Debug for FuncRef<E> {
+impl<E> core::fmt::Debug for FuncRef<'_, E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match &self.func {
             Some(func) => {
@@ -426,7 +422,7 @@ impl<E> core::fmt::Debug for FuncRef<E> {
     }
 }
 
-impl<E> Drop for FuncRef<E> {
+impl<E> Drop for FuncRef<'_, E> {
     fn drop(&mut self) {
         if let Some(func) = core::mem::take(&mut self.func) {
             // SAFETY: the `func` won't be used after this point, so the data is "moved" out.
