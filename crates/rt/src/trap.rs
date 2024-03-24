@@ -60,8 +60,12 @@ pub enum TrapCode {
     IntegerOverflow,
     //UnalignedAtomicOperation
     /// A function reference did not have the correct signature.
-    FuncRefSignatureMismatch(crate::func_ref::SignatureMismatchError),
-    //NullReference
+    IndirectCallSignatureMismatch(crate::func_ref::SignatureMismatchError),
+    /// A function reference was null.
+    NullFunctionReference {
+        /// The type that the function reference was expected to have.
+        expected: Option<&'static crate::func_ref::FuncRefSignature>,
+    },
     /// Instantiating a module failed because linear memory could not be allocated.
     MemoryAllocation {
         /// The index of the memory that could not be allocated.
@@ -103,7 +107,14 @@ impl core::fmt::Display for TrapCode {
             } => write!(f, "at address {address:#X} into memory #{memory}: {source}"),
             Self::IntegerDivisionByZero => f.write_str("integer division by zero"),
             Self::IntegerOverflow => f.write_str("integer overflow"),
-            Self::FuncRefSignatureMismatch(error) => write!(f, "function reference {error}"),
+            Self::IndirectCallSignatureMismatch(error) => write!(f, "function reference {error}"),
+            Self::NullFunctionReference { expected } => {
+                if let Some(signature) = expected {
+                    write!(f, "expected signature {signature:?} for ")?;
+                }
+
+                f.write_str("null function reference")
+            }
             Self::MemoryAllocation { memory, error } => {
                 write!(f, "{error} #{memory}")
             }
@@ -119,6 +130,7 @@ impl std::error::Error for TrapCode {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::MemoryBoundsCheck { source, .. } => Some(source),
+            Self::IndirectCallSignatureMismatch(error) => Some(error),
             Self::MemoryAllocation { error, .. } => Some(error),
             Self::MemoryLimitsCheck { limits, .. } => Some(limits),
             _ => None,
