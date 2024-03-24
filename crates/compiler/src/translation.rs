@@ -39,6 +39,7 @@ pub struct Translation<'a> {
     generated_macro_name: crate::rust::SafeIdent<'a>,
     data_segment_writer: DataSegmentWriter<'a>,
     wasm_features: &'a wasmparser::WasmFeatures,
+    emit_stack_overflow_checks: bool,
     buffer_pool: Option<&'a crate::buffer::Pool>,
     func_validator_allocation_pool: Option<&'a crate::FuncValidatorAllocationPool>,
 }
@@ -81,6 +82,7 @@ impl<'a> Translation<'a> {
             generated_macro_name: crate::rust::Ident::DEFAULT_MACRO_NAME.into(),
             data_segment_writer: &|_, _| Ok(None),
             wasm_features: &Self::DEFAULT_SUPPORTED_FEATURES,
+            emit_stack_overflow_checks: false,
             buffer_pool: None,
             func_validator_allocation_pool: None,
         }
@@ -140,6 +142,20 @@ impl<'a> Translation<'a> {
     /// For more information, see the documentation for [`DataSegmentWriter`].
     pub fn data_segment_writer(&mut self, writer: DataSegmentWriter<'a>) -> &mut Self {
         self.data_segment_writer = writer;
+        self
+    }
+
+    /// Allows enabling or disabling the emission of stack overflow detection code. Defaults to
+    /// `false`.
+    ///
+    /// Stack overflow detection code may be unreliable, and can only provide conservative
+    /// estimates for the remaining amount of space on the stack. It also introduces overhead for
+    /// each function call, potentially involving thread local variable accesses and other function
+    /// calls.
+    ///
+    /// See the documentation for `wasm2rs_rt::stack::check_for_overflow()` for more information.
+    pub fn emit_stack_overflow_checks(&mut self, enabled: bool) -> &mut Self {
+        self.emit_stack_overflow_checks = enabled;
         self
     }
 }
@@ -360,6 +376,7 @@ impl Translation<'_> {
         };
 
         // Generate Rust code for the functions
+        let emit_stack_overflow_checks = self.emit_stack_overflow_checks;
         let function_decls = functions
             .into_par_iter()
             .map(|func| {
@@ -376,6 +393,7 @@ impl Translation<'_> {
                     &func.body,
                     &types,
                     &import_counts,
+                    emit_stack_overflow_checks,
                 )
                 .with_context(|| format!("failed to translate function #{index}"))?;
 
@@ -551,6 +569,10 @@ impl std::fmt::Debug for Translation<'_> {
         f.debug_struct("Translation")
             .field("generated_macro_name", &self.generated_macro_name)
             .field("wasm_features", self.wasm_features)
+            .field(
+                "emit_stack_overflow_checks",
+                &self.emit_stack_overflow_checks,
+            )
             .finish_non_exhaustive()
     }
 }

@@ -51,14 +51,23 @@ fn write_local_variables(
     validator: &mut Validator,
     mut locals_reader: wasmparser::LocalsReader<'_>,
     param_count: u32,
-) -> crate::Result<()> {
+) -> crate::Result<u32> {
     let local_group_count = locals_reader.get_count();
     let mut local = LocalId(param_count);
+    let mut locals_stack_space = 0u32;
     for _ in 0..local_group_count {
         use wasmparser::ValType;
 
         let (count, ty) = locals_reader.read()?;
         validator.define_locals(locals_reader.original_position(), count, ty)?;
+
+        locals_stack_space = locals_stack_space.saturating_add(match ty {
+            ValType::I32 | ValType::F32 => 4,
+            ValType::I64 | ValType::F64 => (locals_stack_space % 8).saturating_add(8),
+            ValType::V128 => (locals_stack_space % 16).saturating_add(16),
+            // Assumed that references require at least 16 bytes, but are pointer aligned
+            ValType::Ref(_) => (locals_stack_space % 8).saturating_add(16),
+        });
 
         let default_value = match ty {
             ValType::I32 | ValType::I64 => "0",
@@ -73,7 +82,7 @@ fn write_local_variables(
         }
     }
 
-    Ok(())
+    Ok(locals_stack_space)
 }
 
 pub(in crate::translation) fn get_function_type(ty: &wasmparser::SubType) -> &wasmparser::FuncType {
@@ -477,6 +486,7 @@ pub(in crate::translation) fn write_definition(
     body: &wasmparser::FunctionBody,
     types: &wasmparser::types::Types, // TODO: Remove types parameter, see if validator by itself can be used
     import_counts: &crate::translation::ImportCounts,
+    emit_stack_overflow_checks: bool,
 ) -> crate::Result<()> {
     let func_type =
         wasmparser::WasmModuleResources::type_of_function(validator.resources(), validator.index())
@@ -495,6 +505,13 @@ pub(in crate::translation) fn write_definition(
 
     // TODO: Make a crate::buffer::IndentedWriter or something
 
+    if emit_stack_overflow_checks {
+        let _ = writeln!(out, 
+            "      embedder::rt::stack::check_for_overflow(Self::STACK_FRAME_SIZE_{}, &self.embedder)?;\n",
+            validator.index()
+        );
+    }
+
     write_local_variables(
         out,
         validator,
@@ -503,6 +520,7 @@ pub(in crate::translation) fn write_definition(
     )?;
 
     let mut operators = body.get_operators_reader()?;
+    let mut max_operand_stack_height = 0u32;
     while !operators.eof() {
         use wasmparser::Operator;
 
@@ -1387,11 +1405,26 @@ pub(in crate::translation) fn write_definition(
         }
 
         validator.op(op_offset, &op)?;
+        max_operand_stack_height = validator
+            .operand_stack_height()
+            .max(max_operand_stack_height);
     }
 
     // Implicit return generated when last `end` is handled.
     validator.finish(operators.original_position())?;
 
     out.write_str("    }\n");
+
+    if emit_stack_overflow_checks {
+        let _ = writeln!(
+            out,
+            "\n    const STACK_FRAME_SIZE_{}: usize = {};\n",
+            validator.index(),
+            // Assumed that some space in the stack will be reused, and that some stack operands
+            // will be stored in registers.
+            max_operand_stack_height.saturating_mul(2)
+        );
+    }
+
     Ok(())
 }
