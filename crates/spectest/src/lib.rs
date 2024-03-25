@@ -32,12 +32,7 @@ pub struct TestFile {
     pub output_dir: std::path::PathBuf,
 }
 
-fn translate_one(
-    file: &TestFile,
-    translation_options: &wasm2rs::Translation,
-    warnings: &mut Vec<String>,
-    pools: &pools::Pools,
-) -> Result<()> {
+fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Pools) -> Result<()> {
     let mut wast_file = std::fs::File::open(&file.input)
         .with_context(|| format!("could not open test file {:?}", file.input))?;
 
@@ -114,6 +109,17 @@ fn translate_one(
                 ),
                 WastExecute::Wat(_) => emit_warning(span, &"assertion of WAT is not supported"),
             },
+            WastDirective::AssertExhaustion {
+                span,
+                call,
+                message,
+            } => {
+                if !skip_module {
+                    test_cases
+                        .assert_exhaustion(call, message)
+                        .with_context(|| format!("in {}", wast_contents.location(span)))?;
+                }
+            }
             WastDirective::AssertMalformed { .. } | WastDirective::AssertInvalid { .. } => {
                 // We aren't testing wasmparser
                 skip_module = true;
@@ -142,7 +148,10 @@ fn translate_one(
                 )
             })?;
 
-            translation_options
+            wasm2rs::Translation::new()
+                .func_validator_allocation_pool(pools.func_validator_allocations)
+                .buffer_pool(pools.buffers)
+                .emit_stack_overflow_checks(module.requires_stack_overflow_detection)
                 .translate_from_buffer(&wasm, &mut module_file)
                 .with_context(|| {
                     format!(
@@ -200,25 +209,18 @@ pub fn translate(files: &[TestFile]) -> (Vec<String>, anyhow::Result<()>) {
 
     let string_pool = crate::pools::StringPool::default();
     let buffer_pool = wasm2rs::buffer::Pool::default();
-    let func_validator_alloctions_pool = wasm2rs::FuncValidatorAllocationPool::default();
+    let func_validator_allocations_pool = wasm2rs::FuncValidatorAllocationPool::default();
     let pools = pools::Pools {
         strings: &string_pool,
         buffers: &buffer_pool,
-    };
-
-    let translation = {
-        let mut options = wasm2rs::Translation::new();
-        options
-            .func_validator_allocation_pool(&func_validator_alloctions_pool)
-            .buffer_pool(&buffer_pool);
-        options
+        func_validator_allocations: &func_validator_allocations_pool,
     };
 
     let (warnings, result) = files
         .par_iter()
         .map(|file| {
             let mut local_warnings = Vec::new();
-            let result = translate_one(file, &translation, &mut local_warnings, &pools);
+            let result = translate_one(file, &mut local_warnings, &pools);
             (local_warnings, result)
         })
         .collect::<(Vec<Vec<String>>, Result<()>)>();

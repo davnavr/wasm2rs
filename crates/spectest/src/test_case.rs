@@ -110,6 +110,7 @@ enum TrapReason {
     IntegerDivideByZero,
     IntegerOverflow,
     OutOfBoundsMemoryAccess,
+    CallStackExhaustion,
 }
 
 impl std::str::FromStr for TrapReason {
@@ -133,6 +134,7 @@ impl std::fmt::Display for TrapReason {
             Self::IntegerDivideByZero => f.write_str("IntegerDivisionByZero"),
             Self::IntegerOverflow => f.write_str("IntegerOverflow"),
             Self::OutOfBoundsMemoryAccess => f.write_str("MemoryBoundsCheck { .. }"),
+            Self::CallStackExhaustion => f.write_str("CallStackExhausted"),
         }
     }
 }
@@ -172,6 +174,7 @@ pub struct Module<'wasm> {
     id: Option<&'wasm str>,
     span: wast::token::Span,
     statements: Vec<Statement<'wasm>>,
+    pub(crate) requires_stack_overflow_detection: bool,
 }
 
 pub enum ModuleIdent<'wasm> {

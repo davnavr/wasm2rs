@@ -37,7 +37,7 @@ where
         /// This arbitrary value mostly accounts for extra stuff that may be pushed onto the stack.
         ///
         /// This also ensures extra space is reserved for calling [`Trap::trap_stack_overflow()`].
-        const CALL_OVERHEAD: usize = 512;
+        const CALL_OVERHEAD: usize = 4096;
 
         match stacker::remaining_stack() {
             None => Ok(()),

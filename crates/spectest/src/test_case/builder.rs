@@ -79,6 +79,7 @@ impl<'a, 'wasm> Builder<'a, 'wasm> {
             id: id.map(wast::token::Id::name),
             span,
             statements: Vec::new(),
+            requires_stack_overflow_detection: false,
         });
 
         self.module_contents.push(wat);
@@ -104,6 +105,11 @@ impl<'a, 'wasm> Builder<'a, 'wasm> {
                 self.file_contents.location(invoke.span)
             )
         })?;
+
+        if let Some(ActionResult::Trap(crate::test_case::TrapReason::CallStackExhaustion)) = &result
+        {
+            module.requires_stack_overflow_detection = true;
+        }
 
         module.statements.push(crate::test_case::Statement {
             kind: StatementKind::InvokeFunction {
@@ -142,13 +148,31 @@ impl<'a, 'wasm> Builder<'a, 'wasm> {
         )
     }
 
-    /// Translatesan `(assert_return)` assertion that calls a function and expects a trap.
+    /// Translates an `(assert_return)` assertion that calls a function and expects a trap.
     pub fn assert_trap_invoke(
         &mut self,
         invoke: wast::WastInvoke<'wasm>,
         message: &'wasm str,
     ) -> crate::Result<()> {
         self.invoke_with_results(invoke, Some(ActionResult::Trap(message.parse()?)))
+    }
+
+    /// Translates an `(assert_exhaustion)` assertion that calls a function and expects a trap.
+    pub fn assert_exhaustion(
+        &mut self,
+        invoke: wast::WastInvoke<'wasm>,
+        message: &'wasm str,
+    ) -> crate::Result<()> {
+        if message != "call stack exhausted" {
+            anyhow::bail!("unknown exhaustion message {message:?}")
+        } else {
+            self.invoke_with_results(
+                invoke,
+                Some(ActionResult::Trap(
+                    crate::test_case::TrapReason::CallStackExhaustion,
+                )),
+            )
+        }
     }
 
     pub fn finish(self) -> (Vec<Module<'wasm>>, Vec<wast::QuoteWat<'wasm>>) {

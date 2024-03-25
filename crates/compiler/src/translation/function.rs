@@ -506,13 +506,13 @@ pub(in crate::translation) fn write_definition(
     // TODO: Make a crate::buffer::IndentedWriter or something
 
     if emit_stack_overflow_checks {
-        let _ = writeln!(out, 
+        let _ = writeln!(out,
             "      embedder::rt::stack::check_for_overflow(Self::STACK_FRAME_SIZE_{}, &self.embedder)?;\n",
             validator.index()
         );
     }
 
-    write_local_variables(
+    let local_stack_size = write_local_variables(
         out,
         validator,
         body.get_locals_reader()?,
@@ -520,7 +520,7 @@ pub(in crate::translation) fn write_definition(
     )?;
 
     let mut operators = body.get_operators_reader()?;
-    let mut max_operand_stack_height = 0u32;
+    let mut max_operand_stack_size = 0u32;
     while !operators.eof() {
         use wasmparser::Operator;
 
@@ -1405,9 +1405,7 @@ pub(in crate::translation) fn write_definition(
         }
 
         validator.op(op_offset, &op)?;
-        max_operand_stack_height = validator
-            .operand_stack_height()
-            .max(max_operand_stack_height);
+        max_operand_stack_size = validator.operand_stack_height().max(max_operand_stack_size);
     }
 
     // Implicit return generated when last `end` is handled.
@@ -1422,7 +1420,7 @@ pub(in crate::translation) fn write_definition(
             validator.index(),
             // Assumed that some space in the stack will be reused, and that some stack operands
             // will be stored in registers.
-            max_operand_stack_height.saturating_mul(2)
+            local_stack_size.saturating_add(max_operand_stack_size.saturating_mul(4))
         );
     }
 
