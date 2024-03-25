@@ -8,7 +8,8 @@ fn write_result_check(
     location: &crate::location::Location<'_>,
 ) {
     use crate::test_case::ResultValue;
-    out.write_str("    assert!(");
+
+    out.write_str("    assert!(\n      ");
     match result {
         ResultValue::I32(i) => {
             let _ = write!(out, "{ACTUAL_VARIABLE} == {i}");
@@ -22,9 +23,23 @@ fn write_result_check(
         ResultValue::F64Bits(bits) => {
             let _ = write!(out, "f64::to_bits({ACTUAL_VARIABLE}) == {bits:#018X}u64");
         }
+        // See `tests/spec/src/nan.rs`
+        ResultValue::F32CanonicalNan => {
+            let _ = write!(out, "crate::nan::is_canonical_f32({ACTUAL_VARIABLE})",);
+        }
+        ResultValue::F32ArithmeticNan => {
+            let _ = write!(out, "crate::nan::is_arithmetic_f32({ACTUAL_VARIABLE})",);
+        }
+        ResultValue::F64CanonicalNan => {
+            let _ = write!(out, "crate::nan::is_canonical_f64({ACTUAL_VARIABLE})",);
+        }
+        ResultValue::F64ArithmeticNan => {
+            let _ = write!(out, "crate::nan::is_arithmetic_f64({ACTUAL_VARIABLE})",);
+        }
     }
 
-    out.write_str(", \"expected ");
+    out.write_str(",\n      \"expected ");
+
     match result {
         ResultValue::I32(i) => {
             let _ = write!(out, "{i} ({i:#010X})");
@@ -33,14 +48,59 @@ fn write_result_check(
             let _ = write!(out, "{i} ({i:#018X})");
         }
         ResultValue::F32Bits(bits) => {
-            let _ = write!(out, "{} ({bits:#010X})", f32::from_bits(*bits));
+            let _ = write!(out, "{:e} ({bits:#010X})", f32::from_bits(*bits));
         }
         ResultValue::F64Bits(bits) => {
-            let _ = write!(out, "{} ({bits:#018X})", f64::from_bits(*bits));
+            let _ = write!(out, "{:e} ({bits:#018X})", f64::from_bits(*bits));
+        }
+        ResultValue::F32CanonicalNan | ResultValue::F64CanonicalNan => {
+            out.write_str("canonical NaN ({:#010X} or {:#010X})");
+        }
+        ResultValue::F32ArithmeticNan | ResultValue::F64ArithmeticNan => {
+            out.write_str("arithmetic NaN");
         }
     }
 
-    let _ = writeln!(out, " but got {ACTUAL_VARIABLE} at {location}\n\");");
+    out.write_str(" but got ");
+
+    match result {
+        ResultValue::I32(_) => {
+            let _ = write!(out, "{{{ACTUAL_VARIABLE}}} ({{{ACTUAL_VARIABLE}:#010X}})");
+        }
+        ResultValue::I64(_) => {
+            let _ = write!(out, "{{{ACTUAL_VARIABLE}}} ({{{ACTUAL_VARIABLE}:#018X}})");
+        }
+        ResultValue::F32Bits(_) | ResultValue::F32CanonicalNan | ResultValue::F32ArithmeticNan => {
+            let _ = write!(out, "{{{ACTUAL_VARIABLE}:e}} ({{:#010X}})");
+        }
+        ResultValue::F64Bits(_) | ResultValue::F64CanonicalNan | ResultValue::F64ArithmeticNan => {
+            let _ = write!(out, "{{{ACTUAL_VARIABLE}:e}} ({{:#018X}})");
+        }
+    }
+
+    let _ = write!(out, " at {location}\",\n");
+
+    match result {
+        ResultValue::I32(_) | ResultValue::I64(_) => (),
+        ResultValue::F32Bits(_)
+        | ResultValue::F32ArithmeticNan
+        | ResultValue::F64Bits(_)
+        | ResultValue::F64ArithmeticNan => {
+            let _ = write!(out, "      {ACTUAL_VARIABLE}.to_bits(),\n");
+        }
+        ResultValue::F32CanonicalNan => {
+            let _ = write!(out, "      crate::nan::CANONICAL_F32,\n");
+            let _ = write!(out, "      crate::nan::NEG_CANONICAL_F32,\n");
+            let _ = write!(out, "      {ACTUAL_VARIABLE}.to_bits(),\n");
+        }
+        ResultValue::F64CanonicalNan => {
+            let _ = write!(out, "      crate::nan::CANONICAL_F64,\n");
+            let _ = write!(out, "      crate::nan::NEG_CANONICAL_F64,\n");
+            let _ = write!(out, "      {ACTUAL_VARIABLE}.to_bits(),\n");
+        }
+    }
+
+    out.write_str("    );\n");
 }
 
 pub fn write_unit_tests<'wasm>(

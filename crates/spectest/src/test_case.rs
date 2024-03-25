@@ -80,7 +80,11 @@ enum ResultValue {
     I32(i32),
     I64(i64),
     F32Bits(u32),
+    F32CanonicalNan,
+    F32ArithmeticNan,
     F64Bits(u64),
+    F64CanonicalNan,
+    F64ArithmeticNan,
 }
 
 impl ResultValue {
@@ -104,6 +108,11 @@ impl TryFrom<wast::WastRet<'_>> for ResultValue {
                 WastRetCore::I64(i) => Self::I64(i),
                 WastRetCore::F32(NanPattern::Value(f)) => Self::F32Bits(f.bits),
                 WastRetCore::F64(NanPattern::Value(f)) => Self::F64Bits(f.bits),
+                // See https://webassembly.github.io/spec/core/syntax/values.html#floating-point
+                WastRetCore::F32(NanPattern::CanonicalNan) => Self::F32CanonicalNan,
+                WastRetCore::F32(NanPattern::ArithmeticNan) => Self::F32ArithmeticNan,
+                WastRetCore::F64(NanPattern::CanonicalNan) => Self::F64CanonicalNan,
+                WastRetCore::F64(NanPattern::ArithmeticNan) => Self::F64ArithmeticNan,
                 bad => anyhow::bail!("result {bad:?} is currently unsupported"),
             },
             WastRet::Component(value) => anyhow::bail!("unsupported result {value:?}"),

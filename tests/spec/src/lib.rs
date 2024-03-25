@@ -4,4 +4,6 @@
 
 #![doc(hidden)]
 
+pub mod nan;
+
 include!(concat!(env!("OUT_DIR"), "/all.rs"));
