@@ -1461,6 +1461,51 @@ pub(in crate::translation) fn write_definition(
                     "let {popped:#} = embedder::rt::math::i64_trunc_f64_u({popped}, &self.embedder)?;"
                 );
             }
+            // - Rust uses "roundTiesToEven".
+            // - WebAssembly specifies round-to-nearest ties-to-even.
+            //
+            // Are they the same?
+            //
+            // Rust: https://doc.rust-lang.org/reference/expressions/operator-expr.html#numeric-cast
+            // WASM: https://webassembly.github.io/spec/core/exec/numerics.html#rounding
+            Operator::F32ConvertI32S | Operator::F32ConvertI64S => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = {popped} as f32;");
+            }
+            Operator::F32ConvertI32U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = ({popped} as u32) as f32;");
+            }
+            Operator::F32ConvertI64U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = ({popped} as u64) as f32;");
+            }
+            Operator::F32DemoteF64 => {
+                // TODO: Does Rust's conversion of `f64` to `f32` preserve the "canonical NaN"
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "// f32.demote_f64\nlet {popped:#} = {popped} as f32;");
+            }
+            Operator::F64ConvertI32S | Operator::F64ConvertI64S => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = {popped} as f64;");
+            }
+            Operator::F64ConvertI32U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = ({popped} as u32) as f64;");
+            }
+            Operator::F64ConvertI64U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = ({popped} as u64) as f64;");
+            }
+            // TODO: Does Rust's conversion of `f32` to `f64` preserve the "canonical NaN"
+            Operator::F64PromoteF32 => {
+                // See https://webassembly.github.io/spec/core/exec/numerics.html#op-promote
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "// f64.promote_f32\nlet {popped:#} = {popped} as f64;"
+                );
+            }
             Operator::I32ReinterpretF32 => {
                 let popped = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {popped:#} = f32::to_bits({popped}) as i32;");
