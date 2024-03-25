@@ -7,11 +7,12 @@ repository.workspace = true
 
 [features]
 default = ["std", "stack-overflow-detection"]
-std = ["alloc"]
+std = ["alloc", "num-traits/std"]
 alloc = []
 stack-overflow-detection = ["std", "dep:stacker"]
 
 [dependencies]
+num-traits = { version = "0.2.18", default-features = false }
 stacker = { version = "0.1.15", optional = true }
 
 [[test]]

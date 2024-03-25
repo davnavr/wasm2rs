@@ -43,6 +43,8 @@ pub enum TrapCode {
     ///
     /// [**`unreachable`**]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-control
     Unreachable,
+    /// An attempt to convert a float value to an integer failed.
+    ConversionToInteger,
     /// A memory access was out of bounds.
     MemoryBoundsCheck {
         /// The originating invalid memory access.
@@ -104,6 +106,7 @@ impl core::fmt::Display for TrapCode {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Unreachable => f.write_str("executed unreachable instruction"),
+            Self::ConversionToInteger => f.write_str("invalid conversion to integer"),
             Self::MemoryBoundsCheck {
                 source,
                 memory,

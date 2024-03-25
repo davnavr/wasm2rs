@@ -2,100 +2,78 @@
 
 #[cold]
 #[inline(never)]
-fn integer_division_by_zero<TR>(trap: &TR) -> TR::Repr
+fn integer_division_by_zero<E>(trap: &E) -> E::Repr
 where
-    TR: crate::trap::Trap + ?Sized,
+    E: crate::trap::Trap + ?Sized,
 {
     trap.trap(crate::trap::TrapCode::IntegerDivisionByZero)
 }
 
 #[cold]
 #[inline(never)]
-fn integer_overflow<TR>(trap: &TR) -> TR::Repr
+fn integer_overflow<E>(trap: &E) -> E::Repr
 where
-    TR: crate::trap::Trap + ?Sized,
+    E: crate::trap::Trap + ?Sized,
 {
     trap.trap(crate::trap::TrapCode::IntegerOverflow)
 }
 
-macro_rules! int_ops {
+#[cold]
+#[inline(never)]
+fn conversion_to_integer<E>(trap: &E) -> E::Repr
+where
+    E: crate::trap::Trap + ?Sized,
+{
+    trap.trap(crate::trap::TrapCode::ConversionToInteger)
+}
+
+macro_rules! int_div {
     {$(
-        $signed:ty | $unsigned:ty {
-            $div_s:ident = $div_s_name:literal;
-            $div_u:ident = $div_u_name:literal;
-            $rem_s:ident = $rem_s_name:literal;
-            $rem_u:ident = $rem_u_name:literal;
-        }
+        $signed:ty => $div:ident = $div_name:literal $(as $unsigned:ty)?;
     )*} => {$(
-        #[doc = "Implementation for the [`"]
-        #[doc = $div_s_name]
-        #[doc = "`] instruction.\n\nCalculates `num / denom`, trapping on division by zero.\n\n"]
-        #[doc = "[`"]
-        #[doc = $div_s_name]
-        #[doc = "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"]
+        #[doc = concat!(
+            "Implementation for the [`", $div_name, "`] instruction.\n\nCalculates `num / denom`,",
+            " trapping on division by zero.\n\n",
+            "[`", $div_name, "`]: ",
+            "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
+        )]
         #[inline(always)]
-        #[doc(alias = $div_s_name)]
-        pub fn $div_s<TR>(num: $signed, denom: $signed, trap: &TR) -> Result<$signed, TR::Repr>
+        pub fn $div<E>(num: $signed, denom: $signed, trap: &E) -> Result<$signed, E::Repr>
         where
-            TR: crate::trap::Trap + ?Sized,
+            E: crate::trap::Trap + ?Sized,
         {
-            match <$signed>::checked_div(num, denom) {
-                Some(quot) => Ok(quot),
+            match (num $(as $unsigned)?).checked_div(denom $(as $unsigned)?) {
+                Some(quot) => Ok(quot as $signed),
                 _ if denom == 0 => Err(integer_division_by_zero(trap)),
                 _ => Err(integer_overflow(trap)),
             }
         }
+    )*};
+}
 
-        #[doc = "Implementation for the [`"]
-        #[doc = $div_u_name]
-        #[doc = "`] instruction.\n\nInterprets parameters as an unsigned integer, then calculates"]
-        #[doc = " `num / denom`, trapping on division by zero.\n\n [`"]
-        #[doc = $div_u_name]
-        #[doc = "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"]
-        #[inline(always)]
-        #[doc(alias = $div_u_name)]
-        pub fn $div_u<TR>(num: $signed, denom: $signed, trap: &TR) -> Result<$signed, TR::Repr>
-        where
-            TR: crate::trap::Trap + ?Sized,
-        {
-            if let Some(quot) = <$unsigned>::checked_div(num as $unsigned, denom as $unsigned) {
-                Ok(quot as $signed)
-            } else {
-                Err(integer_division_by_zero(trap))
-            }
-        }
+int_div! {
+    i32 => i32_div_s = "i32.div_s";
+    i32 => i32_div_u = "i32.div_u" as u32;
+    i64 => i64_div_s = "i64.div_s";
+    i64 => i64_div_u = "i64.div_u" as u64;
+}
 
-        #[doc = "Implementation for the [`"]
-        #[doc = $rem_s_name]
-        #[doc = "`] instruction.\n\nCalculates `num % denom`, trapping on division by zero.\n\n [`"]
-        #[doc = $rem_s_name]
-        #[doc = "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"]
+macro_rules! int_rem {
+    {$(
+        $signed:ty => $rem:ident = $rem_name:literal $(as $unsigned:ty)?;
+    )*} => {$(
+        #[doc = concat!(
+            "Implementation for the [`", $rem_name, "`] instruction.\n\nCalculates `num % denom`,",
+            " trapping on division by zero.\n\n",
+            "[`", $rem_name, "`]: ",
+            "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
+        )]
         #[inline(always)]
-        #[doc(alias = $rem_u_name)]
-        pub fn $rem_s<TR>(num: $signed, denom: $signed, trap: &TR) -> Result<$signed, TR::Repr>
+        pub fn $rem<E>(num: $signed, denom: $signed, trap: &E) -> Result<$signed, E::Repr>
         where
-            TR: crate::trap::Trap + ?Sized,
+            E: crate::trap::Trap + ?Sized,
         {
-            if let Some(rem) = <$signed>::checked_rem(num, denom) {
-                Ok(rem)
-            } else {
-                Err(integer_division_by_zero(trap))
-            }
-        }
-
-        #[doc = "Implementation for the [`"]
-        #[doc = $rem_u_name]
-        #[doc = "`] instruction.\n\nInterprets parameters as an unsigned integer, then calculates"]
-        #[doc = " `num % denom`, trapping on division by zero.\n\n [`"]
-        #[doc = $rem_u_name]
-        #[doc = "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"]
-        #[inline(always)]
-        #[doc(alias = $rem_u_name)]
-        pub fn $rem_u<TR>(num: $signed, denom: $signed, trap: &TR) -> Result<$signed, TR::Repr>
-        where
-            TR: crate::trap::Trap + ?Sized,
-        {
-            if let Some(rem) = <$unsigned>::checked_rem(num as $unsigned, denom as $unsigned) {
+            if let Some(rem) = (num $(as $unsigned)?).checked_rem(denom $(as $unsigned)?) {
                 Ok(rem as $signed)
             } else {
                 Err(integer_division_by_zero(trap))
@@ -104,18 +82,48 @@ macro_rules! int_ops {
     )*};
 }
 
-int_ops! {
-    i32 | u32 {
-        i32_div_s = "i32.div_s";
-        i32_div_u = "i32.div_u";
-        i32_rem_s = "i32.rem_s";
-        i32_rem_u = "i32.rem_u";
-    }
+int_rem! {
+    i32 => i32_rem_s = "i32.rem_s";
+    i32 => i32_rem_u = "i32.rem_u" as u32;
+    i64 => i64_rem_s = "i64.rem_s";
+    i64 => i64_rem_u = "i64.rem_u" as u64;
+}
 
-    i64 | u64 {
-        i64_div_s = "i64.div_s";
-        i64_div_u = "i64.div_u";
-        i64_rem_s = "i64.rem_s";
-        i64_rem_u = "i64.rem_u";
-    }
+macro_rules! iXX_trunc_fXX {
+    {$(
+        $float:ty => $trunc:ident = $trunc_name:literal -> $int:ty;
+    )*} => {$(
+        #[doc = concat!(
+            "Implementation for the [`", $trunc_name, "`] instruction.\n\n",
+            "Casts a [`", stringify!($float), "`] value to an [`", stringify!($int), "`], ",
+            "[trapping] on [`", stringify!($float), "::NAN`], [`", stringify!($float),
+            "::INFINITY`], [`",  stringify!($float), "::NEG_INFINITY`], and if the [`",
+            stringify!($float), "`] value is too large to fit into an [`", stringify!($int),
+            "`].\n\n",
+            "[trapping]: crate::trap::TrapCode::ConversionToInteger\n",
+            "[`", $trunc_name,
+            "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
+        )]
+        #[inline(always)]
+        pub fn $trunc<E>(value: $float, trap: &E) -> Result<$int, E::Repr>
+        where
+            E: crate::trap::Trap + ?Sized,
+        {
+            match <$int as num_traits::cast::NumCast>::from(value) {
+                Some(n) => Ok(n),
+                None => Err(conversion_to_integer(trap)),
+            }
+        }
+    )*};
+}
+
+iXX_trunc_fXX! {
+    f32 => i32_trunc_f32_s = "i32.trunc_f32_s" -> i32;
+    f64 => i32_trunc_f64_s = "i32.trunc_f64_s" -> i32;
+    f32 => i32_trunc_f32_u = "i32.trunc_f32_u" -> u32;
+    f64 => i32_trunc_f64_u = "i32.trunc_f64_u" -> u32;
+    f32 => i64_trunc_f32_s = "i64.trunc_f32_s" -> i64;
+    f64 => i64_trunc_f64_s = "i64.trunc_f64_s" -> i64;
+    f32 => i64_trunc_f32_u = "i64.trunc_f32_u" -> u64;
+    f64 => i64_trunc_f64_u = "i64.trunc_f64_u" -> u64;
 }
