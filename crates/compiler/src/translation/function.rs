@@ -1463,19 +1463,36 @@ pub(in crate::translation) fn write_definition(
             }
             Operator::I32ReinterpretF32 => {
                 let popped = PoppedValue::pop(validator, 0);
-                let _ = writeln!(out, "let {popped:#} = f32::to_bits({popped}) as i32;",);
+                let _ = writeln!(out, "let {popped:#} = f32::to_bits({popped}) as i32;");
             }
             Operator::I64ReinterpretF64 => {
                 let popped = PoppedValue::pop(validator, 0);
-                let _ = writeln!(out, "let {popped:#} = f64::to_bits({popped}) as i64;",);
+                let _ = writeln!(out, "let {popped:#} = f64::to_bits({popped}) as i64;");
             }
             Operator::F32ReinterpretI32 => {
                 let popped = PoppedValue::pop(validator, 0);
-                let _ = writeln!(out, "let {popped:#} = f32::from_bits({popped} as u32);",);
+                let _ = writeln!(out, "let {popped:#} = f32::from_bits({popped} as u32);");
             }
             Operator::F64ReinterpretI64 => {
                 let popped = PoppedValue::pop(validator, 0);
-                let _ = writeln!(out, "let {popped:#} = f64::from_bits({popped} as u64);",);
+                let _ = writeln!(out, "let {popped:#} = f64::from_bits({popped} as u64);");
+            }
+            // Float-to-integer saturation operations translate exactly to Rust casts.
+            Operator::I32TruncSatF32S | Operator::I32TruncSatF64S => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = {popped} as i32;");
+            }
+            Operator::I32TruncSatF32U | Operator::I32TruncSatF64U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = ({popped} as u32) as i32;");
+            }
+            Operator::I64TruncSatF32S | Operator::I64TruncSatF64S => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = {popped} as i64;");
+            }
+            Operator::I64TruncSatF32U | Operator::I64TruncSatF64U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = ({popped} as u64) as i64;");
             }
             _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
         }
