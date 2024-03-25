@@ -1287,10 +1287,7 @@ pub(in crate::translation) fn write_definition(
             Operator::I32Or | Operator::I64Or => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
-                let _ = writeln!(
-                    out,
-                    "let {c_1:#} = {c_1} | {c_2};",
-                );
+                let _ = writeln!(out, "let {c_1:#} = {c_1} | {c_2};",);
             }
             Operator::I32Shl => {
                 let c_2 = PoppedValue::pop(validator, 0);
@@ -1400,6 +1397,34 @@ pub(in crate::translation) fn write_definition(
                 let popped = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {popped:#} = {popped} as i32;");
             }
+            Operator::I32TruncF32S => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {popped:#} = embedder::rt::math::i32_trunc_f32_s({popped}, &self.embedder)?;"
+                );
+            }
+            Operator::I32TruncF32U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {popped:#} = embedder::rt::math::i32_trunc_f32_u({popped}, &self.embedder)?;"
+                );
+            }
+            Operator::I32TruncF64S => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {popped:#} = embedder::rt::math::i32_trunc_f64_s({popped}, &self.embedder)?;"
+                );
+            }
+            Operator::I32TruncF64U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {popped:#} = embedder::rt::math::i32_trunc_f64_u({popped}, &self.embedder)?;"
+                );
+            }
             Operator::I64ExtendI32S => {
                 let popped = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {popped:#} = ({popped} as i32) as i64;");
@@ -1407,6 +1432,34 @@ pub(in crate::translation) fn write_definition(
             Operator::I64ExtendI32U => {
                 let popped = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {popped:#} = (({popped} as u32) as u64) as i64;",);
+            }
+            Operator::I64TruncF32S => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {popped:#} = embedder::rt::math::i64_trunc_f32_s({popped}, &self.embedder)?;"
+                );
+            }
+            Operator::I64TruncF32U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {popped:#} = embedder::rt::math::i64_trunc_f32_u({popped}, &self.embedder)?;"
+                );
+            }
+            Operator::I64TruncF64S => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {popped:#} = embedder::rt::math::i64_trunc_f64_s({popped}, &self.embedder)?;"
+                );
+            }
+            Operator::I64TruncF64U => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(
+                    out,
+                    "let {popped:#} = embedder::rt::math::i64_trunc_f64_u({popped}, &self.embedder)?;"
+                );
             }
             Operator::I32ReinterpretF32 => {
                 let popped = PoppedValue::pop(validator, 0);
