@@ -114,6 +114,7 @@ impl TryFrom<wast::WastRet<'_>> for ResultValue {
 enum TrapReason {
     IntegerDivideByZero,
     IntegerOverflow,
+    InvalidConversionToInteger,
     OutOfBoundsMemoryAccess,
     CallStackExhaustion,
 }
@@ -125,6 +126,7 @@ impl std::str::FromStr for TrapReason {
         Ok(match message {
             "integer divide by zero" => Self::IntegerDivideByZero,
             "integer overflow" => Self::IntegerOverflow,
+            "invalid conversion to integer" => Self::InvalidConversionToInteger,
             "out of bounds memory access" => Self::OutOfBoundsMemoryAccess,
             _ => anyhow::bail!("unrecognized trap message {message:?}"),
         })
@@ -138,6 +140,7 @@ impl std::fmt::Display for TrapReason {
         match self {
             Self::IntegerDivideByZero => f.write_str("IntegerDivisionByZero"),
             Self::IntegerOverflow => f.write_str("IntegerOverflow"),
+            Self::InvalidConversionToInteger => f.write_str("ConversionToInteger"),
             Self::OutOfBoundsMemoryAccess => f.write_str("MemoryBoundsCheck { .. }"),
             Self::CallStackExhaustion => f.write_str("CallStackExhausted"),
         }
