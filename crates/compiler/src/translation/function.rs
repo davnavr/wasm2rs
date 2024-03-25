@@ -448,7 +448,6 @@ fn write_branch(
                 .with_context(|| "block has too many parameters")?;
 
             for i in 0..block_params {
-                dbg!(block_params, operands_start, i);
                 let _ = writeln!(
                     out,
                     "_b_{}{} = {};",

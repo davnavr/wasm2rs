@@ -10,7 +10,8 @@ pub use writer::write_unit_tests;
 enum ArgumentValue {
     I32(i32),
     I64(i64),
-    //F32(f32),
+    F32(u32),
+    F64(u64),
 }
 
 /// Renders the argument as a Rust expression.
@@ -19,6 +20,8 @@ impl std::fmt::Display for ArgumentValue {
         match self {
             Self::I32(i) => write!(f, "{i}i32"),
             Self::I64(i) => write!(f, "{i}i64"),
+            Self::F32(z) => write!(f, "f32::from_bits({z:#010X}u32)"),
+            Self::F64(z) => write!(f, "f64::from_bits({z:#018X}u64)"),
         }
     }
 }
@@ -33,6 +36,8 @@ impl TryFrom<wast::WastArg<'_>> for ArgumentValue {
             WastArg::Core(arg) => match arg {
                 WastArgCore::I32(i) => Self::I32(i),
                 WastArgCore::I64(i) => Self::I64(i),
+                WastArgCore::F32(f) => Self::F32(f.bits),
+                WastArgCore::F64(f) => Self::F64(f.bits),
                 bad => anyhow::bail!("argument {bad:?} is currently unsupported"),
             },
             WastArg::Component(value) => anyhow::bail!("unsupported argument {value:?}"),

@@ -30,7 +30,7 @@ fn write_result_check(
             let _ = write!(out, "{i} ({i:#010X})");
         }
         ResultValue::I64(i) => {
-            let _ = write!(out, "{i} ({i:018X})");
+            let _ = write!(out, "{i} ({i:#018X})");
         }
         ResultValue::F32Bits(bits) => {
             let _ = write!(out, "{} ({bits:#010X})", f32::from_bits(*bits));
