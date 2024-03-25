@@ -1284,6 +1284,14 @@ pub(in crate::translation) fn write_definition(
                     "let {c_1:#} = {MATH}::i32_rem_u({c_1}, {c_2}, &self.embedder)?;",
                 );
             }
+            Operator::I32Or | Operator::I64Or => {
+                let c_2 = PoppedValue::pop(validator, 0);
+                let c_1 = PoppedValue::pop(validator, 1);
+                let _ = writeln!(
+                    out,
+                    "let {c_1:#} = {c_1} | {c_2};",
+                );
+            }
             Operator::I32Shl => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
@@ -1399,6 +1407,22 @@ pub(in crate::translation) fn write_definition(
             Operator::I64ExtendI32U => {
                 let popped = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {popped:#} = (({popped} as u32) as u64) as i64;",);
+            }
+            Operator::I32ReinterpretF32 => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = f32::to_bits({popped}) as i32;",);
+            }
+            Operator::I64ReinterpretF64 => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = f64::to_bits({popped}) as i64;",);
+            }
+            Operator::F32ReinterpretI32 => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = f32::from_bits({popped} as u32);",);
+            }
+            Operator::F64ReinterpretI64 => {
+                let popped = PoppedValue::pop(validator, 0);
+                let _ = writeln!(out, "let {popped:#} = f64::from_bits({popped} as u64);",);
             }
             _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
         }
