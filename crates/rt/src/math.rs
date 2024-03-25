@@ -34,6 +34,11 @@ macro_rules! int_div {
         #[doc = concat!(
             "Implementation for the [`", $div_name, "`] instruction.\n\nCalculates `num / denom`,",
             " trapping on division by zero.\n\n",
+            $(
+                "The `num` and `denom` are interpreted as an [`", stringify!($unsigned), "`] ",
+                "value, and the resulting [`", stringify!($unsigned), "`] quotient is ",
+                "reinterpreted as an [`", stringify!($signed), "`] value.\n\n",
+            )?
             "[`", $div_name, "`]: ",
             "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
         )]
@@ -65,6 +70,11 @@ macro_rules! int_rem {
         #[doc = concat!(
             "Implementation for the [`", $rem_name, "`] instruction.\n\nCalculates `num % denom`,",
             " trapping on division by zero.\n\n",
+            $(
+                "The `num` and `denom` are interpreted as an [`", stringify!($unsigned), "`] ",
+                "value, and the resulting [`", stringify!($unsigned), "`] remainder is ",
+                "reinterpreted as an [`", stringify!($signed), "`] value.\n\n",
+            )?
             "[`", $rem_name, "`]: ",
             "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
         )]
@@ -89,9 +99,18 @@ int_rem! {
     i64 => i64_rem_u = "i64.rem_u" as u64;
 }
 
+macro_rules! prefer_right {
+    ($left: ty | $right: ty) => {
+        $right
+    };
+    ($left: ty) => {
+        $left
+    };
+}
+
 macro_rules! iXX_trunc_fXX {
     {$(
-        $float:ty => $trunc:ident = $trunc_name:literal -> $int:ty;
+        $float:ty => $trunc:ident = $trunc_name:literal -> $int:ty $(as $reinterpret:ty)?;
     )*} => {$(
         #[doc = concat!(
             "Implementation for the [`", $trunc_name, "`] instruction.\n\n",
@@ -100,17 +119,21 @@ macro_rules! iXX_trunc_fXX {
             "::INFINITY`], [`",  stringify!($float), "::NEG_INFINITY`], and if the [`",
             stringify!($float), "`] value is too large to fit into an [`", stringify!($int),
             "`].\n\n",
+            $(
+                "The result is then reinterpreted as an [`", stringify!($reinterpret), "`] value.",
+                "\n\n",
+            )?
             "[trapping]: crate::trap::TrapCode::ConversionToInteger\n",
             "[`", $trunc_name,
             "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
         )]
         #[inline(always)]
-        pub fn $trunc<E>(value: $float, trap: &E) -> Result<$int, E::Repr>
+        pub fn $trunc<E>(value: $float, trap: &E) -> Result<prefer_right!($int $(| $reinterpret)?), E::Repr>
         where
             E: crate::trap::Trap + ?Sized,
         {
             match <$int as num_traits::cast::NumCast>::from(value) {
-                Some(n) => Ok(n),
+                Some(n) => Ok(n $(as $reinterpret)?),
                 None => Err(conversion_to_integer(trap)),
             }
         }
@@ -120,10 +143,10 @@ macro_rules! iXX_trunc_fXX {
 iXX_trunc_fXX! {
     f32 => i32_trunc_f32_s = "i32.trunc_f32_s" -> i32;
     f64 => i32_trunc_f64_s = "i32.trunc_f64_s" -> i32;
-    f32 => i32_trunc_f32_u = "i32.trunc_f32_u" -> u32;
-    f64 => i32_trunc_f64_u = "i32.trunc_f64_u" -> u32;
+    f32 => i32_trunc_f32_u = "i32.trunc_f32_u" -> u32 as i32;
+    f64 => i32_trunc_f64_u = "i32.trunc_f64_u" -> u32 as i32;
     f32 => i64_trunc_f32_s = "i64.trunc_f32_s" -> i64;
     f64 => i64_trunc_f64_s = "i64.trunc_f64_s" -> i64;
-    f32 => i64_trunc_f32_u = "i64.trunc_f32_u" -> u64;
-    f64 => i64_trunc_f64_u = "i64.trunc_f64_u" -> u64;
+    f32 => i64_trunc_f32_u = "i64.trunc_f32_u" -> u64 as i64;
+    f64 => i64_trunc_f64_u = "i64.trunc_f64_u" -> u64 as i64;
 }
