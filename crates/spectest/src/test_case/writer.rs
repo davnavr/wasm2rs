@@ -153,7 +153,8 @@ pub fn write_unit_tests<'wasm>(
         let _ = writeln!(out, "{module_location}\");");
 
         for statement in module.statements.iter() {
-            let _ = writeln!(out, "    // {}", wast.location(statement.span));
+            let statement_location = wast.location(statement.span);
+            let _ = writeln!(out, "    // {}", statement_location);
 
             match &statement.kind {
                 crate::test_case::StatementKind::InvokeFunction {
@@ -176,17 +177,33 @@ pub fn write_unit_tests<'wasm>(
                             let _ = writeln!(
                                 out,
                                 "    assert!(\n      \
-                                matches!({RESULT_VARIABLE}, Err(ref e) if matches!(e.code(), {trap})),\n      \
-                                \"expected trap {trap:?} but got {{:?}} at {module_location}\",\n      \
-                                {RESULT_VARIABLE}\n    );",
+                                    matches!({RESULT_VARIABLE}, Err(ref e) if matches!(e.code(), {trap})),\n      \
+                                    \"expected trap {trap:?} but got {{:?}} at {statement_location}\",\n      \
+                                    {RESULT_VARIABLE}\n    \
+                                );",
                             );
                         }
                         Some(ActionResult::Values(values)) => {
                             out.write_str("    ");
                             if values.is_empty() {
-                                let _ = writeln!(out, "assert_eq!({RESULT_VARIABLE}, Ok(()), \"unexpected trap {{:?}} at {module_location}\", {RESULT_VARIABLE});");
+                                let _ = writeln!(
+                                    out,
+                                    "assert_eq!(\n      \
+                                        {RESULT_VARIABLE},\n      \
+                                        Ok(()),\n      \
+                                        \"unexpected trap {{:?}} at {statement_location}\",\n      \
+                                        {RESULT_VARIABLE}\n    \
+                                    );"
+                                );
                             } else {
-                                let _ = writeln!(out, "assert!({RESULT_VARIABLE}.is_ok(), \"unexpected trap {{:?}} at {module_location}\", {RESULT_VARIABLE});");
+                                let _ = writeln!(
+                                    out,
+                                    "assert!(\n      \
+                                        {RESULT_VARIABLE}.is_ok(),\n      \
+                                        \"unexpected trap {{:?}} at {statement_location}\",\n      \
+                                        {RESULT_VARIABLE}\n    \
+                                    );"
+                                );
 
                                 out.write_str("    let ");
 
