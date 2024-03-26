@@ -179,3 +179,12 @@ impl<T: Trap + ?Sized> Trap for &T {
         <T>::trap(self, code)
     }
 }
+
+/// Implements the [`unreachable`] instruction.
+///
+/// [`unreachable`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-control
+#[inline(never)]
+#[cold]
+pub fn unreachable<E: core::fmt::Debug>(trap: &dyn Trap<Repr = E>) -> E {
+    trap.trap(TrapCode::Unreachable)
+}

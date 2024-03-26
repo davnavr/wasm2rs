@@ -583,7 +583,6 @@ pub(in crate::translation) fn write_definition(
             continue;
         }
 
-        const STATE: &str = "embedder::State";
         const MEMORY: &str = paths::MEMORY;
         const MATH: &str = "embedder::rt::math";
 
@@ -596,7 +595,7 @@ pub(in crate::translation) fn write_definition(
 
                 let _ = write!(
                     out,
-                    "::core::result::Result::Err(<{STATE} as {TRAP_TRAIT}>::trap(&self.embedder, {TRAP_CODE}::Unreachable))"
+                    "::core::result::Result::Err(embedder::rt::trap::unreachable(&self.embedder))"
                 );
 
                 if in_block {
