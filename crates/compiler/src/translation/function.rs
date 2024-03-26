@@ -1268,7 +1268,7 @@ pub(in crate::translation) fn write_definition(
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = (({c_1} as u32) < ({c_2} as u32)) as i32;"
+                    "let {c_1:#} = (({c_1} as u64) < ({c_2} as u64)) as i32;"
                 );
             }
             Operator::I64GtU => {
