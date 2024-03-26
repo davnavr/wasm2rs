@@ -121,7 +121,8 @@ pub fn write_unit_tests<'wasm>(
 
         let _ = writeln!(
             out,
-            "mod {} {{\n\n",
+            "#[allow(non_snake_case)]\n\
+            mod {} {{\n\n",
             wasm2rs::rust::SafeIdent::from(file_name.as_ref())
         );
     }
