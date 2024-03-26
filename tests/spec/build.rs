@@ -28,6 +28,7 @@ fn main() -> Result<()> {
         "int_literals",
         "labels",
         "memory_init",
+        "unwind",
     ];
 
     let mut all_file = String::with_capacity(1024);
