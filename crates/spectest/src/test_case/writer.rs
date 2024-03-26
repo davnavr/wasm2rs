@@ -228,7 +228,7 @@ pub fn write_unit_tests<'wasm>(
                                 for (i, result) in values.iter().enumerate() {
                                     let _ =
                                         writeln!(out, "    let {ACTUAL_VARIABLE} = actual_{i};");
-                                    write_result_check(&mut out, result, &module_location);
+                                    write_result_check(&mut out, result, &statement_location);
                                 }
                             }
                         }
