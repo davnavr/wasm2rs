@@ -33,7 +33,7 @@ macro_rules! int_div {
     )*} => {$(
         #[doc = concat!(
             "Implementation for the [`", $div_name, "`] instruction.\n\nCalculates `num / denom`,",
-            " trapping on division by zero.\n\n",
+            " trapping on division by zero or overflow.\n\n",
             $(
                 "The `num` and `denom` are interpreted as an [`", stringify!($unsigned), "`] ",
                 "value, and the resulting [`", stringify!($unsigned), "`] quotient is ",
@@ -69,12 +69,13 @@ macro_rules! int_rem {
     )*} => {$(
         #[doc = concat!(
             "Implementation for the [`", $rem_name, "`] instruction.\n\nCalculates `num % denom`,",
-            " trapping on division by zero.\n\n",
+            " trapping on [division by zero].\n\n",
             $(
                 "The `num` and `denom` are interpreted as an [`", stringify!($unsigned), "`] ",
                 "value, and the resulting [`", stringify!($unsigned), "`] remainder is ",
                 "reinterpreted as an [`", stringify!($signed), "`] value.\n\n",
             )?
+            "[division by zero]: crate::trap::TrapCode::IntegerDivisionByZero\n",
             "[`", $rem_name, "`]: ",
             "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
         )]
@@ -83,10 +84,10 @@ macro_rules! int_rem {
         where
             E: crate::trap::Trap + ?Sized,
         {
-            if let Some(rem) = (num $(as $unsigned)?).checked_rem(denom $(as $unsigned)?) {
-                Ok(rem as $signed)
-            } else {
+            if denom == 0 {
                 Err(integer_division_by_zero(trap))
+            } else {
+                Ok((num $(as $unsigned)?).wrapping_rem(denom $(as $unsigned)?) as $signed)
             }
         }
     )*};
