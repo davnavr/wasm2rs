@@ -28,7 +28,7 @@ fn main() -> Result<()> {
         "int_literals",
         "labels",
         "memory_init",
-        "start",
+        // "start", // TODO: Blocked on using imports in spec tests
         "switch",
         "traps",
         "unwind",
