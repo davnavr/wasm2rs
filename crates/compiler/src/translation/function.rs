@@ -479,20 +479,38 @@ fn write_branch(
             }
 
             let _ = writeln!(out, "continue {label};");
-        } else {
-            BranchKind::Branch(label).write_control_flow(
+
+            return Ok(());
+        } else if validator.control_stack_height() > 1 || relative_depth == 0 {
+            let target = if validator.control_stack_height() == 1 {
+                if popped_before_branch == 0 {
+                    BranchKind::ImplicitReturn
+                } else {
+                    // For `br_if``
+                    BranchKind::ExplicitReturn
+                }
+            } else {
+                BranchKind::Branch(label)
+            };
+
+            target.write_control_flow(
                 out,
                 validator,
                 block_results.len().try_into().unwrap(),
                 popped_before_branch,
             );
+
+            return Ok(());
         }
-    } else {
-        let _ = writeln!(
-            out,
-            "::core::unimplemented!(\"code generation bug, bad branch target\");"
-        );
     }
+
+    let _ = writeln!(
+        out,
+        "::core::unimplemented!(\"code generation bug, bad branch target {} where control stack \
+        was {} frames high\");",
+        relative_depth,
+        validator.control_stack_height(),
+    );
 
     Ok(())
 }
