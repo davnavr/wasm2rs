@@ -75,7 +75,9 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
                 test_cases.module(wat)?;
             }
             WastDirective::Invoke(invoke) => {
-                if !skip_module {
+                if skip_module {
+                    emit_warning(invoke.span, &"assertion was skipped")
+                } else {
                     test_cases.invoke(invoke)?
                 }
             }
@@ -84,7 +86,7 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
                 exec,
                 message,
             } => match exec {
-                _ if skip_module => (),
+                _ if skip_module => emit_warning(span, &"assertion was skipped"),
                 WastExecute::Invoke(invoke) => test_cases
                     .assert_trap_invoke(invoke, message)
                     .with_context(|| format!("in {}", wast_contents.location(span)))?,
@@ -99,7 +101,7 @@ fn translate_one(file: &TestFile, warnings: &mut Vec<String>, pools: &pools::Poo
                 exec,
                 results,
             } => match exec {
-                _ if skip_module => (),
+                _ if skip_module => emit_warning(span, &"assertion was skipped"),
                 WastExecute::Invoke(invoke) => test_cases
                     .assert_return_invoke(invoke, results)
                     .with_context(|| format!("in {}", wast_contents.location(span)))?,
