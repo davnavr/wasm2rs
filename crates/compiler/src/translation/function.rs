@@ -223,6 +223,7 @@ impl BranchKind {
         out: &mut crate::buffer::Writer<'_>,
         validator: &Validator,
         result_count: u32,
+        popped_first: u32,
     ) {
         if result_count == 0u32 {
             match self {
@@ -240,14 +241,14 @@ impl BranchKind {
             return;
         } else if result_count == 1 {
             self.write_start(out);
-            let _ = write!(out, "{}", PoppedValue::pop(validator, 0));
+            let _ = write!(out, "{}", PoppedValue::pop(validator, popped_first));
         } else {
             for i in 0..result_count {
                 let _ = writeln!(
                     out,
                     "let _r{} = {};",
                     result_count - i - 1,
-                    PoppedValue::pop(validator, i),
+                    PoppedValue::pop(validator, popped_first + i),
                 );
             }
 
@@ -483,6 +484,7 @@ fn write_branch(
                 out,
                 validator,
                 block_results.len().try_into().unwrap(),
+                popped_before_branch,
             );
         }
     } else {
@@ -635,7 +637,7 @@ pub(in crate::translation) fn write_definition(
                     .try_into()
                     .with_context(|| "too many block results")?;
 
-                BranchKind::Block.write_control_flow(out, validator, result_count);
+                BranchKind::Block.write_control_flow(out, validator, result_count, 0);
                 let _ = writeln!(out, "}} else {{");
             }
             Operator::End => {
@@ -654,7 +656,7 @@ pub(in crate::translation) fn write_definition(
                             BranchKind::Loop(Label(validator.control_stack_height()))
                         };
 
-                        kind.write_control_flow(out, validator, result_count);
+                        kind.write_control_flow(out, validator, result_count, 0);
                     }
 
                     out.write_str("}");
@@ -677,6 +679,7 @@ pub(in crate::translation) fn write_definition(
                         out,
                         validator,
                         func_result_count,
+                        0,
                     );
                 }
             }
@@ -716,7 +719,7 @@ pub(in crate::translation) fn write_definition(
                     BranchKind::ExplicitReturn
                 };
 
-                kind.write_control_flow(out, validator, func_result_count);
+                kind.write_control_flow(out, validator, func_result_count, 0);
             }
             Operator::Call { function_index } => {
                 let signature = wasmparser::WasmModuleResources::type_of_function(
