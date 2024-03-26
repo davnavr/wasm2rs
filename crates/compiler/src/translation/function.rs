@@ -1501,10 +1501,7 @@ pub(in crate::translation) fn write_definition(
             Operator::F64PromoteF32 => {
                 // See https://webassembly.github.io/spec/core/exec/numerics.html#op-promote
                 let popped = PoppedValue::pop(validator, 0);
-                let _ = writeln!(
-                    out,
-                    "// f64.promote_f32\nlet {popped:#} = {popped} as f64;"
-                );
+                let _ = writeln!(out, "// f64.promote_f32\nlet {popped:#} = {popped} as f64;");
             }
             Operator::I32ReinterpretF32 => {
                 let popped = PoppedValue::pop(validator, 0);

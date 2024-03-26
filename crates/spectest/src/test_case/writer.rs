@@ -173,7 +173,12 @@ pub fn write_unit_tests<'wasm>(
 
                     match result {
                         Some(ActionResult::Trap(trap)) => {
-                            let _ = writeln!(out, "    assert!(matches!({RESULT_VARIABLE}, Err(ref e) if matches!(e.code(), {trap})), \"expected trap but got {{:?}} at {module_location}\", {RESULT_VARIABLE});",
+                            let _ = writeln!(
+                                out,
+                                "    assert!(\n      \
+                                matches!({RESULT_VARIABLE}, Err(ref e) if matches!(e.code(), {trap})),\n      \
+                                \"expected trap {trap:?} but got {{:?}} at {module_location}\",\n      \
+                                {RESULT_VARIABLE}\n    );",
                             );
                         }
                         Some(ActionResult::Values(values)) => {

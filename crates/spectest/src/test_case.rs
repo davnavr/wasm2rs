@@ -120,6 +120,7 @@ impl TryFrom<wast::WastRet<'_>> for ResultValue {
     }
 }
 
+#[derive(Debug)]
 enum TrapReason {
     IntegerDivideByZero,
     IntegerOverflow,
