@@ -122,6 +122,7 @@ impl TryFrom<wast::WastRet<'_>> for ResultValue {
 
 #[derive(Debug)]
 enum TrapReason {
+    Unreachable,
     IntegerDivideByZero,
     IntegerOverflow,
     InvalidConversionToInteger,
@@ -134,6 +135,7 @@ impl std::str::FromStr for TrapReason {
 
     fn from_str(message: &str) -> crate::Result<Self> {
         Ok(match message {
+            "unreachable" => Self::Unreachable,
             "integer divide by zero" => Self::IntegerDivideByZero,
             "integer overflow" => Self::IntegerOverflow,
             "invalid conversion to integer" => Self::InvalidConversionToInteger,
@@ -148,6 +150,7 @@ impl std::fmt::Display for TrapReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("::wasm2rs_rt::trap::TrapCode::")?;
         match self {
+            Self::Unreachable => f.write_str("Unreachable"),
             Self::IntegerDivideByZero => f.write_str("IntegerDivisionByZero"),
             Self::IntegerOverflow => f.write_str("IntegerOverflow"),
             Self::InvalidConversionToInteger => f.write_str("ConversionToInteger"),
