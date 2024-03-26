@@ -19,10 +19,14 @@ fn main() -> Result<()> {
         // "block", // TODO: blocked on `call_indirect` support.
         // "br_if",
         "conversions",
+        // "data", // TODO: blocked on `global.get` in constant expressions.
         "endianness",
         "fac",
+        "forward",
+        "i64",
         "int_exprs",
         "int_literals",
+        // "labels", TODO: Bug in /home/davnavr/compsci/wasm2rs/tests/spec/testsuite/labels.wast:309:17
         "memory_init",
     ];
 
