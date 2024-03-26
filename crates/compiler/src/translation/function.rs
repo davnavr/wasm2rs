@@ -46,28 +46,48 @@ pub(in crate::translation) fn write_definition_signature(
 
 type Validator = wasmparser::FuncValidator<wasmparser::ValidatorResources>;
 
+#[must_use]
+struct LocalStackSpace {
+    space: u32,
+}
+
+impl LocalStackSpace {
+    fn allocate(&mut self, ty: wasmparser::ValType) {
+        use wasmparser::ValType;
+
+        self.space = self.space.saturating_add(match ty {
+            ValType::I32 | ValType::F32 => 4,
+            ValType::I64 | ValType::F64 => (self.space % 8).saturating_add(8),
+            ValType::V128 => (self.space % 16).saturating_add(16),
+            // Assumed that references require at least 16 bytes, but are pointer aligned
+            ValType::Ref(_) => (self.space % 8).saturating_add(16),
+        });
+    }
+
+    fn finish(self, operand_stack_count: u32) -> u32 {
+        // Assumed that some space in the stack will be reused, and that some stack operands will
+        // be stored in registers, so arbitrary multiplier is picked here.
+        self.space
+            .saturating_add(operand_stack_count.saturating_mul(2))
+    }
+}
+
 fn write_local_variables(
     out: &mut crate::buffer::Writer<'_>,
     validator: &mut Validator,
     mut locals_reader: wasmparser::LocalsReader<'_>,
     param_count: u32,
-) -> crate::Result<u32> {
+    local_stack_space: &mut LocalStackSpace,
+) -> crate::Result<()> {
     let local_group_count = locals_reader.get_count();
     let mut local = LocalId(param_count);
-    let mut locals_stack_space = 0u32;
     for _ in 0..local_group_count {
         use wasmparser::ValType;
 
         let (count, ty) = locals_reader.read()?;
         validator.define_locals(locals_reader.original_position(), count, ty)?;
 
-        locals_stack_space = locals_stack_space.saturating_add(match ty {
-            ValType::I32 | ValType::F32 => 4,
-            ValType::I64 | ValType::F64 => (locals_stack_space % 8).saturating_add(8),
-            ValType::V128 => (locals_stack_space % 16).saturating_add(16),
-            // Assumed that references require at least 16 bytes, but are pointer aligned
-            ValType::Ref(_) => (locals_stack_space % 8).saturating_add(16),
-        });
+        local_stack_space.allocate(ty);
 
         let default_value = match ty {
             ValType::I32 | ValType::I64 => "0",
@@ -82,7 +102,7 @@ fn write_local_variables(
         }
     }
 
-    Ok(locals_stack_space)
+    Ok(())
 }
 
 pub(in crate::translation) fn get_function_type(ty: &wasmparser::SubType) -> &wasmparser::FuncType {
@@ -511,11 +531,18 @@ pub(in crate::translation) fn write_definition(
         );
     }
 
-    let local_stack_size = write_local_variables(
+    let mut local_stack_space = LocalStackSpace { space: 0 };
+
+    for ty in func_type.params() {
+        local_stack_space.allocate(*ty);
+    }
+
+    write_local_variables(
         out,
         validator,
         body.get_locals_reader()?,
         u32::try_from(func_type.params().len()).unwrap_or(u32::MAX),
+        &mut local_stack_space,
     )?;
 
     let mut operators = body.get_operators_reader()?;
@@ -1553,9 +1580,7 @@ pub(in crate::translation) fn write_definition(
             out,
             "\n    const STACK_FRAME_SIZE_{}: usize = {};\n",
             validator.index(),
-            // Assumed that some space in the stack will be reused, and that some stack operands
-            // will be stored in registers.
-            local_stack_size.saturating_add(max_operand_stack_size.saturating_mul(4))
+            local_stack_space.finish(max_operand_stack_size)
         );
     }
 
