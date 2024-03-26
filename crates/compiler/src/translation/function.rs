@@ -1383,19 +1383,19 @@ pub(in crate::translation) fn write_definition(
             Operator::I32Shl => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
-                let _ = writeln!(out, "let {c_1:#} = {c_1} << ({c_2} % 32);");
+                let _ = writeln!(out, "let {c_1:#} = {c_1} << ({c_2} as u32 % 32);");
             }
             Operator::I32ShrS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
-                let _ = writeln!(out, "let {c_1:#} = {c_1} >> ({c_2} % 32);");
+                let _ = writeln!(out, "let {c_1:#} = {c_1} >> ({c_2} as u32 % 32);");
             }
             Operator::I32ShrU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = (({c_1} as u32) >> ({c_2} % 32)) as i32;"
+                    "let {c_1:#} = (({c_1} as u32) >> ({c_2} as u32 % 32)) as i32;"
                 );
             }
             Operator::I32Rotl => {
@@ -1482,19 +1482,19 @@ pub(in crate::translation) fn write_definition(
             Operator::I64Shl => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
-                let _ = writeln!(out, "let {c_1:#} = {c_1} << ({c_2} % 64);");
+                let _ = writeln!(out, "let {c_1:#} = {c_1} << ({c_2} as u64 % 64);");
             }
             Operator::I64ShrS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
-                let _ = writeln!(out, "let {c_1:#} = {c_1} >> ({c_2} % 64);");
+                let _ = writeln!(out, "let {c_1:#} = {c_1} >> ({c_2} as u64 % 64);");
             }
             Operator::I64ShrU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "let {c_1:#} = (({c_1} as u64) >> ({c_2} % 64)) as i64;"
+                    "let {c_1:#} = (({c_1} as u64) >> ({c_2} as u64 % 64)) as i64;"
                 );
             }
             Operator::I64Rotl => {
