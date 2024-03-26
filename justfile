@@ -13,11 +13,9 @@ fmt toolchain='+stable':
 test toolchain='+stable':
     cargo {{toolchain}} test --workspace
 
-# Quickly compiles and runs all tests; requires Rust nightly and nextest.
-test_fast threads:
-    RUSTFLAGS='-Zthreads={{threads}}' \
-    NEXTEST_TEST_THREADS='{{threads}}' \
-    cargo +nightly nextest run --workspace
+# Quickly runs all tests; requires nextest.
+test_fast toolchain='+stable':
+    cargo {{toolchain}} nextest run --workspace
 
 # Runs all tests under the Miri interpreter; requires Rust nightly and nextest.
 test_miri:
