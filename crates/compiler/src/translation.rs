@@ -529,7 +529,11 @@ impl Translation<'_> {
         writeln!(output, "        embedder,\n      }};\n")?;
 
         if let Some(start_index) = start_function {
-            writeln!(output, "      self.{}()?;", display::FuncId(start_index))?;
+            writeln!(
+                output,
+                "      instantiated.{}()?;",
+                display::FuncId(start_index)
+            )?;
         } else {
             output.write_all(b"      // No start function\n")?;
         }

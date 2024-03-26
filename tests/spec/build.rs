@@ -28,7 +28,7 @@ fn main() -> Result<()> {
         "int_literals",
         "labels",
         "memory_init",
-        // "start", // TODO: Blocked on fixing start call bug with `self`
+        "start",
         "switch",
         "traps",
         "unwind",
