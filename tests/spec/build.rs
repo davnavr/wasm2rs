@@ -26,7 +26,7 @@ fn main() -> Result<()> {
         "i64",
         "int_exprs",
         "int_literals",
-        // "labels", TODO: Bug in /home/davnavr/compsci/wasm2rs/tests/spec/testsuite/labels.wast:309:17
+        "labels",
         "memory_init",
     ];
 
