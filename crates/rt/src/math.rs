@@ -134,7 +134,11 @@ macro_rules! iXX_trunc_fXX {
         {
             match <$int as num_traits::cast::NumCast>::from(value) {
                 Some(n) => Ok(n $(as $reinterpret)?),
-                None => Err(conversion_to_integer(trap)),
+                None => Err(if value.is_nan() {
+                    conversion_to_integer(trap)
+                } else {
+                    integer_overflow(trap)
+                }),
             }
         }
     )*};
