@@ -1,6 +1,10 @@
-//! Functions for checking stack overflow conditions.
+//! Functions for producing stack traces and checking for call stack overflow conditions.
 
 use crate::trap::Trap;
+
+// mod trace;
+
+// pub use trace::StackTrace;
 
 /// Checks if there is enough space on the stack for approximately `amount` bytes worth of
 /// variables.
