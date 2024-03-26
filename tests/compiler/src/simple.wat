@@ -102,4 +102,14 @@
     local.set 2
     local.set 1
     local.set 0)
+
+  (func (export "trap_on_three") (param i32)
+    block
+      local.get 0
+      i32.const 3
+      i32.eq
+      br_if 0
+      return
+    end
+    unreachable)
 )

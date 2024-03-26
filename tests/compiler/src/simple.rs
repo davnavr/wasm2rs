@@ -66,3 +66,15 @@ fn immutable_global() {
     inst.increment_counter().unwrap();
     assert_eq!(inst.counter().get(), 2);
 }
+
+#[test]
+fn br_if() {
+    let inst = wasm::Instance::instantiate(Default::default()).unwrap();
+    assert_eq!(inst.trap_on_three(2), Ok(()));
+
+    let result = inst.trap_on_three(3);
+    assert!(
+        matches!(&result, Err(e) if e.code() == wasm2rs_rt::trap::TrapCode::Unreachable),
+        "expected trap unreachable, but got {result:?}"
+    );
+}
