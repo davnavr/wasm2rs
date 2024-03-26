@@ -31,6 +31,7 @@ fn main() -> Result<()> {
         // "start", // TODO: Blocked on using imports in spec tests
         "switch",
         "traps",
+        "unreached-valid",
         "unwind",
     ];
 
