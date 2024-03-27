@@ -398,10 +398,11 @@ fn write_i8_load(
     let address = PoppedValue::pop(validator, 0);
     let _ = write!(
         out,
-        "let {}: {destination} = {}::i8_load::<{}, {}, _, _>({}, {address}, &self.embedder)?",
+        "let {}: {destination} = {}::i8_load::<{}, {}, embedder::Memory{}, embedder::State>({}, {address}, &self.embedder)?",
         StackValue(validator.operand_stack_height() - 1),
         paths::MEMORY,
         memarg.offset,
+        memarg.memory,
         memarg.memory,
         MemAccess::new(memarg.memory, import_counts),
     );
@@ -424,11 +425,12 @@ fn write_i16_load(
     let address = PoppedValue::pop(validator, 0);
     let _ = write!(
         out,
-        "let {}: {destination} = {}::i16_load::<{}, {}, {}, _, _>({}, {address}, &self.embedder)?",
+        "let {}: {destination} = {}::i16_load::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, &self.embedder)?",
         StackValue(validator.operand_stack_height() - 1),
         paths::MEMORY,
         memarg.offset,
         memarg.align,
+        memarg.memory,
         memarg.memory,
         MemAccess::new(memarg.memory, import_counts),
     );
@@ -906,10 +908,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {}: i32 = {MEMORY}::i32_load::<{}, {}, {}, _, _>({}, {address}, &self.embedder)?;",
+                    "let {}: i32 = {MEMORY}::i32_load::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, &self.embedder)?;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -918,10 +921,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {}: i64 = {MEMORY}::i64_load::<{}, {}, {}, _, _>({}, {address}, &self.embedder)?;",
+                    "let {}: i64 = {MEMORY}::i64_load::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, &self.embedder)?;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -930,10 +934,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {}: f32 = f32::from_bits({MEMORY}::i32_load::<{}, {}, {}, _, _>({}, {address}, &self.embedder)? as u32);",
+                    "let {}: f32 = f32::from_bits({MEMORY}::i32_load::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, &self.embedder)? as u32);",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -942,10 +947,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {}: f64 = f64::from_bits({MEMORY}::i64_load::<{}, {}, {}, _, _>({}, {address}, &self.embedder)? as u64);",
+                    "let {}: f64 = f64::from_bits({MEMORY}::i64_load::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, &self.embedder)? as u64);",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1034,10 +1040,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {}: i64 = {MEMORY}::i32_load::<{}, {}, {}, _, _>({}, {address}, &self.embedder)? as i64;",
+                    "let {}: i64 = {MEMORY}::i32_load::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, &self.embedder)? as i64;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1046,10 +1053,11 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
                     out,
-                    "let {}: i64 = {MEMORY}::i32_load::<{}, {}, {}, _, _>({}, {address}, &self.embedder)? as u32 as i64;",
+                    "let {}: i64 = {MEMORY}::i32_load::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, &self.embedder)? as u32 as i64;",
                     StackValue(validator.operand_stack_height() - 1),
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1059,9 +1067,10 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i32_store::<{}, {}, {}, _, _>({}, {address}, {to_store}, &self.embedder)?;",
+                    "{MEMORY}::i32_store::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, {to_store}, &self.embedder)?;",
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1071,9 +1080,10 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i64_store::<{}, {}, {}, _, _>({}, {address}, {to_store}, &self.embedder)?;",
+                    "{MEMORY}::i64_store::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, {to_store}, &self.embedder)?;",
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1083,9 +1093,10 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i32_store::<{}, {}, {}, _, _>({}, {address}, {to_store}.to_bits() as i32, &self.embedder)?;",
+                    "{MEMORY}::i32_store::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, {to_store}.to_bits() as i32, &self.embedder)?;",
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1095,9 +1106,10 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i64_store::<{}, {}, {}, _, _>({}, {address}, {to_store}.to_bits() as i64, &self.embedder)?;",
+                    "{MEMORY}::i64_store::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, {to_store}.to_bits() as i64, &self.embedder)?;",
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1107,8 +1119,9 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i8_store::<{}, {}, _, _>({}, {address}, {to_store} as i8, &self.embedder)?;",
+                    "{MEMORY}::i8_store::<{}, {}, embedder::Memory{}, embedder::State>({}, {address}, {to_store} as i8, &self.embedder)?;",
                     memarg.offset,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1118,9 +1131,10 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i16_store::<{}, {}, {}, _, _>({}, {address}, {to_store} as i16, &self.embedder)?;",
+                    "{MEMORY}::i16_store::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, {to_store} as i16, &self.embedder)?;",
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
@@ -1130,9 +1144,10 @@ pub(in crate::translation) fn write_definition(
                 let address = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
-                    "{MEMORY}::i32_store::<{}, {}, {}, _, _>({}, {address}, {to_store} as i32, &self.embedder)?;",
+                    "{MEMORY}::i32_store::<{}, {}, {}, embedder::Memory{}, embedder::State>({}, {address}, {to_store} as i32, &self.embedder)?;",
                     memarg.offset,
                     memarg.align,
+                    memarg.memory,
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
