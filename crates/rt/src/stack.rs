@@ -2,9 +2,7 @@
 
 use crate::trap::Trap;
 
-// mod trace;
-
-// pub use trace::StackTrace;
+pub mod trace;
 
 /// Checks if there is enough space on the stack for approximately `amount` bytes worth of
 /// variables.
