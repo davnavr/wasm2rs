@@ -4,8 +4,8 @@ alias t := test
 
 check toolchain='+stable': fmt
     cargo {{toolchain}} clippy
-    cargo {{toolchain}} clippy --package wasm2rs-rt --no-default-features --features alloc
-    cargo {{toolchain}} clippy --package wasm2rs-rt --no-default-features
+    cargo {{toolchain}} clippy --package wasm2rs-rt --no-default-features --features alloc,merged
+    cargo {{toolchain}} clippy --package wasm2rs-rt --no-default-features --features merged
 
 fmt toolchain='+stable':
     cargo {{toolchain}} fmt
