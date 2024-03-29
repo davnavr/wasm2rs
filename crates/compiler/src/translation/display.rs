@@ -43,6 +43,26 @@ impl std::fmt::Display for FuncId {
 
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
+pub(in crate::translation) struct CodeOffset(pub(in crate::translation) u32);
+
+impl std::fmt::Display for CodeOffset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_F{}_OFFSET", self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(transparent)]
+pub(in crate::translation) struct FuncSymbol(pub(in crate::translation) u32);
+
+impl std::fmt::Display for FuncSymbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_F{}_SYMBOL", self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(transparent)]
 pub(in crate::translation) struct MemId(pub(in crate::translation) u32);
 
 impl std::fmt::Display for MemId {

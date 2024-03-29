@@ -98,7 +98,7 @@ pub(in crate::translation) fn write(
                     mem_type.initial
                 );
 
-                init_out.write_str("          }));\n        }\n");
+                init_out.write_str("          }, None));\n        }\n");
 
                 if let Some(maximum) = mem_type.maximum {
                     init_out.write_str(
@@ -120,7 +120,7 @@ pub(in crate::translation) fn write(
                         "            limits: {LIMITS_ENUM}::Maximum {{ expected: {maximum}, actual: max }},",
                     );
 
-                    init_out.write_str("          }));\n        }\n");
+                    init_out.write_str("          }, None));\n        }\n");
                 }
 
                 init_out.write_str("      }\n");

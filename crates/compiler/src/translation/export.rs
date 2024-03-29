@@ -35,14 +35,18 @@ fn write_function_export(
     out.write_str(") }\n");
 }
 
-pub fn write(
+pub fn write<'a>(
     buffer_pool: &crate::buffer::Pool,
-    section: wasmparser::ExportSectionReader,
+    section: wasmparser::ExportSectionReader<'a>,
     types: &wasmparser::types::Types,
 ) -> crate::Result<crate::translation::GeneratedLines> {
     let mut impl_out = crate::buffer::Writer::new(buffer_pool);
 
     impl_out.write_str("    // Exports\n");
+
+    let mut func_export_symbols = indexmap::IndexMap::<u32, Vec<&'a str>>::with_capacity(
+        usize::try_from(section.count()).unwrap_or_default() / 4,
+    );
 
     for result in section {
         use wasmparser::ExternalKind;
@@ -53,12 +57,18 @@ pub fn write(
             "    $vis fn {}",
             crate::rust::SafeIdent::from(export.name),
         );
+
         match export.kind {
-            ExternalKind::Func => write_function_export(
-                &mut impl_out,
-                crate::translation::display::FuncId(export.index),
-                types,
-            ),
+            ExternalKind::Func => {
+                write_function_export(
+                    &mut impl_out,
+                    crate::translation::display::FuncId(export.index),
+                    types,
+                );
+
+                let export_names = func_export_symbols.entry(export.index).or_default();
+                export_names.push(export.name);
+            }
             ExternalKind::Memory => {
                 let index = crate::translation::display::MemId(export.index);
                 let _ = writeln!(
@@ -86,6 +96,27 @@ pub fn write(
     }
 
     impl_out.write_str("\n");
+
+    for (func, names) in func_export_symbols.into_iter() {
+        let _ = write!(
+            impl_out,
+            "    const {}: embedder::rt::trap::WasmSymbol = {{ \
+            let mut s = embedder::rt::trap::WasmSymbol::from_index_and_offset({func}, Self::{}); \
+            s.export_names = &[",
+            crate::translation::display::FuncSymbol(func),
+            crate::translation::display::CodeOffset(func),
+        );
+
+        for (i, name) in names.into_iter().enumerate() {
+            if i > 0 {
+                impl_out.write_str(", ");
+            }
+
+            let _ = write!(impl_out, "\"{}\"", name.escape_default());
+        }
+
+        impl_out.write_str("]; s };\n");
+    }
 
     Ok(crate::translation::GeneratedLines {
         impls: impl_out.finish(),

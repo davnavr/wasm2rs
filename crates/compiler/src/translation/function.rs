@@ -517,6 +517,22 @@ fn write_branch(
     Ok(())
 }
 
+fn write_stack_trace_frame(
+    out: &mut crate::buffer::Writer<'_>,
+    index: u32,
+    body_offset: usize,
+    operator_offset: usize,
+) {
+    let _ = write!(
+        out,
+        "{{ const FRAME: embedder::rt::trap::WasmStackTraceFrame = \
+            embedder::rt::trap::WasmStackTraceFrame::new(&Instance::{}, {}); \
+            FRAME }}",
+        crate::translation::display::FuncSymbol(index),
+        operator_offset - body_offset,
+    );
+}
+
 /// Generates a [Rust function] definition corresponding to a [WebAssembly function body].
 ///
 /// [Rust function]: https://doc.rust-lang.org/reference/items/functions.html
@@ -538,9 +554,12 @@ pub(in crate::translation) fn write_definition(
 
     let _ = write!(
         out,
-        "\n    fn {}",
+        "\n    const {}: u64 = {:#X};\n    fn {}",
+        crate::translation::display::CodeOffset(validator.index()),
+        body.range().start,
         crate::translation::display::FuncId(validator.index())
     );
+
     write_definition_signature(out, func_type);
     out.write_str(" {\n");
 
@@ -595,10 +614,13 @@ pub(in crate::translation) fn write_definition(
                     out.write_str("return ");
                 }
 
-                let _ = write!(
-                    out,
-                    "::core::result::Result::Err(embedder::rt::trap::unreachable(&self.embedder))"
+                out.write_str(
+                    "::core::result::Result::Err(embedder::rt::trap::unreachable(&self.embedder, &",
                 );
+
+                write_stack_trace_frame(out, validator.index(), body.range().start, op_offset);
+
+                out.write_str("))");
 
                 if in_block {
                     out.write_str(";\n");

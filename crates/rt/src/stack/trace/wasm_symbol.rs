@@ -16,7 +16,7 @@ pub struct WasmSymbol {
     /// corresponding to the WebAssembly function.
     ///
     /// [code section entry]: https://webassembly.github.io/spec/core/binary/modules.html#code-section
-    pub offset: u32,
+    pub offset: u64,
 }
 
 impl WasmSymbol {
@@ -24,7 +24,7 @@ impl WasmSymbol {
     ///
     /// [`index`]: WasmSymbol::index
     /// [`offset`]: WasmSymbol::offset
-    pub const fn from_index_and_offset(index: u32, offset: u32) -> Self {
+    pub const fn from_index_and_offset(index: u32, offset: u64) -> Self {
         Self {
             export_names: &[],
             index,
