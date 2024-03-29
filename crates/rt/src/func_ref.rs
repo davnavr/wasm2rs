@@ -66,12 +66,15 @@ impl FuncRefCastError {
     {
         use crate::trap::TrapCode;
 
-        trap.trap(match self {
-            Self::Null { expected } => TrapCode::NullFunctionReference {
-                expected: Some(expected),
+        trap.trap(
+            match self {
+                Self::Null { expected } => TrapCode::NullFunctionReference {
+                    expected: Some(expected),
+                },
+                Self::SignatureMismatch(error) => TrapCode::IndirectCallSignatureMismatch(error),
             },
-            Self::SignatureMismatch(error) => TrapCode::IndirectCallSignatureMismatch(error),
-        })
+            None,
+        )
     }
 }
 

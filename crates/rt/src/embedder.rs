@@ -44,14 +44,17 @@ impl<I> State<I> {
         &self,
     ) -> Result<Memory0> {
         #[cfg(not(feature = "alloc"))]
-        return Err(self.trap(TrapCode::MemoryAllocation {
-            memory: IDX,
-            error: crate::memory::AllocationError::with_size(MIN),
-        }));
+        return Err(self.trap(
+            TrapCode::MemoryAllocation {
+                memory: IDX,
+                error: crate::memory::AllocationError::with_size(MIN),
+            },
+            None,
+        ));
 
         #[cfg(feature = "alloc")]
         return Memory0::with_limits(MIN, MAX)
-            .map_err(|error| self.trap(TrapCode::MemoryAllocation { memory: IDX, error }));
+            .map_err(|error| self.trap(TrapCode::MemoryAllocation { memory: IDX, error }, None));
     }
 
     /// Gets access to the module's imports.
@@ -64,8 +67,12 @@ impl<I> Trap for State<I> {
     type Repr = crate::trap::TrapValue;
 
     #[inline(never)]
-    fn trap(&self, code: TrapCode) -> Self::Repr {
-        <Self::Repr>::new(code)
+    fn trap(
+        &self,
+        code: TrapCode,
+        frame: Option<&'static crate::trap::WasmStackTraceFrame>,
+    ) -> Self::Repr {
+        <Self::Repr>::new(code, frame)
     }
 }
 

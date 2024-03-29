@@ -4,6 +4,7 @@
 
 mod trap_value;
 
+pub use crate::stack::trace::{WasmStackTraceFrame, WasmSymbol};
 pub use trap_value::TrapValue;
 
 /// Describes which limits a memory or table did not match.
@@ -151,13 +152,14 @@ impl std::error::Error for TrapCode {
 /// Trait for implementing WebAssembly traps.
 pub trait Trap {
     /// The type used to describe the WebAssembly trap.
-    type Repr: core::fmt::Debug;
+    type Repr: core::fmt::Debug + crate::stack::trace::WasmTrace;
 
-    /// Generates a trap with the given reason.
+    /// Generates a trap with the given reason and an optional WebAssembly stack frame indicating
+    /// the source of the trap in the original WebAssembly function.
     ///
     /// The `wasm2rs` compiler generates calls to this function for instructions that generate a
     /// trap.
-    fn trap(&self, code: TrapCode) -> Self::Repr;
+    fn trap(&self, code: TrapCode, frame: Option<&'static WasmStackTraceFrame>) -> Self::Repr;
 
     /// Generates a trap due to a stack overflow condition.
     ///
@@ -168,15 +170,15 @@ pub trait Trap {
     /// [`stack::check_for_overflow()`]: crate::stack::check_for_overflow()
     #[inline(always)]
     fn trap_stack_overflow(&self) -> Self::Repr {
-        self.trap(TrapCode::CallStackExhausted)
+        self.trap(TrapCode::CallStackExhausted, None)
     }
 }
 
 impl<T: Trap + ?Sized> Trap for &T {
     type Repr = T::Repr;
 
-    fn trap(&self, code: TrapCode) -> Self::Repr {
-        <T>::trap(self, code)
+    fn trap(&self, code: TrapCode, frame: Option<&'static WasmStackTraceFrame>) -> Self::Repr {
+        <T>::trap(self, code, frame)
     }
 }
 
@@ -185,6 +187,9 @@ impl<T: Trap + ?Sized> Trap for &T {
 /// [`unreachable`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-control
 #[inline(never)]
 #[cold]
-pub fn unreachable<E: core::fmt::Debug>(trap: &dyn Trap<Repr = E>) -> E {
-    trap.trap(TrapCode::Unreachable)
+pub fn unreachable<E>(trap: &dyn Trap<Repr = E>, frame: &'static WasmStackTraceFrame) -> E
+where
+    E: core::fmt::Debug + crate::stack::trace::WasmTrace,
+{
+    trap.trap(TrapCode::Unreachable, Some(frame))
 }

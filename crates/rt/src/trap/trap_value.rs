@@ -1,7 +1,8 @@
 struct Inner {
     //rust_backtrace: std::backtrace::Backtrace,
-    //wasm_backtrace: ?,
     code: crate::trap::TrapCode,
+    #[cfg(feature = "alloc")]
+    wasm_backtrace: crate::stack::trace::WasmStackTrace,
 }
 
 /// Describes a WebAssembly trap.
@@ -20,8 +21,19 @@ pub struct TrapValue {
 }
 
 impl TrapValue {
-    pub(crate) fn new(code: crate::trap::TrapCode) -> Self {
-        let inner = Inner { code };
+    pub(crate) fn new(
+        code: crate::trap::TrapCode,
+        frame: Option<&'static crate::trap::WasmStackTraceFrame>,
+    ) -> Self {
+        let inner = Inner {
+            code,
+            #[cfg(feature = "alloc")]
+            wasm_backtrace: crate::stack::trace::WasmStackTrace::from(frame.copied()),
+        };
+
+        #[cfg(not(feature = "alloc"))]
+        let _ = frame;
+
         Self {
             #[cfg(feature = "alloc")]
             inner: alloc::boxed::Box::new(inner),
@@ -34,10 +46,32 @@ impl TrapValue {
     pub fn code(&self) -> &crate::trap::TrapCode {
         &self.inner.code
     }
+
+    /// Gets a backtrace capturing the WebAssembly stack frames.
+    ///
+    /// If the `alloc` feature is not enabled, then an empty stack trace is returned.
+    pub fn wasm_stack_trace(&self) -> &crate::stack::trace::WasmStackTrace {
+        #[cfg(feature = "alloc")]
+        return &self.inner.wasm_backtrace;
+
+        #[cfg(not(feature = "alloc"))]
+        return &crate::stack::trace::WasmStackTrace::EMPTY;
+    }
+}
+
+impl crate::stack::trace::WasmTrace for TrapValue {
+    fn push(&mut self, frame: Option<crate::trap::WasmStackTraceFrame>) {
+        #[cfg(feature = "alloc")]
+        crate::stack::trace::WasmTrace::push(&mut self.inner.wasm_backtrace, frame);
+
+        #[cfg(not(feature = "alloc"))]
+        let _ = frame;
+    }
 }
 
 impl core::cmp::PartialEq for TrapValue {
     fn eq(&self, other: &Self) -> bool {
+        // TODO: How does WASM backtrace impact equality? Maybe remove this impl?
         self.code() == other.code()
     }
 }
@@ -46,12 +80,14 @@ impl core::fmt::Debug for TrapValue {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("TrapValue")
             .field("code", self.code())
+            .field("wasm_stack_trace", self.wasm_stack_trace())
             .finish()
     }
 }
 
 impl core::fmt::Display for TrapValue {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // TODO: Include Display impl for WasmStackTrace
         core::fmt::Display::fmt(self.code(), f)
     }
 }

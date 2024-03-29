@@ -6,7 +6,7 @@ fn integer_division_by_zero<E>(trap: &E) -> E::Repr
 where
     E: crate::trap::Trap + ?Sized,
 {
-    trap.trap(crate::trap::TrapCode::IntegerDivisionByZero)
+    trap.trap(crate::trap::TrapCode::IntegerDivisionByZero, None)
 }
 
 #[cold]
@@ -15,7 +15,7 @@ fn integer_overflow<E>(trap: &E) -> E::Repr
 where
     E: crate::trap::Trap + ?Sized,
 {
-    trap.trap(crate::trap::TrapCode::IntegerOverflow)
+    trap.trap(crate::trap::TrapCode::IntegerOverflow, None)
 }
 
 #[cold]
@@ -24,7 +24,7 @@ fn conversion_to_integer<E>(trap: &E) -> E::Repr
 where
     E: crate::trap::Trap + ?Sized,
 {
-    trap.trap(crate::trap::TrapCode::ConversionToInteger)
+    trap.trap(crate::trap::TrapCode::ConversionToInteger, None)
 }
 
 macro_rules! int_div {

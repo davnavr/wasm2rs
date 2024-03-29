@@ -92,11 +92,14 @@ impl AccessError {
     where
         TR: crate::trap::Trap + ?Sized,
     {
-        trap.trap(crate::trap::TrapCode::MemoryBoundsCheck {
-            source: self,
-            memory,
-            address,
-        })
+        trap.trap(
+            crate::trap::TrapCode::MemoryBoundsCheck {
+                source: self,
+                memory,
+                address,
+            },
+            None,
+        )
     }
 }
 
