@@ -3,9 +3,10 @@
 
 #![no_std]
 #![cfg_attr(doc_cfg, feature(doc_auto_cfg))]
-#![deny(unsafe_op_in_unsafe_fn)]
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
+#![deny(unreachable_pub)]
+#![deny(unsafe_op_in_unsafe_fn)]
 #![deny(clippy::missing_safety_doc)]
 #![deny(clippy::alloc_instead_of_core)]
 #![deny(clippy::std_instead_of_alloc)]
