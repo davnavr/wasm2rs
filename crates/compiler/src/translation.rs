@@ -5,6 +5,7 @@ mod data_segment;
 mod display;
 mod export;
 mod function;
+mod function_types;
 mod global;
 mod import;
 mod memory;
@@ -162,9 +163,10 @@ impl<'a> Translation<'a> {
 
 enum KnownSection<'a> {
     Import(wasmparser::ImportSectionReader<'a>),
+    Function,
     Memory(wasmparser::MemorySectionReader<'a>),
     Global(wasmparser::GlobalSectionReader<'a>),
-    Export(wasmparser::ExportSectionReader<'a>),
+    Export(Option<wasmparser::ExportSectionReader<'a>>),
     Data(wasmparser::DataSectionReader<'a>),
 }
 
@@ -209,6 +211,8 @@ fn parse_wasm_sections<'a>(
     let mut global_definition_count = 0;
     let mut start_function = None;
 
+    let mut saw_export_section = false;
+
     for result in wasmparser::Parser::new(0).parse_all(wasm) {
         use wasmparser::Payload;
 
@@ -230,6 +234,7 @@ fn parse_wasm_sections<'a>(
             }
             Payload::FunctionSection(section) => {
                 validator.function_section(&section)?;
+                sections.push(KnownSection::Function);
             }
             Payload::TableSection(tables) => {
                 validator.table_section(&tables)?;
@@ -251,7 +256,8 @@ fn parse_wasm_sections<'a>(
             }
             Payload::ExportSection(exports) => {
                 validator.export_section(&exports)?;
-                sections.push(KnownSection::Export(exports));
+                sections.push(KnownSection::Export(Some(exports)));
+                saw_export_section = true;
             }
             Payload::StartSection { func, range } => {
                 validator.start_section(func, &range)?;
@@ -281,6 +287,10 @@ fn parse_wasm_sections<'a>(
                 // Handling of custom `name`, 'producers' and DWARF sections is not yet implemented.
             }
             Payload::End(offset) => {
+                if !saw_export_section {
+                    sections.push(KnownSection::Export(None));
+                }
+
                 let types = validator.end(offset)?;
                 return Ok(ModuleContents {
                     sections,
@@ -415,13 +425,17 @@ impl Translation<'_> {
                 .into_par_iter()
                 .map(|section| match section {
                     KnownSection::Import(imports) => import::write(buffer_pool, imports, &types),
+                    KnownSection::Function => Ok(function_types::write(buffer_pool, &types)),
                     KnownSection::Memory(memories) => {
                         memory::write(buffer_pool, memories, import_counts.memories)
                     }
                     KnownSection::Global(globals) => {
                         global::write(buffer_pool, globals, import_counts.globals)
                     }
-                    KnownSection::Export(exports) => export::write(buffer_pool, exports, &types),
+                    KnownSection::Export(Some(exports)) => {
+                        export::write(buffer_pool, exports, &types)
+                    }
+                    KnownSection::Export(None) => Ok(export::write_empty(buffer_pool, &types)),
                     KnownSection::Data(data) => {
                         data_segment::write(buffer_pool, data, self.data_segment_writer)
                     }

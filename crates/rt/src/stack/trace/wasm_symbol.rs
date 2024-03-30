@@ -51,7 +51,6 @@ impl core::fmt::Display for WasmValType {
 /// Describes the parameter and return types of a WebAssembly function.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
 pub struct WasmSymbolSignature {
     pub parameters: &'static [WasmValType],
     pub results: &'static [WasmValType],

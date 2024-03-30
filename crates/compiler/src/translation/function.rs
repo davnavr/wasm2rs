@@ -545,19 +545,32 @@ pub(in crate::translation) fn write_definition(
     import_counts: &crate::translation::ImportCounts,
     emit_stack_overflow_checks: bool,
 ) -> crate::Result<()> {
+    let func_idx = validator.index();
     let func_type =
-        wasmparser::WasmModuleResources::type_of_function(validator.resources(), validator.index())
+        wasmparser::WasmModuleResources::type_of_function(validator.resources(), func_idx)
             .expect("could not get function type");
 
     let func_result_count =
         u32::try_from(func_type.results().len()).with_context(|| "too many results in function")?;
 
+    // TODO: Introduce constant to store the custom name.
     let _ = write!(
         out,
-        "\n    const {}: Option<u64> = Some({:#X});\n    fn {}",
-        crate::translation::display::CodeOffset(validator.index()),
+        "\n    const {}: embedder::rt::stack::trace::WasmSymbol = {{ \
+            let mut s = embedder::rt::stack::trace::WasmSymbol::new(\
+                {func_idx}, \
+                &Self::{}, \
+                embedder::rt::stack::trace::WasmSymbolKind::Defined {{ offset: {} }}\
+            ); \
+            s.export_names = Self::{}; \
+            s \
+        }};\n    \
+        fn {}",
+        crate::translation::display::FuncSymbol(func_idx),
+        crate::translation::display::FuncSignature(func_idx),
         body.range().start,
-        crate::translation::display::FuncId(validator.index())
+        crate::translation::display::FuncExportSymbols(func_idx),
+        crate::translation::display::FuncId(func_idx)
     );
 
     write_definition_signature(out, func_type);
@@ -566,9 +579,12 @@ pub(in crate::translation) fn write_definition(
     // TODO: Make a crate::buffer::IndentedWriter or something
 
     if emit_stack_overflow_checks {
-        let _ = writeln!(out,
-            "      embedder::rt::stack::check_for_overflow(Self::STACK_FRAME_SIZE_{}, &self.embedder)?;\n",
-            validator.index()
+        let _ = writeln!(
+            out,
+            "      embedder::rt::stack::check_for_overflow(\
+                Self::STACK_FRAME_SIZE_{func_idx}, \
+                &self.embedder\
+            )?;\n",
         );
     }
 
@@ -618,7 +634,7 @@ pub(in crate::translation) fn write_definition(
                     "::core::result::Result::Err(embedder::rt::trap::unreachable(&self.embedder, &",
                 );
 
-                write_stack_trace_frame(out, validator.index(), body.range().start, op_offset);
+                write_stack_trace_frame(out, func_idx, body.range().start, op_offset);
 
                 out.write_str("))");
 

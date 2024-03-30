@@ -5,7 +5,7 @@ mod wasm_symbol;
 // pub use backtrace::{BacktraceFrame as NativeStackTraceFrame, BacktraceSymbol as NativeSymbol};
 pub use wasm_symbol::{
     WasmImportSymbol, /* WasmSymbolTable, WasmSymbolTableIter */
-    WasmSymbol, WasmSymbolKind, WasmSymbolSignature,
+    WasmSymbol, WasmSymbolKind, WasmSymbolSignature, WasmValType,
 };
 
 /// Stores WebAssembly-specific information for a native stack frame corresponding to a Rust
