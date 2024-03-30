@@ -34,6 +34,11 @@ fn basic_closure_call() {
     );
 
     assert_eq!(call_counter.get(), 1);
+
+    let cloned = func_ref.clone();
+    assert_eq!(func_ref.call_2(1, 2, &trap), Ok(1));
+    assert_eq!(cloned.call_2(2, 3, &trap), Ok(2));
+    assert_eq!(call_counter.get(), 3);
 }
 
 #[test]

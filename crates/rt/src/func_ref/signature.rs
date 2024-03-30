@@ -17,7 +17,7 @@ impl FuncRefSignature {
     ///
     /// The type parameter `F` **should** be a function pointer in the following form:
     ///
-    /// ```no_run
+    /// ```ignore
     /// unsafe fn(&RawFuncRefData, A0, A1, ...) -> Result<(R0, R1, ...), E>
     /// ```
     ///
