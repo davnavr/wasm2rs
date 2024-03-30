@@ -16,4 +16,4 @@ pub mod rust;
 
 pub use anyhow::{Error, Result};
 pub use func_validator_allocation_pool::FuncValidatorAllocationPool;
-pub use translation::{DataSegmentWriter, Translation};
+pub use translation::{DataSegmentWriter, DebugInfo, Translation};

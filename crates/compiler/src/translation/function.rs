@@ -520,17 +520,26 @@ fn write_branch(
 fn write_stack_trace_frame(
     out: &mut crate::buffer::Writer<'_>,
     index: u32,
+    debug_level: crate::DebugInfo,
     body_offset: usize,
     operator_offset: usize,
 ) {
-    let _ = write!(
-        out,
-        "{{ const FRAME: embedder::rt::trap::WasmStackTraceFrame = \
-            embedder::rt::trap::WasmStackTraceFrame::new(&Instance::{}, {}); \
-            FRAME }}",
-        crate::translation::display::FuncSymbol(index),
-        operator_offset - body_offset,
-    );
+    if debug_level.include_symbols() {
+        let _ = write!(
+            out,
+            "&{{ const FRAME: embedder::rt::trap::WasmStackTraceFrame = \
+                embedder::rt::trap::WasmStackTraceFrame::new(&Instance::{}, {}); \
+                FRAME }}",
+            crate::translation::display::FuncSymbol(index),
+            operator_offset - body_offset,
+        );
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::translation) struct Options {
+    pub emit_stack_overflow_checks: bool,
+    pub debug_info: crate::DebugInfo,
 }
 
 /// Generates a [Rust function] definition corresponding to a [WebAssembly function body].
@@ -543,7 +552,7 @@ pub(in crate::translation) fn write_definition(
     body: &wasmparser::FunctionBody,
     types: &wasmparser::types::Types, // TODO: Remove types parameter, see if validator by itself can be used
     import_counts: &crate::translation::ImportCounts,
-    emit_stack_overflow_checks: bool,
+    options: Options,
 ) -> crate::Result<()> {
     let func_idx = validator.index();
     let func_type =
@@ -554,22 +563,28 @@ pub(in crate::translation) fn write_definition(
         u32::try_from(func_type.results().len()).with_context(|| "too many results in function")?;
 
     // TODO: Introduce constant to store the custom name.
+    if options.debug_info.include_symbols() {
+        let _ = write!(
+            out,
+            "\n    const {}: embedder::rt::stack::trace::WasmSymbol = {{ \
+                let mut s = embedder::rt::stack::trace::WasmSymbol::new(\
+                    {func_idx}, \
+                    &Self::{}, \
+                    embedder::rt::stack::trace::WasmSymbolKind::Defined {{ offset: {} }}\
+                ); \
+                s.export_names = Self::{}; \
+                s \
+            }};",
+            crate::translation::display::FuncSymbol(func_idx),
+            crate::translation::display::FuncSignature(func_idx),
+            body.range().start,
+            crate::translation::display::FuncExportSymbols(func_idx),
+        );
+    }
+
     let _ = write!(
         out,
-        "\n    const {}: embedder::rt::stack::trace::WasmSymbol = {{ \
-            let mut s = embedder::rt::stack::trace::WasmSymbol::new(\
-                {func_idx}, \
-                &Self::{}, \
-                embedder::rt::stack::trace::WasmSymbolKind::Defined {{ offset: {} }}\
-            ); \
-            s.export_names = Self::{}; \
-            s \
-        }};\n    \
-        fn {}",
-        crate::translation::display::FuncSymbol(func_idx),
-        crate::translation::display::FuncSignature(func_idx),
-        body.range().start,
-        crate::translation::display::FuncExportSymbols(func_idx),
+        "\n    fn {}",
         crate::translation::display::FuncId(func_idx)
     );
 
@@ -578,7 +593,7 @@ pub(in crate::translation) fn write_definition(
 
     // TODO: Make a crate::buffer::IndentedWriter or something
 
-    if emit_stack_overflow_checks {
+    if options.emit_stack_overflow_checks {
         let _ = writeln!(
             out,
             "      embedder::rt::stack::check_for_overflow(\
@@ -631,10 +646,16 @@ pub(in crate::translation) fn write_definition(
                 }
 
                 out.write_str(
-                    "::core::result::Result::Err(embedder::rt::trap::unreachable(&self.embedder, &",
+                    "::core::result::Result::Err(embedder::rt::trap::unreachable(&self.embedder, ",
                 );
 
-                write_stack_trace_frame(out, func_idx, body.range().start, op_offset);
+                write_stack_trace_frame(
+                    out,
+                    func_idx,
+                    options.debug_info,
+                    body.range().start,
+                    op_offset,
+                );
 
                 out.write_str("))");
 
@@ -1798,7 +1819,7 @@ pub(in crate::translation) fn write_definition(
 
     out.write_str("    }\n");
 
-    if emit_stack_overflow_checks {
+    if options.emit_stack_overflow_checks {
         let _ = writeln!(
             out,
             "\n    const STACK_FRAME_SIZE_{}: usize = {};\n",

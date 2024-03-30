@@ -7,6 +7,7 @@ pub(in crate::translation) fn write(
     buffer_pool: &crate::buffer::Pool,
     section: wasmparser::ImportSectionReader,
     types: &wasmparser::types::Types,
+    debug_level: crate::DebugInfo,
 ) -> crate::Result<crate::translation::GeneratedLines> {
     let mut impl_out = crate::buffer::Writer::new(buffer_pool);
     let mut init_out = crate::buffer::Writer::new(buffer_pool);
@@ -23,16 +24,18 @@ pub(in crate::translation) fn write(
 
         let import = result?;
 
-        if !name_map
-            .entry(import.module)
-            .or_default()
-            .insert(import.name)
-        {
-            todo!(
-                "conflicting imports ({:?} from {:?}) are not yet supported",
-                import.name,
-                import.module
-            );
+        if debug_level.include_symbols() {
+            if !name_map
+                .entry(import.module)
+                .or_default()
+                .insert(import.name)
+            {
+                todo!(
+                    "conflicting imports ({:?} from {:?}) are not yet supported",
+                    import.name,
+                    import.module
+                );
+            }
         }
 
         impl_out.write_str("    fn ");

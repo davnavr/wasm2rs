@@ -32,6 +32,47 @@ struct GeneratedLines {
 pub type DataSegmentWriter<'a> =
     &'a (dyn Fn(u32, &[u8]) -> std::io::Result<Option<String>> + Send + Sync);
 
+/// Used to specify what debug information is included in the generated Rust code.
+///
+/// See [`Translation::debug_info`] for more
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum DebugInfo {
+    /// All debug information is removed.
+    Omit,
+    /// Only bytecode offsets, function parameter and result types, and function names are
+    /// included.
+    ///
+    /// Function names are taken from:
+    /// - The [*import* section].
+    /// - The [*export* section].
+    /// - If available, the [`name` custom section].
+    /// - If available, DWARF debug data (**not yet implemented**).
+    ///
+    /// [*import* section]: https://webassembly.github.io/spec/core/syntax/modules.html#imports
+    /// [*export* section]: https://webassembly.github.io/spec/core/syntax/modules.html#exports
+    /// [`name` custom section]: https://webassembly.github.io/spec/core/appendix/custom.html#name-section
+    SymbolsOnly,
+    /// Includes everything from [`SymbolsOnly`], in addition to file names and line number
+    /// information taken from DWARF debug data if it is available (**not yet implemented**).
+    ///
+    /// [`SymbolsOnly`]: DebugInfo::SymbolsOnly
+    LineTablesOnly,
+    /// Includes everything from [`LineTablesOnly`], in addition to variable names taken from
+    /// the [`name` custom section] and DWARF debug data (**not yet implemented**) if available.
+    ///
+    /// [`LineTablesOnly`]: DebugInfo::LineTablesOnly
+    /// [`name` custom section]: https://webassembly.github.io/spec/core/appendix/custom.html#name-section
+    #[default]
+    Full,
+}
+
+impl DebugInfo {
+    fn include_symbols(&self) -> bool {
+        *self != Self::Omit
+    }
+}
+
 /// Provides options for translating a [WebAssembly binary module] into a [Rust source file].
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
@@ -41,6 +82,7 @@ pub struct Translation<'a> {
     data_segment_writer: DataSegmentWriter<'a>,
     wasm_features: &'a wasmparser::WasmFeatures,
     emit_stack_overflow_checks: bool,
+    debug_info: DebugInfo,
     buffer_pool: Option<&'a crate::buffer::Pool>,
     func_validator_allocation_pool: Option<&'a crate::FuncValidatorAllocationPool>,
 }
@@ -84,6 +126,7 @@ impl<'a> Translation<'a> {
             data_segment_writer: &|_, _| Ok(None),
             wasm_features: &Self::DEFAULT_SUPPORTED_FEATURES,
             emit_stack_overflow_checks: false,
+            debug_info: Default::default(),
             buffer_pool: None,
             func_validator_allocation_pool: None,
         }
@@ -157,6 +200,17 @@ impl<'a> Translation<'a> {
     /// See the documentation for `wasm2rs_rt::stack::check_for_overflow()` for more information.
     pub fn emit_stack_overflow_checks(&mut self, enabled: bool) -> &mut Self {
         self.emit_stack_overflow_checks = enabled;
+        self
+    }
+
+    /// Allows specifying what debug information is included in the generated Rust code.
+    ///
+    /// Currently, debug information is only used in building stack traces for WebAssembly
+    /// instructions that can [trap].
+    ///
+    /// [trap]: https://webassembly.github.io/spec/core/intro/overview.html#trap
+    pub fn debug_info(&mut self, level: DebugInfo) -> &mut Self {
+        self.debug_info = level;
         self
     }
 }
@@ -386,7 +440,11 @@ impl Translation<'_> {
         };
 
         // Generate Rust code for the functions
-        let emit_stack_overflow_checks = self.emit_stack_overflow_checks;
+        let options = function::Options {
+            emit_stack_overflow_checks: self.emit_stack_overflow_checks,
+            debug_info: self.debug_info,
+        };
+
         let function_decls = functions
             .into_par_iter()
             .map(|func| {
@@ -403,7 +461,7 @@ impl Translation<'_> {
                     &func.body,
                     &types,
                     &import_counts,
-                    emit_stack_overflow_checks,
+                    options,
                 )
                 .with_context(|| format!("failed to translate function #{index}"))?;
 
@@ -424,8 +482,13 @@ impl Translation<'_> {
             let contents = sections
                 .into_par_iter()
                 .map(|section| match section {
-                    KnownSection::Import(imports) => import::write(buffer_pool, imports, &types),
-                    KnownSection::Function => Ok(function_types::write(buffer_pool, &types)),
+                    KnownSection::Import(imports) => {
+                        import::write(buffer_pool, imports, &types, self.debug_info)
+                    }
+                    KnownSection::Function if self.debug_info.include_symbols() => {
+                        Ok(function_types::write(buffer_pool, &types))
+                    }
+                    KnownSection::Function => Ok(Default::default()),
                     KnownSection::Memory(memories) => {
                         memory::write(buffer_pool, memories, import_counts.memories)
                     }
@@ -433,7 +496,7 @@ impl Translation<'_> {
                         global::write(buffer_pool, globals, import_counts.globals)
                     }
                     KnownSection::Export(Some(exports)) => {
-                        export::write(buffer_pool, exports, &types)
+                        export::write(buffer_pool, exports, &types, self.debug_info)
                     }
                     KnownSection::Export(None) => Ok(export::write_empty(buffer_pool, &types)),
                     KnownSection::Data(data) => {
@@ -591,6 +654,7 @@ impl std::fmt::Debug for Translation<'_> {
                 "emit_stack_overflow_checks",
                 &self.emit_stack_overflow_checks,
             )
+            .field("debug_info", &self.debug_info)
             .finish_non_exhaustive()
     }
 }

@@ -59,6 +59,7 @@ pub(in crate::translation) fn write<'a>(
     buffer_pool: &crate::buffer::Pool,
     section: wasmparser::ExportSectionReader<'a>,
     types: &wasmparser::types::Types,
+    debug_level: crate::DebugInfo,
 ) -> crate::Result<crate::translation::GeneratedLines> {
     let mut impl_out = crate::buffer::Writer::new(buffer_pool);
 
@@ -86,10 +87,12 @@ pub(in crate::translation) fn write<'a>(
                     types,
                 );
 
-                func_export_symbols
-                    .entry(export.index)
-                    .or_default()
-                    .push(export.name);
+                if debug_level.include_symbols() {
+                    func_export_symbols
+                        .entry(export.index)
+                        .or_default()
+                        .push(export.name);
+                }
             }
             ExternalKind::Memory => {
                 let index = crate::translation::display::MemId(export.index);
@@ -119,31 +122,33 @@ pub(in crate::translation) fn write<'a>(
 
     impl_out.write_str("\n");
 
-    for func_idx in 0u32..types.core_function_count() {
-        let _ = write!(
-            impl_out,
-            "    const {}: &'static [&'static str] = &[",
-            crate::translation::display::FuncExportSymbols(func_idx),
-        );
+    if debug_level.include_symbols() {
+        for func_idx in 0u32..types.core_function_count() {
+            let _ = write!(
+                impl_out,
+                "    const {}: &'static [&'static str] = &[",
+                crate::translation::display::FuncExportSymbols(func_idx),
+            );
 
-        for (i, name) in func_export_symbols
-            .remove(&func_idx)
-            .unwrap_or_default()
-            .into_iter()
-            .enumerate()
-        {
-            if i > 0 {
-                impl_out.write_str(", ");
+            for (i, name) in func_export_symbols
+                .remove(&func_idx)
+                .unwrap_or_default()
+                .into_iter()
+                .enumerate()
+            {
+                if i > 0 {
+                    impl_out.write_str(", ");
+                }
+
+                let _ = write!(impl_out, "\"{}\"", name.escape_default());
             }
 
-            let _ = write!(impl_out, "\"{}\"", name.escape_default());
+            impl_out.write_str("];\n");
         }
 
-        impl_out.write_str("];\n");
-    }
-
-    if !func_export_symbols.is_empty() {
-        impl_out.write_str("\n");
+        if !func_export_symbols.is_empty() {
+            impl_out.write_str("\n");
+        }
     }
 
     Ok(crate::translation::GeneratedLines {

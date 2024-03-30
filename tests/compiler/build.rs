@@ -4,8 +4,10 @@ fn main() {
     let buffer_pool = wasm2rs::buffer::Pool::default();
     let func_validator_allocation_pool = wasm2rs::FuncValidatorAllocationPool::default();
     let mut translation_options = wasm2rs::Translation::new();
-    translation_options.buffer_pool(&buffer_pool);
-    translation_options.func_validator_allocation_pool(&func_validator_allocation_pool);
+    translation_options
+        .buffer_pool(&buffer_pool)
+        .func_validator_allocation_pool(&func_validator_allocation_pool)
+        .debug_info(wasm2rs::DebugInfo::Full);
 
     let compile_wasm = |wat: &str, name: &str| {
         let mut out_path = std::path::Path::join(out_dir.as_ref(), name);
