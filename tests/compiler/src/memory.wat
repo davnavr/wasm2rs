@@ -1,5 +1,8 @@
 (module
-  (memory 1)
+  (memory (export "mem") 1)
+
+  (data (memory 0) (offset i32.const 1234) "\01\02\03\04")
+
   (func (export "write_my_int")
     i32.const 500
     i32.const 65

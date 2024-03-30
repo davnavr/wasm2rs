@@ -67,14 +67,8 @@ impl<'a> Ident<'a> {
 }
 
 impl Ident<'static> {
-    /// Identifier for the [`i32`] primitive type.
-    pub const PRIM_I32: Self = Self::unescaped("i32");
-
-    /// Identifier for the [`i64`] primitive type.
-    pub const PRIM_I64: Self = Self::unescaped("i64");
-
-    /// Identifier for the `wasm2rs` runtime support crate.
-    pub const NAME_RT_CRATE: Self = Self::unescaped("wasm2rs_rt");
+    /// Identifier for the default name for the generated Rust macro.
+    pub const DEFAULT_MACRO_NAME: Self = Self::unescaped("wasm");
 }
 
 impl std::fmt::Display for Ident<'_> {

@@ -6,8 +6,32 @@ edition.workspace = true
 repository.workspace = true
 
 [features]
-default = ["std"]
-std = ["alloc"]
+default = [
+    "std",
+    # "backtrace",
+    "simd-intrinsics",
+    "stack-overflow-detection",
+    "merged",
+]
+
+std = ["alloc", "num-traits/std"]
 alloc = []
 
+# backtrace = ["std", "dep:backtrace"]
+simd-intrinsics = []
+stack-overflow-detection = ["std", "dep:stacker"]
+
+merged = ["simd-128"]
+simd-128 = []
+
 [dependencies]
+# backtrace = { version = "0.3.71", optional = true, default-features = true }
+num-traits = { version = "0.2.18", default-features = false }
+stacker = { version = "0.1.15", optional = true }
+
+[build-dependencies]
+cfg_aliases = "0.2.0"
+
+[[test]]
+name = "it"
+path = "tests/it/lib.rs"

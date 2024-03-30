@@ -8,12 +8,12 @@
 #![deny(clippy::exhaustive_enums)]
 
 mod error;
+mod func_validator_allocation_pool;
 mod translation;
 
+pub mod buffer;
 pub mod rust;
 
-pub use error::Error;
-pub use translation::Translation;
-
-/// Result type used for translation operations.
-pub type Result<T> = std::result::Result<T, Error>;
+pub use anyhow::{Error, Result};
+pub use func_validator_allocation_pool::FuncValidatorAllocationPool;
+pub use translation::{DataSegmentWriter, DebugInfo, Translation};

@@ -1,64 +1,75 @@
-// TODO: Move this to the `rust` module, have function that returns rust identifier/path impl Display for a Wasm ValType
-struct ValType(wasmparser::ValType);
+//! Contains the core code for translating WebAssembly to Rust.
 
-impl std::fmt::Display for ValType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
-            wasmparser::ValType::I32 => f.write_str("i32"),
-            wasmparser::ValType::I64 => f.write_str("i64"),
-            other => todo!("how to write {other}?"),
-        }
-    }
+mod const_expr;
+mod data_segment;
+mod display;
+mod export;
+mod function;
+mod function_types;
+mod global;
+mod import;
+mod memory;
+
+#[derive(Default)]
+struct GeneratedLines {
+    items: Vec<bytes::BytesMut>,
+    fields: Vec<bytes::BytesMut>,
+    impls: Vec<bytes::BytesMut>,
+    inits: Vec<bytes::BytesMut>, // Vec<Ordered<u8, bytes::Bytes>>,
 }
 
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-struct LocalVar(u32);
+/// Function that writes a data segment to some file, returning a path to it.
+///
+/// This function is passed the index of the data segment and its contents. An implementation
+/// is expected to write the contents to a new file, and return a path to it such that the
+/// generated code may use [`include_bytes!`].
+///
+/// # Errors
+///
+/// - `Ok(None)` is returned if a file could not be created. In this case, the data segment
+///   contents are included as a byte string literal.
+/// - `Err` is returned if a file could not be created.
+pub type DataSegmentWriter<'a> =
+    &'a (dyn Fn(u32, &[u8]) -> std::io::Result<Option<String>> + Send + Sync);
 
-impl std::fmt::Display for LocalVar {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "_l{}", self.0)
-    }
+/// Used to specify what debug information is included in the generated Rust code.
+///
+/// See [`Translation::debug_info`] for more
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum DebugInfo {
+    /// All debug information is removed.
+    Omit,
+    /// Only bytecode offsets, function parameter and result types, and function names are
+    /// included.
+    ///
+    /// Function names are taken from:
+    /// - The [*import* section].
+    /// - The [*export* section].
+    /// - If available, the [`name` custom section].
+    /// - If available, DWARF debug data (**not yet implemented**).
+    ///
+    /// [*import* section]: https://webassembly.github.io/spec/core/syntax/modules.html#imports
+    /// [*export* section]: https://webassembly.github.io/spec/core/syntax/modules.html#exports
+    /// [`name` custom section]: https://webassembly.github.io/spec/core/appendix/custom.html#name-section
+    SymbolsOnly,
+    /// Includes everything from [`SymbolsOnly`], in addition to file names and line number
+    /// information taken from DWARF debug data if it is available (**not yet implemented**).
+    ///
+    /// [`SymbolsOnly`]: DebugInfo::SymbolsOnly
+    LineTablesOnly,
+    /// Includes everything from [`LineTablesOnly`], in addition to variable names taken from
+    /// the [`name` custom section] and DWARF debug data (**not yet implemented**) if available.
+    ///
+    /// [`LineTablesOnly`]: DebugInfo::LineTablesOnly
+    /// [`name` custom section]: https://webassembly.github.io/spec/core/appendix/custom.html#name-section
+    #[default]
+    Full,
 }
 
-const RT_CRATE_PATH: &str = "::wasm2rs_rt";
-
-fn get_function_type(ty: &wasmparser::SubType) -> &wasmparser::FuncType {
-    if let wasmparser::SubType {
-        is_final: true,
-        supertype_idx: None,
-        composite_type: wasmparser::CompositeType::Func(sig),
-    } = ty
-    {
-        sig
-    } else {
-        unimplemented!("expected function type, but got unsupported type: {ty:?}")
-    }
-}
-
-fn get_block_type<'a>(
-    types: &'a wasmparser::types::Types,
-    ty: &'a wasmparser::BlockType,
-) -> (&'a [wasmparser::ValType], &'a [wasmparser::ValType]) {
-    use wasmparser::BlockType;
-
-    match ty {
-        BlockType::Empty => (&[], &[]),
-        BlockType::Type(result) => (&[], std::slice::from_ref(result)),
-        BlockType::FuncType(sig) => {
-            let func_type =
-                get_function_type(types.get(types.core_type_at(*sig).unwrap_sub()).unwrap());
-            (func_type.params(), func_type.results())
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct MemId(u32);
-
-impl std::fmt::Display for MemId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "_mem_{}", self.0)
+impl DebugInfo {
+    fn include_symbols(&self) -> bool {
+        *self != Self::Omit
     }
 }
 
@@ -66,13 +77,14 @@ impl std::fmt::Display for MemId {
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
 /// [Rust source file]: https://doc.rust-lang.org/reference/crates-and-source-files.html
-#[derive(Debug)]
 pub struct Translation<'a> {
-    //buffers: dyn Fn() -> Vec<u8>,
-    //thread_pool: Option<rayon::ThreadPool>,
-    //runtime_crate_path: CratePath,
-    //visibility: Public|Crate(Option<Path>),
-    generated_module_name: crate::rust::SafeIdent<'a>,
+    generated_macro_name: crate::rust::SafeIdent<'a>,
+    data_segment_writer: DataSegmentWriter<'a>,
+    wasm_features: &'a wasmparser::WasmFeatures,
+    emit_stack_overflow_checks: bool,
+    debug_info: DebugInfo,
+    buffer_pool: Option<&'a crate::buffer::Pool>,
+    func_validator_allocation_pool: Option<&'a crate::FuncValidatorAllocationPool>,
 }
 
 impl Default for Translation<'_> {
@@ -82,18 +94,19 @@ impl Default for Translation<'_> {
 }
 
 impl<'a> Translation<'a> {
-    const SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
-        mutable_global: false,
-        saturating_float_to_int: false,
-        sign_extension: false,
-        reference_types: false,
+    /// The set of WebAssembly features that are supported by default.
+    pub const DEFAULT_SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
+        mutable_global: true,
+        saturating_float_to_int: true,
+        sign_extension: true,
+        reference_types: true,
         multi_value: true,
-        bulk_memory: false,
+        bulk_memory: true,
         simd: false,
         relaxed_simd: false,
         threads: false,
         tail_call: false,
-        floats: false,
+        floats: true,
         multi_memory: false,
         exceptions: false,
         memory64: false,
@@ -106,1098 +119,542 @@ impl<'a> Translation<'a> {
         component_model_nested_names: false,
     };
 
-    #[allow(missing_docs)]
+    /// Gets the default options.
     pub fn new() -> Self {
         Self {
-            generated_module_name: crate::rust::SafeIdent::from("wasm"),
+            generated_macro_name: crate::rust::Ident::DEFAULT_MACRO_NAME.into(),
+            data_segment_writer: &|_, _| Ok(None),
+            wasm_features: &Self::DEFAULT_SUPPORTED_FEATURES,
+            emit_stack_overflow_checks: false,
+            debug_info: Default::default(),
+            buffer_pool: None,
+            func_validator_allocation_pool: None,
         }
     }
 
-    /// Sets the name of the Rust module that is generated to contain all of the translated code.
-    pub fn generated_module_name<N>(&mut self, name: N) -> &mut Self
+    /// Sets the name of the Rust macro that is generated to contain all of the translated code.
+    pub fn generated_macro_name<N>(&mut self, name: N) -> &mut Self
     where
         N: Into<crate::rust::SafeIdent<'a>>,
     {
-        self.generated_module_name = name.into();
+        self.generated_macro_name = name.into();
         self
     }
 
-    fn write_function_signature(
-        &self,
-        sig: &wasmparser::FuncType,
-        b: &mut Vec<u8>,
-    ) -> wasmparser::Result<()> {
-        use std::io::Write as _;
-
-        // Write the parameter types
-        for (i, ty) in sig.params().iter().enumerate() {
-            if i > 0 {
-                let _ = write!(b, ", ");
-            }
-
-            let _ = write!(
-                b,
-                "mut {}: {}",
-                LocalVar(u32::try_from(i).expect("too many parameters")),
-                ValType(*ty)
-            );
-        }
-
-        let _ = write!(b, ") -> ::core::result::Result<");
-
-        let results = sig.results();
-
-        if results.len() != 1 {
-            let _ = write!(b, "(");
-        }
-
-        // Write the result types
-        for (i, ty) in results.iter().enumerate() {
-            if i > 0 {
-                let _ = write!(b, ", ");
-            }
-
-            let _ = write!(b, "{}", ValType(*ty));
-        }
-
-        if results.len() != 1 {
-            let _ = write!(b, ")");
-        }
-
-        let _ = write!(b, ", <RT as {RT_CRATE_PATH}::trap::Trap>::Repr>");
-
-        Ok(())
+    /// Sets the WebAssembly features that are supported.
+    ///
+    /// Attempting to translate a WebAssembly module that uses unsupported features will result in
+    /// parser and validation errors.
+    pub fn wasm_features(&mut self, features: &'a wasmparser::WasmFeatures) -> &mut Self {
+        self.wasm_features = features;
+        self
     }
 
-    fn compile_function(
-        &self,
-        body: &wasmparser::FunctionBody,
-        validator: &mut wasmparser::FuncValidator<wasmparser::ValidatorResources>,
-        types: &wasmparser::types::Types,
-    ) -> wasmparser::Result<Vec<u8>> {
-        use wasmparser::WasmModuleResources as _;
+    /// Specifies a pool to take buffers from during translation.
+    ///
+    /// This is useful if multiple WebAssembly modules are being translated with the same
+    /// [`Translation`] options.
+    ///
+    /// If not set, a new [`Pool`] is created for every translation of one WebAssembly module.
+    ///
+    /// [`Pool`]: crate::buffer::Pool
+    pub fn buffer_pool(&mut self, pool: &'a crate::buffer::Pool) -> &mut Self {
+        self.buffer_pool = Some(pool);
+        self
+    }
 
-        // Note that write operations on a `Vec` currently always return `Ok`
-        use std::io::Write as _;
+    /// Specifies a pool to take [`FuncValidatorAllocations`] from during translation.
+    ///
+    /// This is useful if multiple WebAssembly modules are being translated with the same
+    /// [`Translation`] options.
+    ///
+    /// If not set, a new [`FuncValidatorAllocationPool`] is created for every translation of one
+    /// WebAssembly module.
+    ///
+    /// [`FuncValidatorAllocations`]: wasmparser::FuncValidatorAllocations
+    /// [`FuncValidatorAllocationPool`]: crate::FuncValidatorAllocationPool
+    pub fn func_validator_allocation_pool(
+        &mut self,
+        pool: &'a crate::FuncValidatorAllocationPool,
+    ) -> &mut Self {
+        self.func_validator_allocation_pool = Some(pool);
+        self
+    }
 
-        let mut b = Vec::new();
-        let _ = write!(&mut b, "fn _f{}(&self, ", validator.index());
+    /// Sets the function used to write data segment contents to disk.
+    ///
+    /// For more information, see the documentation for [`DataSegmentWriter`].
+    pub fn data_segment_writer(&mut self, writer: DataSegmentWriter<'a>) -> &mut Self {
+        self.data_segment_writer = writer;
+        self
+    }
 
-        let func_type = validator
-            .resources()
-            .type_of_function(validator.index())
-            .unwrap();
+    /// Allows enabling or disabling the emission of stack overflow detection code. Defaults to
+    /// `false`.
+    ///
+    /// Stack overflow detection code may be unreliable, and can only provide conservative
+    /// estimates for the remaining amount of space on the stack. It also introduces overhead for
+    /// each function call, potentially involving thread local variable accesses and other function
+    /// calls.
+    ///
+    /// See the documentation for `wasm2rs_rt::stack::check_for_overflow()` for more information.
+    pub fn emit_stack_overflow_checks(&mut self, enabled: bool) -> &mut Self {
+        self.emit_stack_overflow_checks = enabled;
+        self
+    }
 
-        self.write_function_signature(func_type, &mut b)?;
+    /// Allows specifying what debug information is included in the generated Rust code.
+    ///
+    /// Currently, debug information is only used in building stack traces for WebAssembly
+    /// instructions that can [trap].
+    ///
+    /// [trap]: https://webassembly.github.io/spec/core/intro/overview.html#trap
+    pub fn debug_info(&mut self, level: DebugInfo) -> &mut Self {
+        self.debug_info = level;
+        self
+    }
+}
 
-        let _ = writeln!(&mut b, " {{");
+enum KnownSection<'a> {
+    Import(wasmparser::ImportSectionReader<'a>),
+    Function,
+    Memory(wasmparser::MemorySectionReader<'a>),
+    Global(wasmparser::GlobalSectionReader<'a>),
+    Export(Option<wasmparser::ExportSectionReader<'a>>),
+    Data(wasmparser::DataSectionReader<'a>),
+}
 
-        let func_result_count =
-            u32::try_from(func_type.results().len()).expect("too many function results");
+struct FunctionValidator<'a> {
+    validator: wasmparser::FuncToValidate<wasmparser::ValidatorResources>,
+    body: wasmparser::FunctionBody<'a>,
+}
 
-        // Write local variables
-        {
-            let mut local_index = u32::try_from(func_type.params().len()).unwrap_or(u32::MAX);
-            let mut locals_reader = body.get_locals_reader()?;
-            let locals_count = locals_reader.get_count();
-            for _ in 0..locals_count {
-                let (count, ty) = locals_reader.read()?;
-                validator.define_locals(locals_reader.original_position(), count, ty)?;
+#[derive(Clone, Copy, Default)]
+struct ImportCounts {
+    memories: u32,
+    globals: u32,
+}
 
-                for _ in 0..count {
-                    let default_value = match ty {
-                        wasmparser::ValType::I32 | wasmparser::ValType::I64 => "0",
-                        _ => "Default::default()",
-                    };
+impl ImportCounts {
+    fn is_memory_import(&self, index: u32) -> bool {
+        index < self.memories
+    }
 
-                    let _ = writeln!(
-                        &mut b,
-                        "let mut {}: {} = {default_value};",
-                        LocalVar(local_index),
-                        ValType(ty),
-                    );
+    fn is_global_import(&self, index: u32) -> bool {
+        index < self.globals
+    }
+}
 
-                    local_index += 1;
-                }
+struct ModuleContents<'a> {
+    sections: Vec<KnownSection<'a>>,
+    functions: Vec<FunctionValidator<'a>>,
+    types: wasmparser::types::Types,
+    import_counts: ImportCounts,
+    start_function: Option<u32>,
+}
+
+fn parse_wasm_sections<'a>(
+    wasm: &'a [u8],
+    features: &wasmparser::WasmFeatures,
+) -> crate::Result<ModuleContents<'a>> {
+    let mut validator = wasmparser::Validator::new_with_features(*features);
+    let mut sections = Vec::new();
+    let mut functions = Vec::new();
+
+    let mut memory_definition_count = 0;
+    let mut global_definition_count = 0;
+    let mut start_function = None;
+
+    let mut saw_export_section = false;
+
+    for result in wasmparser::Parser::new(0).parse_all(wasm) {
+        use wasmparser::Payload;
+
+        let payload = result?;
+        match payload {
+            Payload::Version {
+                num,
+                encoding,
+                range,
+            } => {
+                validator.version(num, encoding, &range)?;
             }
-        }
-
-        #[derive(Clone, Copy)]
-        #[repr(transparent)]
-        struct StackValue(u32);
-
-        impl std::fmt::Display for StackValue {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "_s{}", self.0)
+            Payload::TypeSection(types) => {
+                validator.type_section(&types)?;
             }
-        }
-
-        #[derive(Clone, Copy)]
-        enum PoppedValue {
-            Pop(StackValue),
-            Underflow,
-        }
-
-        impl std::fmt::Display for PoppedValue {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self {
-                    Self::Pop(v) => std::fmt::Display::fmt(&v, f),
-                    Self::Underflow if f.alternate() => f.write_str("_"),
-                    Self::Underflow => f.write_str("::core::unimplemented!(\"code generation bug, operand stack underflow occured\")"),
-                }
+            Payload::ImportSection(imports) => {
+                validator.import_section(&imports)?;
+                sections.push(KnownSection::Import(imports));
             }
-        }
-
-        let pop_value = |validator: &wasmparser::FuncValidator<_>, depth: u32| {
-            match validator.get_operand_type(depth as usize) {
-                Some(Some(_)) => {
-                    // TODO: Basic copying only good for numtype and vectype, have to call Runtime::clone for funcref + externref
-                    let height = validator.operand_stack_height() - depth - 1;
-                    PoppedValue::Pop(StackValue(height))
-                }
-                Some(None) => todo!("generate code for unreachable value, call Runtime::trap"),
-                None => {
-                    // A stack underflow should be caught later by the validator
-                    PoppedValue::Underflow
-                }
+            Payload::FunctionSection(section) => {
+                validator.function_section(&section)?;
+                sections.push(KnownSection::Function);
             }
-        };
-
-        #[derive(Clone, Copy)]
-        struct Label(u32);
-
-        impl std::fmt::Display for Label {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "'l{}", self.0)
+            Payload::TableSection(tables) => {
+                validator.table_section(&tables)?;
+                //sections.push(KnownSection::Table(tables));
             }
-        }
-
-        #[must_use]
-        struct BlockInputs {
-            label: Label,
-            count: u32,
-            /// Operand stack height at which block stack inputs begin.
-            height: u32,
-        }
-
-        impl BlockInputs {
-            fn write(self, b: &mut Vec<u8>) {
-                for i in 0..self.count {
-                    let operand = StackValue(self.height + i);
-                    let _ = writeln!(b, "let mut _b{}{operand} = {operand};", self.label.0);
-                }
+            Payload::MemorySection(memories) => {
+                validator.memory_section(&memories)?;
+                memory_definition_count = memories.count();
+                sections.push(KnownSection::Memory(memories));
             }
-        }
-
-        let write_block_start = |b: &mut Vec<u8>, label: Label, operand_height, ty| {
-            let (argument_types, result_types) = get_block_type(types, &ty);
-            let argument_count = u32::try_from(argument_types.len()).expect("too many parameters");
-            let result_count = u32::try_from(result_types.len()).expect("too many results");
-            let result_start_height = operand_height - argument_count;
-
-            if result_count > 0 {
-                let _ = write!(b, "let ");
-
-                if result_count > 1 {
-                    let _ = write!(b, "(");
-                }
-
-                for i in 0..result_count {
-                    if i > 0 {
-                        let _ = write!(b, ", ");
-                    }
-
-                    let _ = write!(
-                        b,
-                        "{}",
-                        StackValue(
-                            i.checked_add(result_start_height)
-                                .expect("too many results")
-                        )
-                    );
-                }
-
-                if result_count > 1 {
-                    let _ = write!(b, ")");
-                }
-
-                let _ = write!(b, " = ");
+            Payload::TagSection(tags) => {
+                validator.tag_section(&tags)?;
+                //sections.push(KnownSection::Tag(tags));
             }
-
-            let _ = write!(b, " {label}: ");
-            BlockInputs {
-                label,
-                count: argument_count,
-                height: result_start_height,
+            Payload::GlobalSection(globals) => {
+                validator.global_section(&globals)?;
+                global_definition_count = globals.count();
+                sections.push(KnownSection::Global(globals));
             }
-        };
-
-        #[derive(Clone, Copy)]
-        enum BranchKind {
-            ExplicitReturn,
-            ImplicitReturn,
-            Block,
-            Loop(Label),
-            /// Branch out of a `block` or `if`/`else` block.
-            Branch(Label),
-        }
-
-        impl BranchKind {
-            fn write_start(&self, b: &mut Vec<u8>) {
-                match self {
-                    Self::ExplicitReturn => {
-                        let _ = write!(b, "return Ok(");
-                    }
-                    Self::ImplicitReturn => {
-                        let _ = write!(b, "Ok(");
-                    }
-                    Self::Block => (),
-                    Self::Loop(label) | Self::Branch(label) => {
-                        let _ = write!(b, "break {label} ");
-                    }
-                }
+            Payload::ExportSection(exports) => {
+                validator.export_section(&exports)?;
+                sections.push(KnownSection::Export(Some(exports)));
+                saw_export_section = true;
             }
-        }
-
-        // For `return`, `end`, and `br` instructions
-        let write_control_flow =
-            |validator: &_, b: &mut Vec<u8>, kind: BranchKind, result_count| {
-                if result_count == 0u32 {
-                    let _ = match kind {
-                        BranchKind::ExplicitReturn => writeln!(b, "return Ok(());"),
-                        BranchKind::ImplicitReturn => writeln!(b, "Ok(())"),
-                        BranchKind::Block => writeln!(b),
-                        BranchKind::Loop(label) | BranchKind::Branch(label) => {
-                            writeln!(b, "break {label};")
-                        }
-                    };
-                    return;
-                } else if result_count == 1 {
-                    kind.write_start(b);
-                    let _ = write!(b, "{}", pop_value(validator, 0));
-                } else {
-                    for i in 0..result_count {
-                        let _ = writeln!(
-                            b,
-                            "let _r{} = {};",
-                            result_count - i - 1,
-                            pop_value(validator, i),
-                        );
-                    }
-
-                    kind.write_start(b);
-                    let _ = write!(b, "(");
-                    for i in 0..result_count {
-                        if i > 0 {
-                            let _ = write!(b, ", ");
-                        }
-
-                        let _ = write!(b, "_r{i}");
-                    }
-                    let _ = write!(b, ")");
-                }
-
-                let _ = match kind {
-                    BranchKind::ExplicitReturn => writeln!(b, ");"),
-                    BranchKind::ImplicitReturn => writeln!(b, ")"),
-                    BranchKind::Block => writeln!(b),
-                    BranchKind::Loop(_) | BranchKind::Branch(_) => {
-                        writeln!(b, ";")
-                    }
-                };
-            };
-
-        let mut operators_reader = body.get_operators_reader()?;
-        while !operators_reader.eof() {
-            use wasmparser::Operator;
-
-            let (op, op_offset) = operators_reader.read_with_offset()?;
-
-            let current_frame = validator
-                .get_control_frame(0)
-                .expect("control frame stack was unexpectedly empty");
-
-            if current_frame.unreachable && !matches!(op, Operator::End | Operator::Else) {
-                // Although code is unreachable, WASM spec still requires it to be validated
-                validator.op(op_offset, &op)?;
-                // Don't generate Rust code
-                continue;
+            Payload::StartSection { func, range } => {
+                validator.start_section(func, &range)?;
+                start_function = Some(func);
             }
-
-            match op {
-                Operator::Unreachable => {
-                    let in_block = validator.control_stack_height() > 1;
-                    if in_block {
-                        let _ = write!(b, "return ");
-                    }
-
-                    let _ = write!(b, "::core::result::Result::Err(<RT as {RT_CRATE_PATH}::trap::Trap>::trap(&self._rt, {RT_CRATE_PATH}::trap::TrapCode::Unreachable))");
-
-                    let _ = if in_block {
-                        writeln!(b, ";")
-                    } else {
-                        writeln!(b)
-                    };
+            Payload::ElementSection(elements) => {
+                validator.element_section(&elements)?;
+                //sections.push(KnownSection::Elements(elements));
+            }
+            Payload::DataCountSection { count, range } => {
+                validator.data_count_section(count, &range)?
+            }
+            Payload::DataSection(data) => {
+                validator.data_section(&data)?;
+                sections.push(KnownSection::Data(data));
+            }
+            Payload::CodeSectionStart {
+                count,
+                range,
+                size: _,
+            } => validator.code_section_start(count, &range)?,
+            Payload::CodeSectionEntry(body) => functions.push(FunctionValidator {
+                validator: validator.code_section_entry(&body)?,
+                body,
+            }),
+            Payload::CustomSection(_section) => {
+                // Handling of custom `name`, 'producers' and DWARF sections is not yet implemented.
+            }
+            Payload::End(offset) => {
+                if !saw_export_section {
+                    sections.push(KnownSection::Export(None));
                 }
-                Operator::Nop | Operator::Drop => (),
-                Operator::Block { blockty } => {
-                    let _ = write_block_start(
-                        &mut b,
-                        Label(validator.control_stack_height() + 1),
-                        validator.operand_stack_height(),
-                        blockty,
-                    );
 
-                    let _ = writeln!(b, "{{");
-                }
-                Operator::Loop { blockty } => {
-                    let inputs = write_block_start(
-                        &mut b,
-                        Label(validator.control_stack_height() + 1),
-                        validator.operand_stack_height(),
-                        blockty,
-                    );
-
-                    let _ = writeln!(b, "loop {{");
-                    inputs.write(&mut b);
-                }
-                Operator::If { blockty } => {
-                    let _ = write_block_start(
-                        &mut b,
-                        Label(validator.control_stack_height() + 1),
-                        validator.operand_stack_height() - 1,
-                        blockty,
-                    );
-
-                    let _ = writeln!(b, "{{ if {} != 0i32 {{", pop_value(validator, 0));
-                }
-                Operator::Else => {
-                    let result_count = get_block_type(types, &current_frame.block_type)
-                        .1
-                        .len()
-                        .try_into()
-                        .expect("too many block results");
-
-                    write_control_flow(validator, &mut b, BranchKind::Block, result_count);
-                    let _ = writeln!(b, "}} else {{");
-                }
-                Operator::End => {
-                    if validator.control_stack_height() > 1 {
-                        let result_count = get_block_type(types, &current_frame.block_type)
-                            .1
-                            .len()
-                            .try_into()
-                            .expect("too many block results");
-
-                        // Generate code to write to result variables
-                        if !current_frame.unreachable {
-                            write_control_flow(
-                                validator,
-                                &mut b,
-                                if current_frame.kind != wasmparser::FrameKind::Loop {
-                                    BranchKind::Block
-                                } else {
-                                    BranchKind::Loop(Label(validator.control_stack_height()))
-                                },
-                                result_count,
-                            );
-                        }
-
-                        let _ = write!(b, "}}");
-
-                        // Extra brackets needed to end `if`/`else`
-                        if matches!(
-                            current_frame.kind,
-                            wasmparser::FrameKind::Else | wasmparser::FrameKind::If
-                        ) {
-                            let _ = write!(b, "}}");
-                        }
-
-                        let _ = if result_count > 0 {
-                            writeln!(b, ";")
-                        } else {
-                            writeln!(b)
-                        };
-                    } else if !current_frame.unreachable {
-                        write_control_flow(
-                            validator,
-                            &mut b,
-                            BranchKind::ImplicitReturn,
-                            func_result_count,
-                        );
-                    }
-                }
-                Operator::Br { relative_depth } => {
-                    if let Some(frame) = validator.get_control_frame(relative_depth as usize) {
-                        // `validator` will handle bad labels
-                        let (block_parameters, block_results) =
-                            get_block_type(types, &frame.block_type);
-
-                        let label = Label(validator.control_stack_height() - relative_depth);
-                        if frame.kind == wasmparser::FrameKind::Loop {
-                            let operands_start =
-                                u32::try_from(frame.height).expect("operand stack too high");
-
-                            for i in 0..u32::try_from(block_parameters.len()).unwrap() {
-                                let operand = StackValue(operands_start + i);
-                                let _ = writeln!(b, "_b{}{operand} = {operand};", label.0);
-                            }
-
-                            let _ = writeln!(b, "continue {label};");
-                        } else {
-                            write_control_flow(
-                                validator,
-                                &mut b,
-                                BranchKind::Branch(label),
-                                block_results
-                                    .len()
-                                    .try_into()
-                                    .expect("too many types for branch"),
-                            );
-                        }
-                    }
-                }
-                Operator::Return => write_control_flow(
-                    validator,
-                    &mut b,
-                    if validator.control_stack_height() == 1 {
-                        BranchKind::ImplicitReturn
-                    } else {
-                        BranchKind::ExplicitReturn
+                let types = validator.end(offset)?;
+                return Ok(ModuleContents {
+                    sections,
+                    functions,
+                    import_counts: ImportCounts {
+                        memories: types.memory_count() - memory_definition_count,
+                        globals: types.global_count() - global_definition_count,
                     },
-                    func_result_count,
-                ),
-                Operator::LocalGet { local_index } => {
-                    let _ = writeln!(
-                        &mut b,
-                        "let {} = {};",
-                        StackValue(validator.operand_stack_height()),
-                        LocalVar(local_index)
-                    );
-                }
-                Operator::LocalSet { local_index } => {
-                    let _ = writeln!(
-                        &mut b,
-                        "{} = {};",
-                        LocalVar(local_index),
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I32Load { memarg } => {
-                    let address = pop_value(validator, 0);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {} = {RT_CRATE_PATH}::memory::i32_load::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), &self._rt)?;",
-                        StackValue(validator.operand_stack_height() - 1),
-                        memarg.align,
-                        memarg.memory,
-                        MemId(memarg.memory),
-                        memarg.offset
-                    );
-                }
-                Operator::I32Store { memarg } => {
-                    let to_store = pop_value(validator, 0);
-                    let address = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "{RT_CRATE_PATH}::memory::i32_store::<{}, {}, _, _>(&self.{}, {}i32.wrapping_add({address}), {to_store}, &self._rt)?;",
-                        memarg.align,
-                        memarg.memory,
-                        MemId(memarg.memory),
-                        memarg.offset
-                    );
-                }
-                Operator::MemorySize { mem, mem_byte: _ } => {
-                    let _ = writeln!(
-                        &mut b,
-                        "let {}: i32 = {RT_CRATE_PATH}::memory::size(&self.{});",
-                        StackValue(validator.operand_stack_height()),
-                        MemId(mem),
-                    );
-                }
-                Operator::MemoryGrow { mem, mem_byte: _ } => {
-                    let operand = pop_value(validator, 0);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {operand:#}: i32 = {RT_CRATE_PATH}::memory::grow(&self.{}, {operand});",
-                        MemId(mem),
-                    );
-                }
-                Operator::I32Const { value } => {
-                    let _ = writeln!(
-                        &mut b,
-                        "let {} = {value}i32;",
-                        StackValue(validator.operand_stack_height()),
-                    );
-                }
-                Operator::I64Const { value } => {
-                    let _ = writeln!(
-                        &mut b,
-                        "let {} = {value}i64;",
-                        StackValue(validator.operand_stack_height()),
-                    );
-                }
-                Operator::I32Eqz | Operator::I64Eqz => {
-                    let result_value = pop_value(validator, 0);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {:#} = ({} == 0) as i32;",
-                        result_value, result_value
-                    );
-                }
-                Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {result_value:#} = ({result_value} == {}) as i32;",
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I32Ne | Operator::I64Ne | Operator::F32Ne | Operator::F64Ne => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {result_value:#} = ({result_value} != {}) as i32;",
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I32LtS | Operator::I64LtS => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(&mut b, "let {c_1:#} = ({c_1} < {c_2}) as i32;");
-                }
-                Operator::I32LtU => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = (({c_1} as u32) < ({c_2} as u32)) as i32;"
-                    );
-                }
-                Operator::I64LtU => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = (({c_1} as u32) < ({c_2} as u32)) as i32;"
-                    );
-                }
-                Operator::I32Add => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {result_value:#} = i32::wrapping_add({result_value}, {});",
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I32Sub => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {result_value:#} = i32::wrapping_sub({result_value}, {});",
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I32Mul => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {result_value:#} = i32::wrapping_mul({result_value}, {});",
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I32DivS => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = {RT_CRATE_PATH}::math::i32_div_s({c_1}, {c_2}, &self._rt)?;",
-                    );
-                }
-                Operator::I32DivU => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = {RT_CRATE_PATH}::math::i32_div_u({c_1}, {c_2}, &self._rt)?;",
-                    );
-                }
-                Operator::I32RemS => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = {RT_CRATE_PATH}::math::i32_rem_s({c_1}, {c_2}, &self._rt)?;",
-                    );
-                }
-                Operator::I32RemU => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = {RT_CRATE_PATH}::math::i32_rem_u({c_1}, {c_2}, &self._rt)?;",
-                    );
-                }
-                Operator::I32Shl => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(&mut b, "let {c_1:#} = {c_1} << ({c_2} % 32);");
-                }
-                Operator::I32ShrS => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(&mut b, "let {c_1:#} = {c_1} >> ({c_2} % 32);");
-                }
-                Operator::I32ShrU => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = (({c_1} as u32) >> ({c_2} % 32)) as i32;"
-                    );
-                }
-                Operator::I64Add => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {result_value:#} = i64::wrapping_add({result_value}, {});",
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I64Sub => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {result_value:#} = i64::wrapping_sub({result_value}, {});",
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I64Mul => {
-                    let result_value = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {result_value:#} = i64::wrapping_mul({result_value}, {});",
-                        pop_value(validator, 0)
-                    );
-                }
-                Operator::I64DivS => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = {RT_CRATE_PATH}::math::i64_div_s({c_1}, {c_2}, &self._rt)?;",
-                    );
-                }
-                Operator::I64DivU => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = {RT_CRATE_PATH}::math::i64_div_u({c_1}, {c_2}, &self._rt)?;",
-                    );
-                }
-                Operator::I64RemS => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = {RT_CRATE_PATH}::math::i64_rem_s({c_1}, {c_2}, &self._rt)?;",
-                    );
-                }
-                Operator::I64RemU => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = {RT_CRATE_PATH}::math::i64_rem_u({c_1}, {c_2}, &self._rt)?;",
-                    );
-                }
-                Operator::I64Shl => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(&mut b, "let {c_1:#} = {c_1} << ({c_2} % 64);");
-                }
-                Operator::I64ShrS => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(&mut b, "let {c_1:#} = {c_1} >> ({c_2} % 64);");
-                }
-                Operator::I64ShrU => {
-                    let c_2 = pop_value(validator, 0);
-                    let c_1 = pop_value(validator, 1);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {c_1:#} = (({c_1} as u64) >> ({c_2} % 64)) as i64;"
-                    );
-                }
-                Operator::I32WrapI64 => {
-                    let popped = pop_value(validator, 0);
-                    let _ = writeln!(&mut b, "let {popped:#} = {popped} as i32;");
-                }
-                Operator::I64ExtendI32S => {
-                    let popped = pop_value(validator, 0);
-                    let _ = writeln!(&mut b, "let {popped:#} = ({popped} as i32) as i64;");
-                }
-                Operator::I64ExtendI32U => {
-                    let popped = pop_value(validator, 0);
-                    let _ = writeln!(
-                        &mut b,
-                        "let {popped:#} = (({popped} as u32) as u64) as i64;",
-                    );
-                }
-                _ => todo!("translate {op:?}"),
+                    start_function,
+                    types,
+                });
             }
-
-            validator.op(op_offset, &op)?;
+            // Component model is not yet supported
+            Payload::ModuleSection { parser: _, range } => validator.module_section(&range)?,
+            Payload::InstanceSection(section) => validator.instance_section(&section)?,
+            Payload::CoreTypeSection(section) => validator.core_type_section(&section)?,
+            Payload::ComponentSection { parser: _, range } => {
+                validator.component_section(&range)?
+            }
+            Payload::ComponentInstanceSection(section) => {
+                validator.component_instance_section(&section)?
+            }
+            Payload::ComponentAliasSection(section) => {
+                validator.component_alias_section(&section)?
+            }
+            Payload::ComponentTypeSection(section) => validator.component_type_section(&section)?,
+            Payload::ComponentCanonicalSection(section) => {
+                validator.component_canonical_section(&section)?
+            }
+            Payload::ComponentStartSection { start, range } => {
+                validator.component_start_section(&start, &range)?
+            }
+            Payload::ComponentImportSection(section) => {
+                validator.component_import_section(&section)?
+            }
+            Payload::ComponentExportSection(section) => {
+                validator.component_export_section(&section)?
+            }
+            Payload::UnknownSection {
+                id,
+                contents: _,
+                range,
+            } => validator.unknown_section(id, &range)?,
         }
-
-        // Implicit return generated when last `end` is handled.
-
-        validator.finish(operators_reader.original_position())?;
-
-        let _ = writeln!(&mut b, "}}");
-        Ok(b)
     }
 
-    fn write_function_export(
-        &self,
-        name: &str,
-        index: u32,
-        types: &wasmparser::types::Types,
-        buf: &mut Vec<u8>,
-    ) -> crate::Result<()> {
-        use std::io::Write as _;
+    unreachable!("missing end payload");
+}
 
-        let _ = write!(buf, "pub fn {}(&self, ", crate::rust::SafeIdent::from(name),);
-
-        let func_type = get_function_type(types.get(types.core_function_at(index)).unwrap());
-        self.write_function_signature(func_type, buf)?;
-        let _ = write!(buf, " {{ self._f{index}(");
-
-        for i in 0..u32::try_from(func_type.params().len()).expect("too many parameters") {
-            if i > 0 {
-                let _ = write!(buf, ", ");
-            }
-
-            let _ = write!(buf, "{}", LocalVar(i));
-        }
-
-        let _ = writeln!(buf, ") }}");
-        Ok(())
-    }
-
+impl Translation<'_> {
     /// Translates an in-memory WebAssembly binary module, and [`Write`]s the resulting Rust source
     /// code to the given output.
     ///
-    /// If the `rayon` feature is enabled, portions of the parsing, validation, and translation
-    /// process may be run in parallel.
+    /// # Errors
+    ///
+    /// An error will be returned if the WebAssembly module could not be parsed, the module
+    /// [could not be validated], or if an error occured while writing to the `output`.
     ///
     /// [`Write`]: std::io::Write
-    pub fn compile_from_buffer(
+    /// [could not be validated]: https://webassembly.github.io/spec/core/valid/index.html
+    pub fn translate_from_buffer(
         &self,
         wasm: &[u8],
         output: &mut dyn std::io::Write,
     ) -> crate::Result<()> {
-        let mut validator = wasmparser::Validator::new_with_features(Self::SUPPORTED_FEATURES);
-        let payloads = wasmparser::Parser::new(0)
-            .parse_all(wasm)
-            .collect::<wasmparser::Result<Vec<_>>>()?;
+        use anyhow::Context;
+        use rayon::prelude::*;
 
-        let payloads_ref = payloads.as_slice();
-        let validate_payloads = move || -> wasmparser::Result<_> {
-            let mut functions = Vec::new();
+        let ModuleContents {
+            sections,
+            functions,
+            types,
+            import_counts,
+            start_function,
+        } = parse_wasm_sections(wasm, self.wasm_features)?;
 
-            for payload in payloads_ref {
-                use wasmparser::ValidPayload;
-
-                if let wasmparser::Payload::FunctionSection(funcs) = payload {
-                    functions.reserve_exact(funcs.count() as usize);
-                }
-
-                match validator.payload(payload)? {
-                    ValidPayload::Ok | ValidPayload::Parser(_) => (),
-                    ValidPayload::Func(func, body) => functions.push((func, body)),
-                    ValidPayload::End(types) => return Ok((functions, types)),
-                }
+        let new_func_validator_allocation_pool;
+        let func_validator_allocation_pool = match self.func_validator_allocation_pool {
+            Some(existing) => existing,
+            None => {
+                new_func_validator_allocation_pool = crate::FuncValidatorAllocationPool::default();
+                &new_func_validator_allocation_pool
             }
-
-            unreachable!("missing end payload");
         };
 
-        #[derive(Clone, Copy, Debug)]
-        struct ExportEntry {
-            name: u32,
-            index: u32,
-        }
-
-        #[derive(Default, Debug)]
-        struct Definitions<'a> {
-            imports: Box<[wasmparser::Import<'a>]>,
-            export_names: Box<[&'a str]>,
-            function_exports: Box<[ExportEntry]>,
-        }
-
-        // TODO: parse sections in parallel with rayon
-        let parse_definitions = move || -> wasmparser::Result<_> {
-            use wasmparser::Payload;
-
-            let mut definitions = Definitions::default();
-
-            for payload in payloads_ref {
-                match payload {
-                    Payload::ImportSection(import_sec) => {
-                        definitions.imports = import_sec
-                            .clone()
-                            .into_iter()
-                            .collect::<wasmparser::Result<_>>()?
-                    }
-                    Payload::ExportSection(export_sec) => {
-                        let mut export_names = Vec::with_capacity(export_sec.count() as usize);
-                        let mut function_exports = Vec::with_capacity(export_names.capacity());
-                        for result in export_sec.clone() {
-                            use wasmparser::ExternalKind;
-
-                            let export = result?;
-                            let name = u32::try_from(export_names.len()).expect("too many exports");
-                            export_names.push(export.name);
-                            match export.kind {
-                                ExternalKind::Func => {
-                                    function_exports.push(ExportEntry {
-                                        name,
-                                        index: export.index,
-                                    });
-                                }
-                                _ => todo!("unsupported export: {export:?}"),
-                            }
-                        }
-
-                        definitions.export_names = export_names.into_boxed_slice();
-                        definitions.function_exports = function_exports.into_boxed_slice();
-                    }
-                    _ => (),
-                }
+        let new_buffer_pool;
+        let buffer_pool = match self.buffer_pool {
+            Some(existing) => existing,
+            None => {
+                new_buffer_pool = crate::buffer::Pool::default();
+                &new_buffer_pool
             }
-
-            Ok(definitions)
         };
 
-        let types;
-        let functions;
-        let definitions;
+        // Generate Rust code for the functions
+        let options = function::Options {
+            emit_stack_overflow_checks: self.emit_stack_overflow_checks,
+            debug_info: self.debug_info,
+        };
 
-        #[cfg(feature = "rayon")]
+        let function_decls = functions
+            .into_par_iter()
+            .map(|func| {
+                let mut out = crate::buffer::Writer::new(buffer_pool);
+                let mut validator = func
+                    .validator
+                    .into_validator(func_validator_allocation_pool.take_allocations());
+
+                let index = validator.index();
+
+                function::write_definition(
+                    &mut out,
+                    &mut validator,
+                    &func.body,
+                    &types,
+                    &import_counts,
+                    options,
+                )
+                .with_context(|| format!("failed to translate function #{index}"))?;
+
+                func_validator_allocation_pool.return_allocations(validator.into_allocations());
+                Ok(out.finish())
+            })
+            .collect::<crate::Result<Vec<_>>>()?;
+
+        // Generate globals, exports, memories, tables, and other things
+        let mut item_lines = Vec::new();
+        let mut field_lines = Vec::new();
+        let mut init_lines = Vec::new();
+        let mut impl_line_groups = function_decls;
+
+        // Note that because `sections` is in a consistent order, all of these contents will be in
+        // a consistent order too.
         {
-            let (validation_result, parse_result) =
-                rayon::join(validate_payloads, parse_definitions);
-
-            (functions, types) = validation_result?;
-            definitions = parse_result?;
-        }
-
-        #[cfg(not(feature = "rayon"))]
-        {
-            (functions, types) = validate_payloads()?;
-            definitions = validate_definitions()?;
-        }
-
-        // Generate function bodies
-        #[cfg(feature = "rayon")]
-        let function_decls: Vec<_> = {
-            use rayon::prelude::*;
-
-            let types = &types;
-            let mut function_decls_unsorted = vec![(0, Vec::new()); functions.len()];
-
-            // TODO: Zip keeps order of items, remove the extra Vec
-            // TODO: Create a pool of FuncValidatorAllocations
-            functions
+            let contents = sections
                 .into_par_iter()
-                .zip_eq(function_decls_unsorted.par_iter_mut())
-                .try_for_each(|((func, body), dst)| {
-                    let mut validator = func.into_validator(Default::default());
-                    *dst = (
-                        validator.index(),
-                        self.compile_function(&body, &mut validator, types)?,
-                    );
-                    crate::Result::Ok(())
-                })?;
-
-            // Ensure that functions are emitted in the same order.
-            function_decls_unsorted.par_sort_unstable_by_key(|(n, _)| *n);
-
-            function_decls_unsorted
-                .into_iter()
-                .map(|(_, b)| b)
-                .collect()
-        };
-
-        #[cfg(not(feature = "rayon"))]
-        let function_decls: Vec<_> = {
-            let mut allocs = wasmparser::FuncValidatorAllocations::default();
-            functions
-                .into_iter()
-                .map(|(func, body)| {
-                    let mut validator = func.into_validator(core::mem::take(&mut allocs));
-                    function_decls.push(self.compile_function(&body, &mut validator)?);
-                    allocs = validator.into_allocations();
-                    crate::Result::Ok(())
+                .map(|section| match section {
+                    KnownSection::Import(imports) => {
+                        import::write(buffer_pool, imports, &types, self.debug_info)
+                    }
+                    KnownSection::Function if self.debug_info.include_symbols() => {
+                        Ok(function_types::write(buffer_pool, &types))
+                    }
+                    KnownSection::Function => Ok(Default::default()),
+                    KnownSection::Memory(memories) => {
+                        memory::write(buffer_pool, memories, import_counts.memories)
+                    }
+                    KnownSection::Global(globals) => {
+                        global::write(buffer_pool, globals, import_counts.globals)
+                    }
+                    KnownSection::Export(Some(exports)) => {
+                        export::write(buffer_pool, exports, &types, self.debug_info)
+                    }
+                    KnownSection::Export(None) => Ok(export::write_empty(buffer_pool, &types)),
+                    KnownSection::Data(data) => {
+                        data_segment::write(buffer_pool, data, self.data_segment_writer)
+                    }
                 })
-                .collect::<crate::Result<_>>()?;
-        };
+                .collect::<Vec<crate::Result<_>>>();
 
-        // Generate function exports, no conflict since export names are unique in WebAssembly.
-        #[cfg(feature = "rayon")]
-        let function_exports: Vec<_> = {
-            use rayon::prelude::*;
+            let mut impl_lines = Vec::new();
 
-            let export_names = definitions.export_names.as_ref();
-            let mut translations = vec![Vec::new(); definitions.function_exports.len()];
+            for result in contents.into_iter() {
+                let mut lines = result?;
+                item_lines.append(&mut lines.items);
+                field_lines.append(&mut lines.fields);
+                init_lines.append(&mut lines.inits);
+                impl_lines.append(&mut lines.impls);
+            }
 
-            Vec::from(definitions.function_exports)
-                .into_par_iter()
-                .zip_eq(translations.par_iter_mut())
-                .try_for_each(|(export, buf)| {
-                    self.write_function_export(
-                        export_names[export.name as usize],
-                        export.index,
-                        &types,
-                        buf,
-                    )
-                })?;
+            impl_line_groups.push(impl_lines);
+        }
 
-            translations
-        };
+        let item_lines = item_lines;
+        let field_lines = field_lines;
+        let init_lines = init_lines;
+        let impl_line_groups = impl_line_groups;
 
-        #[cfg(not(feature = "rayon"))]
-        todo!("compilation without rayon currently unsupported");
-
-        writeln!(output, "/* automatically generated by wasm2rs */")?;
-
-        // Some branches might not be taken
+        // Write the file contents
         writeln!(
             output,
-            "#[allow(unused_labels)]\n#[allow(unreachable_code)]"
+            "// automatically generated by wasm2rs\nmacro_rules! {} {{",
+            self.generated_macro_name
         )?;
 
-        // Names might be mangled
-        writeln!(output, "#[allow(non_snake_case)]")?;
-
-        writeln!(output, "pub mod {} {{", self.generated_module_name)?;
-
-        // TODO: Type parameter for imports
-        write!(
-            output,
-            "#[derive(Debug)]\n#[non_exhaustive]\npub struct Instance<RT = StdRuntime> where RT: Runtime,"
+        output.write_all(
+            concat!(
+                "    ($vis:vis mod $module:ident use $(:: $embedder_start:ident ::)? $($embedder_more:ident)::+) => {\n",
+                // Names might be mangled
+                "#[allow(non_snake_case)]\n",
+                // Some functions may not be called
+                "#[allow(dead_code)]\n",
+                // Some branches may not be taken (e.g. infinite loops detected by `rustc`)
+                "#[allow(unreachable_code)]\n",
+                "$vis mod $module {\n",
+                "  use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n",
+            )
+            .as_bytes(),
         )?;
 
-        // TODO: Should exported tables/globals/memories be exposed as public fields
-        // TODO: Insert globals in struct as public fields
-        writeln!(output, "{{")?;
-        writeln!(output, "_rt: RT,")?;
+        // Write other items
+        let mut io_buffers = Vec::new();
+        crate::buffer::write_all_vectored(output, &item_lines, &mut io_buffers)?;
 
-        for i in 0..types.memory_count() {
-            writeln!(output, "{}: RT::Memory{i},", MemId(i))?;
+        // Write `Instance` struct
+        output.write_all(
+            concat!(
+                "\n  #[derive(Debug)]\n",
+                "  #[non_exhaustive]\n",
+                "  $vis struct Instance {\n",
+                "    embedder: embedder::State,\n"
+            )
+            .as_bytes(),
+        )?;
+
+        // Write fields
+        crate::buffer::write_all_vectored(output, &field_lines, &mut io_buffers)?;
+
+        // Write methods
+        output.write_all(concat!("  }\n\n  impl Instance {\n").as_bytes())?;
+        for impl_lines in impl_line_groups.iter() {
+            crate::buffer::write_all_vectored(output, impl_lines, &mut io_buffers)?;
         }
 
-        writeln!(output, "}}")?;
+        output
+            .write_all(b"    pub fn embedder(&self) -> &embedder::State { &self.embedder }\n\n")?;
 
-        // Generate `limits` module
-        writeln!(output, "pub mod limits {{")?;
+        // Writes the instantiate function.
+        //
+        // This should follow the steps described in the [`specification`]:
+        //
+        // 0. Allocate the defined tables, memories, and globals in that order.
+        //
+        // 1. Check that the imports are of the correct type. For `wasm2rs` only the limits of
+        // tables and modules have to be checkd.
+        //
+        // 2. Initialize globals and evaluate their intiailization expressions to produce their
+        // values. Validation ensures only imported globals can be accessed at this step.
+        //
+        // 3. Write element segments to the tables.
+        //
+        // 4. Write data segments to the memories.
+        //
+        // [specification]: https://webassembly.github.io/spec/core/exec/modules.html#instantiation
+        output.write_all(
+            b"    $vis fn instantiate(embedder: embedder::State) -> embedder::Result<Self> {\n",
+        )?;
+        crate::buffer::write_all_vectored(output, &init_lines, &mut io_buffers)?;
+        writeln!(output, "      let instantiated = Self {{")?;
 
-        for i in 0..types.memory_count() {
-            let mem_type = types.memory_at(i);
-            debug_assert!(!mem_type.memory64);
-
-            writeln!(
-                output,
-                "#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]\n#[repr(u32)]"
-            )?;
-            writeln!(
-                output,
-                "pub enum MinMemoryPages{i} {{ Value = {}u32, }}",
-                mem_type.initial
-            )?;
-            writeln!(
-                output,
-                "#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]\n#[repr(u32)]"
-            )?;
-            writeln!(
-                output,
-                "pub enum MaxMemoryPages{i} {{ Value = {}u32, }}",
-                mem_type.maximum.unwrap_or(u32::MAX.into())
-            )?;
+        for i in import_counts.memories..types.memory_count() {
+            writeln!(output, "        {},", display::MemId(i))?;
         }
 
-        writeln!(output, "}}")?;
-
-        // Generate `Runtime` trait
-        writeln!(output, "pub trait Runtime: {RT_CRATE_PATH}::trap::Trap {{")?;
-
-        for i in 0..types.memory_count() {
-            writeln!(output, "type Memory{i}: {RT_CRATE_PATH}::memory::Memory32;")?;
-            writeln!(
-                output,
-                "fn initialize{}(&self, minimum: self::limits::MinMemoryPages{i}, maximum: self::limits::MaxMemoryPages{i}) -> ::core::result::Result<Self::Memory{i}, <Self as {RT_CRATE_PATH}::trap::Trap>::Repr>;",
-                MemId(i))?;
+        for i in import_counts.globals..types.global_count() {
+            writeln!(output, "        {},", display::GlobalId(i))?;
         }
 
-        writeln!(output, "}}")?;
+        writeln!(output, "        embedder,\n      }};\n")?;
 
-        // Generate `StdRuntime` struct
+        if let Some(start_index) = start_function {
+            writeln!(
+                output,
+                "      instantiated.{}()?;",
+                display::FuncId(start_index)
+            )?;
+        } else {
+            output.write_all(b"      // No start function\n")?;
+        }
+
+        output.write_all(b"\n      Ok(instantiated)\n    }\n  }\n}\n")?; // impl Instance
+
+        // Other macro cases
+        output.write_all(b"    };\n    ($vis:vis mod $module:ident) => {\n")?;
         writeln!(
             output,
-            "#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]\n#[non_exhaustive]\npub struct StdRuntime;"
+            "        {}!{{$vis mod $module use ::wasm2rs_rt::embedder}}\n    }};",
+            self.generated_macro_name
         )?;
 
-        writeln!(output, "impl {RT_CRATE_PATH}::trap::Trap for StdRuntime {{")?;
-        writeln!(output, "type Repr = ::core::convert::Infallible;")?;
-        write!(output, "#[cold]\n#[inline(never)]\nfn trap(&self, code: {RT_CRATE_PATH}::trap::TrapCode) -> Self::Repr {{ ")?;
-        writeln!(output, "::core::panic!(\"{{code}}\") }}")?;
-        writeln!(output, "}}")?;
+        writeln!(
+            output,
+            "    (use $(:: $embedder_start:ident ::)? $($embedder_more:ident)::+) => {{ {}!{{mod wasm use $embedder}} }};\n}}",
+            self.generated_macro_name
+        )?;
 
-        writeln!(output, "impl Runtime for StdRuntime {{")?;
-
-        // TODO: Runtime library needs a default memory impl that defaults to array in no_std+no alloc platforms.
-        for i in 0..types.memory_count() {
-            writeln!(
-                output,
-                "type Memory{i} = {RT_CRATE_PATH}::memory::HeapMemory32;"
-            )?;
-            writeln!(output, "fn initialize{}(&self, minimum: self::limits::MinMemoryPages{i}, maximum: self::limits::MaxMemoryPages{i}) -> ::core::result::Result<Self::Memory{i}, ::core::convert::Infallible> {{", MemId(i))?;
-            writeln!(output, "{RT_CRATE_PATH}::memory::HeapMemory32::with_limits(minimum as u32, maximum as u32).map_err(|error| <Self as {RT_CRATE_PATH}::trap::Trap>::trap(self, {RT_CRATE_PATH}::trap::TrapCode::MemoryInstantiation {{ memory: {i}, error }}))")?;
-            writeln!(output, "}}")?;
-        }
-
-        writeln!(output, "}}")?;
-
-        writeln!(output, "impl<RT: Runtime> Instance<RT> {{")?;
-
-        // TODO: output.write_vectored(bufs)?;
-        for buf in function_decls {
-            output.write_all(&buf)?;
-        }
-
-        // TODO: If `RT: Default` generate `instantiate()`, rename below to `instantiate_with`
-
-        // TODO: Parameter for imports
-        writeln!(output, "pub fn instantiate(runtime: RT) -> ::core::result::Result<Self, <RT as {RT_CRATE_PATH}::trap::Trap>::Repr> {{")?;
-        // TODO: Call start function
-        writeln!(output, "Ok(Self {{")?;
-
-        for i in 0..types.memory_count() {
-            let mem = MemId(i);
-            writeln!(output, "{mem}: runtime.initialize{mem}(self::limits::MinMemoryPages{i}::Value, self::limits::MaxMemoryPages{i}::Value)?,",)?;
-        }
-
-        writeln!(output, "_rt: runtime,\n}})\n}}")?;
-
-        // Write exports
-        for buf in function_exports {
-            output.write_all(&buf)?;
-        }
-
-        writeln!(output, "}}\n}}")?;
         output.flush()?;
+
+        // Return all used buffers back to the pool
+        if let Some(buffer_pool) = self.buffer_pool {
+            buffer_pool.return_buffers_many(item_lines);
+            buffer_pool.return_buffers_many(field_lines);
+            buffer_pool.return_buffers_many(init_lines);
+            buffer_pool.return_buffers_many(impl_line_groups.into_iter().flatten());
+        }
+
         Ok(())
+    }
+}
+
+impl std::fmt::Debug for Translation<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Translation")
+            .field("generated_macro_name", &self.generated_macro_name)
+            .field("wasm_features", self.wasm_features)
+            .field(
+                "emit_stack_overflow_checks",
+                &self.emit_stack_overflow_checks,
+            )
+            .field("debug_info", &self.debug_info)
+            .finish_non_exhaustive()
     }
 }

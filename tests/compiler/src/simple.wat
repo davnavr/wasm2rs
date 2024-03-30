@@ -1,9 +1,15 @@
 (module
-  (func (export "add_five") (param i32) (result i32)
+  (func $add_five (export "add_five") (param i32) (result i32)
     local.get 0
     i32.const 5
     i32.add
     return)
+
+  (func (export "add_fifteen") (param i32) (result i32)
+    local.get 0
+    call $add_five
+    call $add_five
+    call $add_five)
 
   (func (export "block_me_up") (param i32) (result i32)
     block (result i32 i32)
@@ -71,6 +77,39 @@
         i32.const 1
         br 0
       end
+    end
+    unreachable)
+
+  (global $kibibyte i32 (i32.const 1024))
+  (func (export "size_of_kibibyte") (result i32)
+    global.get $kibibyte)
+
+  (global $counter (export "counter") (mut i32) (i32.const 0))
+  (func (export "increment_counter")
+    global.get $counter
+    i32.const 1
+    i32.add
+    global.set $counter)
+
+  (func $returnTypeOrder (result i32 i64 f32)
+    i32.const 0
+  	i64.const 0
+    f32.const 0)
+
+  (func $consumingReturnTypeOrder
+    (local i32 i64 f32)
+    call $returnTypeOrder
+    local.set 2
+    local.set 1
+    local.set 0)
+
+  (func (export "trap_on_three") (param i32)
+    block
+      local.get 0
+      i32.const 3
+      i32.eq
+      br_if 0
+      return
     end
     unreachable)
 )
