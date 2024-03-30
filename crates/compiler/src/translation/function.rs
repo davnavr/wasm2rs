@@ -554,7 +554,7 @@ pub(in crate::translation) fn write_definition(
 
     let _ = write!(
         out,
-        "\n    const {}: u64 = {:#X};\n    fn {}",
+        "\n    const {}: Option<u64> = Some({:#X});\n    fn {}",
         crate::translation::display::CodeOffset(validator.index()),
         body.range().start,
         crate::translation::display::FuncId(validator.index())

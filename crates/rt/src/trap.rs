@@ -4,7 +4,7 @@
 
 mod trap_value;
 
-pub use crate::stack::trace::{WasmStackTraceFrame, WasmSymbol};
+pub use crate::stack::trace::WasmStackTraceFrame;
 pub use trap_value::TrapValue;
 
 /// Describes which limits a memory or table did not match.
