@@ -1,4 +1,4 @@
-/// Allows reusing allocations between [`FuncValidator`].
+/// Allows reusing allocations between [`FuncValidator`]s.
 ///
 /// [`FuncValidator`]: wasmparser::FuncValidator
 #[derive(Default)]
