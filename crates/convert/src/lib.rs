@@ -11,6 +11,7 @@
 #![deny(clippy::exhaustive_enums)]
 
 pub mod buffer;
+pub mod ident;
 
 #[doc(no_inline)]
 pub use anyhow::{Error, Result};
