@@ -1,4 +1,6 @@
-/// Struct for writing bytes into a buffer.
+/// Writes bytes into [`Buffer`]s.
+///
+/// [`Buffer`]: crate::buffer::Buffer
 #[must_use = "call `Writer::finish()`"]
 pub struct Writer<'a> {
     output: Vec<bytes::BytesMut>,
@@ -9,7 +11,9 @@ pub struct Writer<'a> {
 impl<'a> Writer<'a> {
     const DEFAULT_BUFFER_CAPACITY: usize = 512;
 
-    /// Creates a new buffer that bytes can be written to, taking new buffers from the given `pool`.
+    /// Creates a new [`Writer`] to write bytes into, taking new [`Buffer`]s from the given `pool`.
+    ///
+    /// [`Buffer`]: crate::buffer::Buffer
     pub fn new(pool: &'a crate::buffer::Pool) -> Self {
         Self {
             output: Vec::new(),
@@ -18,14 +22,19 @@ impl<'a> Writer<'a> {
         }
     }
 
-    /// Gets the pool that new buffers are taken from.
+    /// Gets the pool that new [`Buffer`]s are taken from.
+    ///
+    /// [`Buffer`]: crate::buffer::Buffer
     pub fn pool(&self) -> &'a crate::buffer::Pool {
         self.pool
     }
 
     /// Returns a vector containing all of the bytes that were written.
     ///
-    /// The writers current buffer is also returned to the pool.
+    /// The writer's current [`Buffer`] is also returned to the pool, allowing any unused space in
+    /// the [`Buffer`] to be used by a later [`Writer`].
+    ///
+    /// [`Buffer`]: crate::buffer::Buffer
     pub fn finish(mut self) -> Vec<bytes::BytesMut> {
         let to_append = self.buffer.split_to(self.buffer.len());
         if !to_append.is_empty() {
@@ -77,6 +86,18 @@ impl<'a> Writer<'a> {
     /// Writes all of a string's bytes into this buffer.
     pub fn write_str(&mut self, s: &str) {
         self.write(s.as_bytes());
+    }
+
+    /// Allows using a [`Writer`] with the [`write!`] macro.
+    ///
+    /// # Panics
+    ///
+    /// Panics if some underlying write operation (e.g. [`Display::fmt()`]) returned an [`Error`].
+    ///
+    /// [`Display::fmt()`]: std::fmt::Display::fmt()
+    /// [`Error`]: std::fmt::Error
+    pub fn write_fmt(&mut self, args: std::fmt::Arguments) {
+        <Self as std::fmt::Write>::write_fmt(self, args).unwrap()
     }
 }
 

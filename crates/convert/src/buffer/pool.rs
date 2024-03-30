@@ -24,15 +24,6 @@ impl Pool {
             self.pool.push(buffer)
         }
     }
-
-    pub(crate) fn return_buffers_many<B>(&self, buffers: B)
-    where
-        B: IntoIterator<Item = bytes::BytesMut>,
-    {
-        buffers
-            .into_iter()
-            .for_each(|buffer| self.return_buffer(buffer));
-    }
 }
 
 impl std::fmt::Debug for Pool {

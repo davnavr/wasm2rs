@@ -1,0 +1,13 @@
+[package]
+name = "wasm2rs-convert"
+description = "Library for converting WebAssembly binaries to Rust source code"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+crossbeam-queue = { workspace = true }
+bytes = "1.5.0"
+rayon = { workspace = true, optional = true }
+wasmparser = "0.201.0"
