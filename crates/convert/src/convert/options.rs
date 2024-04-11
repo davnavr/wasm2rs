@@ -75,6 +75,7 @@ pub enum StackOverflowChecks {
     //Full,
 }
 
+/// Methods for specifying code generation options.
 impl<'a> crate::Convert<'a> {
     /// Sets the name of the Rust macro that is generated to contain all of the converted code.
     pub fn generated_macro_name<N>(&mut self, name: N) -> &mut Self
