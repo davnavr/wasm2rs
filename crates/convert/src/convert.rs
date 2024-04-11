@@ -1,10 +1,10 @@
 //! Contains the core code for converting WebAssembly to Rust.
 
+mod allocations;
 mod code;
-mod func_validator_allocation_pool;
 mod options;
 
-pub use func_validator_allocation_pool::FuncValidatorAllocationPool;
+pub use allocations::Allocations;
 pub use options::{DataSegmentWriter, DebugInfo, StackOverflowChecks};
 
 /// Provides options for converting a [WebAssembly binary module] into a [Rust source file].
@@ -18,7 +18,7 @@ pub struct Convert<'a> {
     stack_overflow_checks: StackOverflowChecks,
     debug_info: DebugInfo,
     buffer_pool: Option<&'a crate::buffer::Pool>,
-    func_validator_allocation_pool: Option<&'a FuncValidatorAllocationPool>,
+    allocations: Option<&'a Allocations>,
 }
 
 impl std::fmt::Debug for Convert<'_> {
@@ -47,7 +47,7 @@ impl Convert<'_> {
             stack_overflow_checks: Default::default(),
             debug_info: Default::default(),
             buffer_pool: None,
-            func_validator_allocation_pool: None,
+            allocations: None,
         }
     }
 }
@@ -246,12 +246,12 @@ impl Convert<'_> {
 
         let (module, code) = validate_payloads(&wasm)?;
 
-        let new_func_validator_allocation_pool;
-        let func_validator_allocation_pool = match self.func_validator_allocation_pool {
+        let new_allocations;
+        let allocations = match &self.allocations {
             Some(existing) => existing,
             None => {
-                new_func_validator_allocation_pool = FuncValidatorAllocationPool::default();
-                &new_func_validator_allocation_pool
+                new_allocations = Allocations::default();
+                &new_allocations
             }
         };
 

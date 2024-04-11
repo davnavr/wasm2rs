@@ -100,22 +100,18 @@ impl<'a> crate::Convert<'a> {
         self
     }
 
-    /// Specifies a pool to take [`FuncValidatorAllocations`] from during conversion.
+    /// Specifies [`Allocations`] to reuse during conversion.
     ///
     /// This is useful if multiple WebAssembly modules are being converted with the same
     /// [`Convert`] options.
     ///
-    /// If not set, a new [`FuncValidatorAllocationPool`] is created for every conversion of one
-    /// WebAssembly module.
+    /// If not set, a new [`Allocations`] pool is created for every conversion of one WebAssembly
+    /// module.
     ///
-    /// [`FuncValidatorAllocations`]: wasmparser::FuncValidatorAllocations
+    /// [`Allocations`]: Allocations
     /// [`Convert`]: crate::Convert
-    /// [`FuncValidatorAllocationPool`]: crate::FuncValidatorAllocationPool
-    pub fn func_validator_allocation_pool(
-        &mut self,
-        pool: &'a crate::FuncValidatorAllocationPool,
-    ) -> &mut Self {
-        self.func_validator_allocation_pool = Some(pool);
+    pub fn allocations(&mut self, allocations: &'a crate::Allocations) -> &mut Self {
+        self.allocations = Some(allocations);
         self
     }
 

@@ -19,6 +19,4 @@ mod convert;
 #[doc(no_inline)]
 pub use anyhow::{Error, Result};
 
-pub use convert::{
-    Convert, DataSegmentWriter, DebugInfo, FuncValidatorAllocationPool, StackOverflowChecks,
-};
+pub use convert::{Allocations, Convert, DataSegmentWriter, DebugInfo, StackOverflowChecks};
