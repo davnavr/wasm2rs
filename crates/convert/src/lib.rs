@@ -14,6 +14,7 @@
 pub mod buffer;
 pub mod ident;
 
+mod ast;
 mod convert;
 
 #[doc(no_inline)]
