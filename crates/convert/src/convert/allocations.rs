@@ -1,15 +1,39 @@
-use crossbeam_queue::SegQueue;
+#[cfg(feature = "crossbeam-queue")]
+type Pool<T> = crossbeam_queue::SegQueue<T>; // TODO: Use Mutex<Vec<T>> instead, have thread_local::ThreadLocal<Vec<T>> alongside
+
+#[cfg(not(feature = "crossbeam-queue"))]
+struct Pool<T> {
+    pool: std::cell::RefCell<Vec<T>>,
+}
+
+#[cfg(not(feature = "crossbeam-queue"))]
+impl<T> Pool<T> {
+    const fn new() -> Self {
+        Self {
+            pool: std::cell::RefCell::new(Vec::new()),
+        }
+    }
+
+    fn pop(&self) -> Option<T> {
+        self.pool.borrow_mut().pop()
+    }
+
+    fn push(&self, value: T) {
+        self.pool.borrow_mut().push(value)
+    }
+}
 
 /// Allows reusing allocations between multiple conversions of WebAssembly code.
 pub struct Allocations {
-    func_validator_allocations: SegQueue<wasmparser::FuncValidatorAllocations>,
-    ast_arenas: SegQueue<crate::ast::Arena>,
+    func_validator_allocations: Pool<wasmparser::FuncValidatorAllocations>,
+    ast_arenas: Pool<crate::ast::Arena>,
+    statement_buffers: Pool<Vec<crate::ast::Statement>>,
     // TODO: Include buffers if needed.
 }
 
 impl Default for Allocations {
     fn default() -> Self {
-        Self::default()
+        Self::new()
     }
 }
 
@@ -17,8 +41,9 @@ impl Default for Allocations {
 impl Allocations {
     const fn new() -> Self {
         Self {
-            func_validator_allocations: SegQueue::new(),
-            ast_arenas: SegQueue::new(),
+            func_validator_allocations: Pool::new(),
+            ast_arenas: Pool::new(),
+            statement_buffers: Pool::new(),
         }
     }
 
@@ -39,6 +64,17 @@ impl Allocations {
 
     pub(crate) fn return_ast_arena(&self, arena: crate::ast::Arena) {
         self.ast_arenas.push(arena)
+    }
+
+    pub(crate) fn take_statement_buffer(&self) -> Vec<crate::ast::Statement> {
+        self.statement_buffers.pop().unwrap_or_default()
+    }
+
+    pub(crate) fn return_statement_buffer(&self, mut buffer: Vec<crate::ast::Statement>) {
+        if buffer.capacity() > 0 {
+            buffer.clear();
+            self.statement_buffers.push(buffer);
+        }
     }
 }
 

@@ -1,15 +1,185 @@
 //! The entrypoint for converting a WebAssembly byte code into Rust source code.
 
-pub(in crate::convert) struct Code<'a> {
-    body: wasmparser::FunctionBody<'a>,
+pub(in crate::convert) struct Code<'wasm> {
+    body: wasmparser::FunctionBody<'wasm>,
     validator: wasmparser::FuncToValidate<wasmparser::ValidatorResources>,
 }
 
-impl<'a> Code<'a> {
-    pub(in crate::convert) fn new(validator: &mut wasmparser::Validator, body: wasmparser::FunctionBody<'a>) -> crate::Result<Self> {
+#[must_use]
+struct StatementBuilder {
+    wasm_operand_stack: Vec<crate::ast::ExprId>,
+    buffer: Vec<crate::ast::Statement>,
+    ast_arena: crate::ast::Arena,
+}
+
+impl StatementBuilder {
+    fn new(allocations: &crate::Allocations) -> Self {
+        // TODO: Value stack should be taken from `allocations`.
+        Self {
+            // TODO: Reserve space in Vec<ExprId>, collect data on avg. max stack height
+            wasm_operand_stack: Vec::new(),
+            buffer: allocations.take_statement_buffer(),
+            ast_arena: allocations.take_ast_arena(),
+        }
+    }
+
+    fn push_wasm_operand(
+        &mut self,
+        operand: impl Into<crate::ast::Expr>,
+    ) -> Result<(), crate::ast::ArenaError> {
+        self.ast_arena
+            .allocate(operand)
+            .map(|expr| self.wasm_operand_stack.push(expr))
+    }
+
+    fn pop_wasm_operand(&mut self) -> crate::ast::ExprId {
+        // Stack underflows are handled later by a `FuncValidator`, so this can't panic.
+        if let Some(expr) = self.wasm_operand_stack.pop() {
+            expr
+        } else {
+            todo!("special Expr value for operand stack underflow bugs")
+        }
+    }
+
+    fn emit_statement_inner(&mut self, statement: crate::ast::Statement) {
+        if !self.wasm_operand_stack.is_empty() {
+            todo!("flushing of wasm operand stack to temporaries not yet implemented");
+            // TODO: iter_mut for self.wasm_operand_stack, write temporaries
+        }
+
+        self.buffer.push(statement);
+    }
+
+    fn emit_statement(&mut self, statement: impl Into<crate::ast::Statement>) {
+        self.emit_statement_inner(statement.into())
+    }
+
+    fn finish(self, allocations: &crate::Allocations) -> Vec<crate::ast::Statement> {
+        let Self {
+            wasm_operand_stack,
+            buffer,
+            ast_arena,
+        } = self;
+
+        debug_assert!(wasm_operand_stack.is_empty());
+        allocations.return_ast_arena(ast_arena);
+        buffer
+    }
+}
+
+impl<'wasm> Code<'wasm> {
+    pub(in crate::convert) fn new(
+        validator: &mut wasmparser::Validator,
+        body: wasmparser::FunctionBody<'wasm>,
+    ) -> crate::Result<Self> {
         Ok(Self {
             validator: validator.code_section_entry(&body)?,
-            body
+            body,
         })
+    }
+
+    /// Converts a [WebAssembly function body] into a series of [`Statement`]s modeling Rust
+    /// source code.
+    ///
+    /// To ensure allocations are properly reused, the returned `Vec<Statement>` should be returned
+    /// to the pool of [`crate::Allocations`].
+    ///
+    /// [WebAssembly function body]: https://webassembly.github.io/spec/core/syntax/modules.html#syntax-func
+    /// [`Statement`]: crate::ast::Statement
+    pub(in crate::convert) fn convert(
+        mut self,
+        module: &crate::convert::Module<'wasm>,
+        options: &crate::Convert<'_>,
+        allocations: &crate::Allocations,
+    ) -> crate::Result<(crate::ast::FuncId, Vec<crate::ast::Statement>)> {
+        use anyhow::Context;
+
+        let mut validator = self
+            .validator
+            .into_validator(allocations.take_func_validator_allocations());
+
+        let func_idx = validator.index();
+        let func_type = module.types[module.types.core_function_at(func_idx)].unwrap_func();
+
+        let _locals = self.body.get_locals_reader()?;
+
+        if _locals.get_count() > 0 {
+            anyhow::bail!("TODO: Processing of locals is not yet implemented!");
+        }
+
+        // TODO: Reserve space in Vec<Statement>, collect data on avg. # of statements per byte of code
+        let mut builder = StatementBuilder::new(allocations);
+
+        let mut operators = self.body.get_operators_reader()?;
+        while !operators.eof() {
+            use wasmparser::Operator;
+
+            let (op, op_offset) = operators.read_with_offset()?;
+
+            // `unwrap()` not used in case `read_with_offset` erroneously returns too many
+            // operators.
+            let current_frame = validator
+                .get_control_frame(0)
+                .with_context(|| "control frame stack was unexpectedly empty")?;
+
+            if current_frame.unreachable && !matches!(op, Operator::End | Operator::Else) {
+                // Although code is unreachable, WASM spec still requires it to be validated.
+                validator.op(op_offset, &op)?;
+
+                // Don't generate Rust code for unreachable instructions.
+                continue;
+            }
+
+            match op {
+                Operator::Nop => (),
+                Operator::End => {
+                    if validator.control_stack_height() > 1 {
+                        anyhow::bail!("TODO: block support not yet implemented");
+                    } else if !current_frame.unreachable {
+                        let result_count = func_type.results().len();
+
+                        debug_assert_eq!(
+                            current_frame.height + result_count,
+                            builder.wasm_operand_stack.len(),
+                            "value stack height mismatch"
+                        );
+
+                        let results = builder.wasm_operand_stack.drain(current_frame.height..);
+                        debug_assert_eq!(result_count, results.as_slice().len());
+
+                        // TODO: Fix, operands are EVALUATED in reverse order in generated code!
+                        // Last result is popped first, so operands have to be in reverse order.
+                        let result_exprs = builder.ast_arena.allocate_many(results.rev())?;
+
+                        debug_assert_eq!(builder.wasm_operand_stack.len(), current_frame.height);
+
+                        builder.emit_statement(crate::ast::Statement::Return(result_exprs));
+                    }
+                }
+                Operator::I32Const { value } => {
+                    builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
+                }
+                Operator::I32Add => {
+                    // TODO: Macro for binop, are these popped in the correct order?
+                    let c_2 = builder.pop_wasm_operand();
+                    let c_1 = builder.pop_wasm_operand();
+                    builder.push_wasm_operand(crate::ast::Operator::I32Add { c_1, c_2 })?;
+                }
+                _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
+            }
+
+            validator.op(op_offset, &op)?;
+        }
+
+        // `Statement::Return` already generated when last `end` is handled.
+        validator.finish(operators.original_position())?;
+
+        allocations.return_func_validator_allocations(validator.into_allocations());
+
+        // TODO: Collect info for optimizations (e.g. is &self parameter needed?).
+        let output = builder.finish(allocations);
+
+        // Caller is responsible for returning this buffer to the pool.
+        Ok((crate::ast::FuncId(func_idx), output))
     }
 }

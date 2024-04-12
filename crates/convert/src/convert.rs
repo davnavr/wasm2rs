@@ -65,6 +65,24 @@ struct Module<'a> {
     types: wasmparser::types::Types,
 }
 
+impl<'wasm> Module<'wasm> {
+    fn resolve_block_type(
+        &self,
+        block_type: wasmparser::BlockType,
+    ) -> std::borrow::Cow<'_, wasmparser::FuncType> {
+        use std::borrow::Cow;
+        use wasmparser::{BlockType, FuncType};
+
+        match block_type {
+            BlockType::Empty => Cow::Owned(FuncType::new([], [])),
+            BlockType::Type(result) => Cow::Owned(FuncType::new([], [result])),
+            BlockType::FuncType(type_idx) => Cow::Borrowed(
+                self.types[self.types.core_type_at(type_idx).unwrap_sub()].unwrap_func(),
+            ),
+        }
+    }
+}
+
 fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code::Code<'a>>)> {
     /// The set of WebAssembly features that are supported by default.
     const SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
@@ -263,6 +281,29 @@ impl Convert<'_> {
         //         &new_buffer_pool
         //     }
         // };
+
+        let convert_function_bodies =
+            |code: code::Code| -> crate::Result<_> { code.convert(&module, &self, allocations) };
+
+        let function_bodies: Vec<(crate::ast::FuncId, Vec<crate::ast::Statement>)>;
+
+        #[cfg(feature = "rayon")]
+        {
+            use rayon::prelude::*;
+
+            function_bodies = code
+                .into_par_iter()
+                .map(convert_function_bodies)
+                .collect::<crate::Result<_>>()?;
+        }
+
+        #[cfg(not(feature = "rayon"))]
+        {
+            function_bodies = code
+                .into_iter()
+                .map(convert_function_bodies)
+                .collect::<crate::Result<_>>()?;
+        }
 
         todo!()
     }

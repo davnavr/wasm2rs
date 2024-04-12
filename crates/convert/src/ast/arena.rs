@@ -1,15 +1,19 @@
 #[derive(Debug)]
 pub(crate) enum ArenaError {
     IndexTooLarge,
+    ListLengthOverflow,
 }
 
 impl std::fmt::Display for ArenaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::IndexTooLarge => "index exceeded maximum",
+            Self::ListLengthOverflow => "expression list length exceeded maximum",
         })
     }
 }
+
+impl std::error::Error for ArenaError {}
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(crate) struct ExprId {
@@ -33,7 +37,8 @@ pub(crate) struct ExprId {
     ///       - If a [`Literal::F64`] is being encoded, then:
     ///         - Bits 30 to 20 correspond to the *exponent*.
     ///         - Bits 4 to 20 correspond to the high 17 bits of the `fraction`.
-    ///   - `100` is unused at this time.
+    ///   - `100` encodes a variable (a parameter or local in the original WebAssembly, or a new
+    ///     temporary). The index is stored in bits 3..31.
     ///   - `101` encodes a translated data segment. The index is stored in bits 3..31.
     ///   - `110` encodes a translated element segment. The index is stored in bits 3..31.
     ///   - `111` encodes a function reference. The function index is stored in bits 3..31, except
@@ -142,6 +147,23 @@ impl ExprListId {
     const INDEX_MASK: u32 = !Self::LEN_MASK;
 
     pub(crate) const EMPTY: Self = Self { id: u32::MAX };
+    pub(crate) const MAX_INDEX: u32 = Self::INDEX_MASK;
+    pub(crate) const MAX_LEN: u32 = (Self::LEN_MASK >> Self::INDEX_WIDTH) + 1;
+
+    pub(crate) fn new(index: u32, len: usize) -> crate::Result<Self, ArenaError> {
+        let len = u32::try_from(len)
+            .ok()
+            .filter(|len| *len <= Self::MAX_LEN)
+            .ok_or(ArenaError::ListLengthOverflow)?;
+
+        if index <= Self::MAX_INDEX {
+            Ok(Self {
+                id: index | (len << Self::INDEX_WIDTH),
+            })
+        } else {
+            Err(ArenaError::IndexTooLarge)
+        }
+    }
 
     pub(crate) const fn is_empty(self) -> bool {
         self.id == Self::EMPTY.id
@@ -207,6 +229,28 @@ impl Arena {
         match DecodeExprId::from(id) {
             DecodeExprId::Index(index) => self.arena[index],
             DecodeExprId::I32(i32) => Literal::I32(i32).into(),
+        }
+    }
+
+    pub(crate) fn allocate_many<E>(&mut self, expressions: E) -> Result<ExprListId, ArenaError>
+    where
+        E: IntoIterator<Item = ExprId>,
+    {
+        let start_len = self.arena.len();
+        let start_index = u32::try_from(start_len).map_err(|_| ArenaError::IndexTooLarge)?;
+
+        let expressions = expressions.into_iter();
+        self.arena.reserve(expressions.size_hint().0);
+        for id in expressions {
+            self.arena.push(self.get(id));
+        }
+
+        // Check if the list was empty.
+        let expressions_len = self.arena.len() - start_len;
+        if expressions_len == 0 {
+            Ok(ExprListId::EMPTY)
+        } else {
+            ExprListId::new(start_index, expressions_len)
         }
     }
 }
