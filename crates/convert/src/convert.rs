@@ -18,7 +18,6 @@ pub struct Convert<'a> {
     // wasm_features: &'a wasmparser::WasmFeatures,
     stack_overflow_checks: StackOverflowChecks,
     debug_info: DebugInfo,
-    buffer_pool: Option<&'a crate::buffer::Pool>,
     allocations: Option<&'a Allocations>,
 }
 
@@ -49,7 +48,6 @@ impl Convert<'_> {
             // wasm_features: &Self::DEFAULT_SUPPORTED_FEATURES,
             stack_overflow_checks: Default::default(),
             debug_info: Default::default(),
-            buffer_pool: None,
             allocations: None,
         }
     }
@@ -276,16 +274,6 @@ impl Convert<'_> {
             }
         };
 
-        // TODO: Use buffers from `allocations` instead.
-        let new_buffer_pool;
-        let buffer_pool = match self.buffer_pool {
-            Some(existing) => existing,
-            None => {
-                new_buffer_pool = crate::buffer::Pool::default();
-                &new_buffer_pool
-            }
-        };
-
         let convert_function_bodies = |(index, code): (usize, code::Code)| -> crate::Result<_> {
             code.convert(&module, &self, allocations)
                 .with_context(|| format!("could not format function #{index}"))
@@ -316,7 +304,7 @@ impl Convert<'_> {
         let printer_options = crate::ast::Print::new(self.indentation);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
             // TODO: Use some average # of Rust bytes per # of Wasm bytes
-            let mut out = crate::buffer::Writer::new(buffer_pool);
+            let mut out = crate::buffer::Writer::new(allocations.byte_buffer_pool());
 
             let id = crate::ast::FuncId(index as u32);
             // TODO: Write function signature

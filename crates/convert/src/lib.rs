@@ -16,6 +16,7 @@ pub mod ident;
 
 mod ast;
 mod convert;
+mod pool;
 
 #[doc(no_inline)]
 pub use anyhow::{Error, Result};

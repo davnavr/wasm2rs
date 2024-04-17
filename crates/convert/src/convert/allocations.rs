@@ -1,34 +1,11 @@
-#[cfg(feature = "crossbeam-queue")]
-type Pool<T> = crossbeam_queue::SegQueue<T>; // TODO: Use Mutex<Vec<T>> instead, have thread_local::ThreadLocal<Vec<T>> alongside
-
-#[cfg(not(feature = "crossbeam-queue"))]
-struct Pool<T> {
-    pool: std::cell::RefCell<Vec<T>>,
-}
-
-#[cfg(not(feature = "crossbeam-queue"))]
-impl<T> Pool<T> {
-    const fn new() -> Self {
-        Self {
-            pool: std::cell::RefCell::new(Vec::new()),
-        }
-    }
-
-    fn pop(&self) -> Option<T> {
-        self.pool.borrow_mut().pop()
-    }
-
-    fn push(&self, value: T) {
-        self.pool.borrow_mut().push(value)
-    }
-}
+use crate::pool::Pool;
 
 /// Allows reusing allocations between multiple conversions of WebAssembly code.
 pub struct Allocations {
     func_validator_allocations: Pool<wasmparser::FuncValidatorAllocations>,
     ast_arenas: Pool<crate::ast::Arena>,
     statement_buffers: Pool<Vec<crate::ast::Statement>>,
-    // TODO: Include buffers if needed.
+    byte_buffers: crate::buffer::Pool,
 }
 
 impl Default for Allocations {
@@ -44,6 +21,7 @@ impl Allocations {
             func_validator_allocations: Pool::new(),
             ast_arenas: Pool::new(),
             statement_buffers: Pool::new(),
+            byte_buffers: crate::buffer::Pool::new(),
         }
     }
 
@@ -75,6 +53,11 @@ impl Allocations {
             buffer.clear();
             self.statement_buffers.push(buffer);
         }
+    }
+
+    #[allow(missing_docs)]
+    pub fn byte_buffer_pool(&self) -> &crate::buffer::Pool {
+        &self.byte_buffers
     }
 }
 

@@ -1,10 +1,21 @@
 /// Stores byte buffers for later use.
-#[derive(Default)]
 pub struct Pool {
-    pool: crossbeam_queue::SegQueue<bytes::BytesMut>,
+    pool: crate::pool::Pool<bytes::BytesMut>,
+}
+
+impl Default for Pool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Pool {
+    pub(crate) const fn new() -> Self {
+        Self {
+            pool: crate::pool::Pool::new(),
+        }
+    }
+
     /// Gets an new empty buffer.
     ///
     /// If no buffers are currently in the pool, a new one is returned with the specified capacity.

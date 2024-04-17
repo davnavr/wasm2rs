@@ -94,20 +94,6 @@ impl<'a> crate::Convert<'a> {
         self
     }
 
-    /// Specifies a pool to take buffers from during conversion.
-    ///
-    /// This is useful if multiple WebAssembly modules are being converted with the same
-    /// [`Convert`] options.
-    ///
-    /// If not set, a new [`Pool`] is created for every conversion of one WebAssembly module.
-    ///
-    /// [`Convert`]: crate::Convert
-    /// [`Pool`]: crate::buffer::Pool
-    pub fn buffer_pool(&mut self, pool: &'a crate::buffer::Pool) -> &mut Self {
-        self.buffer_pool = Some(pool);
-        self
-    }
-
     /// Specifies [`Allocations`] to reuse during conversion.
     ///
     /// This is useful if multiple WebAssembly modules are being converted with the same
@@ -116,7 +102,7 @@ impl<'a> crate::Convert<'a> {
     /// If not set, a new [`Allocations`] pool is created for every conversion of one WebAssembly
     /// module.
     ///
-    /// [`Allocations`]: Allocations
+    /// [`Allocations`]: crate::Allocations
     /// [`Convert`]: crate::Convert
     pub fn allocations(&mut self, allocations: &'a crate::Allocations) -> &mut Self {
         self.allocations = Some(allocations);
