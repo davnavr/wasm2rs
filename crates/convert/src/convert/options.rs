@@ -77,6 +77,14 @@ pub enum StackOverflowChecks {
 
 /// Methods for specifying code generation options.
 impl<'a> crate::Convert<'a> {
+    /// Sets the [`Indentation`] used in the generated Rust source code.
+    ///
+    /// [`Indentation`]: crate::Indentation
+    pub fn indentation(&mut self, indentation: crate::Indentation) -> &mut Self {
+        self.indentation = indentation;
+        self
+    }
+
     /// Sets the name of the Rust macro that is generated to contain all of the converted code.
     pub fn generated_macro_name<N>(&mut self, name: N) -> &mut Self
     where

@@ -20,4 +20,5 @@ mod convert;
 #[doc(no_inline)]
 pub use anyhow::{Error, Result};
 
+pub use ast::Indentation;
 pub use convert::{Allocations, Convert, DataSegmentWriter, DebugInfo, StackOverflowChecks};

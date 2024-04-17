@@ -163,7 +163,11 @@ impl<'wasm> Code<'wasm> {
                     // TODO: Macro for binop, are these popped in the correct order?
                     let c_2 = builder.pop_wasm_operand();
                     let c_1 = builder.pop_wasm_operand();
-                    builder.push_wasm_operand(crate::ast::Operator::I32Add { c_1, c_2 })?;
+                    builder.push_wasm_operand(crate::ast::Operator::Binary {
+                        kind: crate::ast::BinOp::I32Add,
+                        c_1,
+                        c_2,
+                    })?;
                 }
                 _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
             }

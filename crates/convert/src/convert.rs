@@ -12,6 +12,7 @@ pub use options::{DataSegmentWriter, DebugInfo, StackOverflowChecks};
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
 /// [Rust source file]: https://doc.rust-lang.org/reference/crates-and-source-files.html
 pub struct Convert<'a> {
+    indentation: crate::Indentation,
     generated_macro_name: crate::ident::SafeIdent<'a>,
     data_segment_writer: DataSegmentWriter<'a>,
     // wasm_features: &'a wasmparser::WasmFeatures,
@@ -24,6 +25,7 @@ pub struct Convert<'a> {
 impl std::fmt::Debug for Convert<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Convert")
+            .field("indentation", &self.indentation)
             .field("generated_macro_name", &self.generated_macro_name)
             .field("stack_overflow_checks", &self.stack_overflow_checks)
             .field("debug_info", &self.debug_info)
@@ -41,6 +43,7 @@ impl Convert<'_> {
     /// Gets the default options.
     pub fn new() -> Self {
         Self {
+            indentation: Default::default(),
             generated_macro_name: crate::ident::Ident::DEFAULT_MACRO_NAME.into(),
             data_segment_writer: &|_, _| Ok(None),
             // wasm_features: &Self::DEFAULT_SUPPORTED_FEATURES,

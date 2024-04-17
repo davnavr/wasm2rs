@@ -1,8 +1,12 @@
 //! Contains types modeling a Rust-like syntax tree representing a WebAssembly function body.
 
 mod arena;
+mod print;
+
+pub use print::Indentation;
 
 pub(crate) use arena::{Arena, ArenaError, ExprId, ExprListId};
+pub(crate) use print::Print;
 
 /// Represents a WebAssembly [function index].
 ///
@@ -18,23 +22,26 @@ pub(crate) enum Literal {
     F64(u64),
 }
 
-impl core::fmt::Display for Literal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::I32(i) => write!(f, "{i:#010X}i32"),
-            Self::I64(i) => write!(f, "{i:#018X}i64"),
-            Self::F32(z) => write!(f, "::core::primitive::f32::from_bits({z:#010X})"),
-            Self::F64(z) => write!(f, "::core::primitive::f64::from_bits({z:#018X})"),
-        }
-    }
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum BinOp {
+    /// Wrapping addition on `i32`s (`c_1 + c_2`).
+    I32Add,
+    // /// `c_1 / c_2`
+    // I32Div { c_1: ExprId, c_2: ExprId },
+    /// Wrapping addition on `i64`s (`c_1 + c_2`).
+    I64Add,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) enum Operator {
-    /// `c_1 + c_2` (wrapping)
-    I32Add { c_1: ExprId, c_2: ExprId },
-    // /// `c_1 / c_2`
-    // I32Div { c_1: ExprId, c_2: ExprId },
+    /// Represents instructions of the form [*t.binop*] (`binop(c_1, c_2)`).
+    ///
+    /// [*t.binop*]: https://webassembly.github.io/spec/core/exec/instructions.html#exec-instr-numeric
+    Binary {
+        kind: BinOp,
+        c_1: ExprId,
+        c_2: ExprId,
+    },
 }
 
 macro_rules! from_conversions {
@@ -64,6 +71,8 @@ from_conversions! {
 
 #[derive(Clone, Copy)]
 pub(crate) enum Statement {
+    /// An expression that is evaluated, with any results discarded.
     Expr(ExprId),
+    /// Expressions that are evaluated, and used as the return values for the function.
     Return(ExprListId),
 }
