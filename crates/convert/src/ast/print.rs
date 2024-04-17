@@ -82,7 +82,23 @@ impl crate::ast::ExprListId {
         arena: &crate::ast::Arena,
         enclosed: bool,
     ) -> std::fmt::Result {
-        todo!("get expr list from arena")
+        if enclosed {
+            out.write_char('(')?;
+        }
+
+        for (i, expr) in arena.get_list(self).iter().enumerate() {
+            if i > 0 {
+                out.write_str(", ")?;
+            }
+
+            expr.print(out, arena, false)?;
+        }
+
+        if enclosed {
+            out.write_char(')')?;
+        }
+
+        Ok(())
     }
 }
 

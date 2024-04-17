@@ -156,10 +156,18 @@ impl ExprListId {
             .filter(|len| *len <= Self::MAX_LEN)
             .ok_or(ArenaError::ListLengthOverflow)?;
 
-        if index <= Self::MAX_INDEX {
-            Ok(Self {
-                id: index | (len << Self::INDEX_WIDTH),
-            })
+        if len == 0 {
+            Ok(Self::EMPTY)
+        } else if index <= Self::MAX_INDEX {
+            let encoded = Self {
+                id: index | ((len - 1) << Self::INDEX_WIDTH),
+            };
+
+            if encoded.is_empty() {
+                Err(if index == Self::MAX_INDEX { ArenaError::IndexTooLarge } else { ArenaError::ListLengthOverflow })
+            } else {
+                Ok(encoded)
+            }
         } else {
             Err(ArenaError::IndexTooLarge)
         }
@@ -174,6 +182,14 @@ impl ExprListId {
             0
         } else {
             ((self.id | Self::LEN_MASK) >> Self::INDEX_WIDTH) + 1
+        }
+    }
+
+    pub(crate) const fn first(self) -> Option<u32> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.id & Self::LEN_MASK)
         }
     }
 }
@@ -229,6 +245,14 @@ impl Arena {
         match DecodeExprId::from(id) {
             DecodeExprId::Index(index) => self.arena[index],
             DecodeExprId::I32(i32) => Literal::I32(i32).into(),
+        }
+    }
+
+    pub(crate) fn get_list(&self, list: ExprListId) -> &[crate::ast::Expr] {
+        if let Some(first) = list.first() {
+            &self.arena[(first as usize)..][..list.len() as usize]
+        } else {
+            &[]
         }
     }
 
