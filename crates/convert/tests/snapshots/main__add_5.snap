@@ -1,0 +1,5 @@
+---
+source: crates/convert/tests/main.rs
+expression: "String::from_utf8_lossy(&rust)"
+---
+return ::core::primitive::i32::wrapping_add(_l0, 5i32);

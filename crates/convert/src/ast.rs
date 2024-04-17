@@ -11,10 +11,20 @@ pub(crate) use print::Print;
 /// Represents a WebAssembly [function index].
 ///
 /// [function index]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct FuncId(pub(crate) u32);
 
-#[derive(Clone, Copy)]
+/// Represents a WebAssembly local variable in a function body.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LocalId(pub(crate) u32);
+
+impl std::fmt::Display for LocalId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_l{}", self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Literal {
     I32(i32),
     I64(i64),
@@ -22,7 +32,7 @@ pub(crate) enum Literal {
     F64(u64),
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum BinOp {
     /// Wrapping addition on `i32`s (`c_1 + c_2`).
     I32Add,
@@ -32,7 +42,7 @@ pub(crate) enum BinOp {
     I64Add,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Operator {
     /// Represents instructions of the form [*t.binop*] (`binop(c_1, c_2)`).
     ///
@@ -54,10 +64,11 @@ macro_rules! from_conversions {
     )*};
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Expr {
     Literal(Literal),
     Operator(Operator),
+    GetLocal(LocalId),
     Call {
         callee: FuncId,
         arguments: ExprListId,

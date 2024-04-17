@@ -50,7 +50,7 @@ impl StatementBuilder {
             wasm_operand_stack: Vec::new(),
             buffer: allocations.take_statement_buffer(),
             ast_arena: allocations.take_ast_arena(),
-            call_kind: CallKind::Method,
+            call_kind: CallKind::Function,
         }
     }
 
@@ -185,6 +185,11 @@ impl<'wasm> Code<'wasm> {
                         builder.emit_statement(crate::ast::Statement::Return(result_exprs));
                     }
                 }
+                Operator::LocalGet { local_index } => {
+                    builder.push_wasm_operand(crate::ast::Expr::GetLocal(crate::ast::LocalId(
+                        local_index,
+                    )))?;
+                }
                 Operator::I32Const { value } => {
                     builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
                 }
@@ -209,7 +214,7 @@ impl<'wasm> Code<'wasm> {
 
         allocations.return_func_validator_allocations(validator.into_allocations());
 
-        // TODO: Collect info for optimizations (e.g. is &self parameter needed, what locals were mutated?).
+        // TODO: Collect info for optimizations (e.g. what locals were mutated?).
         Ok(builder.finish())
     }
 }

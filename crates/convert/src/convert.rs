@@ -344,6 +344,6 @@ impl Convert<'_> {
             &mut Vec::with_capacity(function_items.len()),
         )?;
 
-        todo!()
+        Ok(())
     }
 }

@@ -56,7 +56,11 @@ impl Default for Indentation {
 impl crate::ast::Literal {
     fn print(&self, out: &mut crate::buffer::Writer) {
         match self {
+            Self::I32(i) if *i <= 9 => write!(out, "{i}i32"),
+            Self::I32(i) if *i <= 0xFFFF => write!(out, "{i:#X}i32"),
             Self::I32(i) => write!(out, "{i:#010X}i32"),
+            Self::I64(i) if *i <= 9 => write!(out, "{i}i64"),
+            Self::I64(i) if *i <= 0xFFFF => write!(out, "{i:#X}i64"),
             Self::I64(i) => write!(out, "{i:#018X}i64"),
             Self::F32(z) => write!(out, "::core::primitive::f32::from_bits({z:#010X})"),
             Self::F64(z) => write!(out, "::core::primitive::f64::from_bits({z:#018X})"),
@@ -128,6 +132,7 @@ impl crate::ast::Expr {
                     }
                 }
             },
+            Self::GetLocal(local) => write!(out, "{local}"),
             Self::Call { callee, arguments } => {
                 todo!("cannot generate call, need to figure out if self should be passed")
             }

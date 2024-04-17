@@ -99,7 +99,7 @@ impl ExprId {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum DecodeExprId {
     Index(usize),
     I32(i32),
@@ -126,6 +126,12 @@ impl From<ExprId> for DecodeExprId {
     }
 }
 
+impl std::fmt::Debug for ExprId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&DecodeExprId::from(*self), f)
+    }
+}
+
 /// Used to refer to zero or more related [`Expr`]essions.
 ///
 /// This is usually used for comma-separated lists of [`Expr`]essions, such as in function
@@ -148,7 +154,7 @@ impl ExprListId {
 
     pub(crate) const EMPTY: Self = Self { id: u32::MAX };
     pub(crate) const MAX_INDEX: u32 = Self::INDEX_MASK;
-    pub(crate) const MAX_LEN: u32 = (Self::LEN_MASK >> Self::INDEX_WIDTH) + 1;
+    pub(crate) const MAX_LEN: u32 = (Self::LEN_MASK >> Self::INDEX_WIDTH) - 1;
 
     pub(crate) fn new(index: u32, len: usize) -> crate::Result<Self, ArenaError> {
         let len = u32::try_from(len)
@@ -163,15 +169,9 @@ impl ExprListId {
                 id: index | ((len - 1) << Self::INDEX_WIDTH),
             };
 
-            if encoded.is_empty() {
-                Err(if index == Self::MAX_INDEX {
-                    ArenaError::IndexTooLarge
-                } else {
-                    ArenaError::ListLengthOverflow
-                })
-            } else {
-                Ok(encoded)
-            }
+            debug_assert!(!encoded.is_empty());
+
+            Ok(encoded)
         } else {
             Err(ArenaError::IndexTooLarge)
         }
@@ -185,7 +185,7 @@ impl ExprListId {
         if self.is_empty() {
             0
         } else {
-            ((self.id | Self::LEN_MASK) >> Self::INDEX_WIDTH) + 1
+            (self.id >> Self::INDEX_WIDTH) + 1
         }
     }
 
@@ -193,7 +193,17 @@ impl ExprListId {
         if self.is_empty() {
             None
         } else {
-            Some(self.id & Self::LEN_MASK)
+            Some(self.id & Self::INDEX_MASK)
+        }
+    }
+}
+
+impl std::fmt::Debug for ExprListId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(first) = self.first() {
+            std::fmt::Debug::fmt(&(first..first + self.len()), f)
+        } else {
+            f.debug_list().finish()
         }
     }
 }
@@ -273,12 +283,6 @@ impl Arena {
             self.arena.push(self.get(id));
         }
 
-        // Check if the list was empty.
-        let expressions_len = self.arena.len() - start_len;
-        if expressions_len == 0 {
-            Ok(ExprListId::EMPTY)
-        } else {
-            ExprListId::new(start_index, expressions_len)
-        }
+        ExprListId::new(start_index, self.arena.len() - start_len)
     }
 }
