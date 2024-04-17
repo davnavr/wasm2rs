@@ -164,7 +164,11 @@ impl ExprListId {
             };
 
             if encoded.is_empty() {
-                Err(if index == Self::MAX_INDEX { ArenaError::IndexTooLarge } else { ArenaError::ListLengthOverflow })
+                Err(if index == Self::MAX_INDEX {
+                    ArenaError::IndexTooLarge
+                } else {
+                    ArenaError::ListLengthOverflow
+                })
             } else {
                 Ok(encoded)
             }

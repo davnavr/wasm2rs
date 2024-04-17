@@ -276,26 +276,30 @@ impl Convert<'_> {
             }
         };
 
-        // let new_buffer_pool;
-        // let buffer_pool = match self.buffer_pool {
-        //     Some(existing) => existing,
-        //     None => {
-        //         new_buffer_pool = crate::buffer::Pool::default();
-        //         &new_buffer_pool
-        //     }
-        // };
+        // TODO: Use buffers from `allocations` instead.
+        let new_buffer_pool;
+        let buffer_pool = match self.buffer_pool {
+            Some(existing) => existing,
+            None => {
+                new_buffer_pool = crate::buffer::Pool::default();
+                &new_buffer_pool
+            }
+        };
 
-        let convert_function_bodies =
-            |code: code::Code| -> crate::Result<_> { code.convert(&module, &self, allocations) };
+        let convert_function_bodies = |(index, code): (usize, code::Code)| -> crate::Result<_> {
+            code.convert(&module, &self, allocations)
+                .with_context(|| format!("could not format function #{index}"))
+        };
 
-        let function_bodies: Vec<(crate::ast::FuncId, Vec<crate::ast::Statement>)>;
+        let function_definitions: Vec<code::Definition>;
 
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
 
-            function_bodies = code
+            function_definitions = code
                 .into_par_iter()
+                .enumerate()
                 .map(convert_function_bodies)
                 .collect::<crate::Result<_>>()?;
         }
@@ -304,9 +308,53 @@ impl Convert<'_> {
         {
             function_bodies = code
                 .into_iter()
+                .enumerate()
                 .map(convert_function_bodies)
                 .collect::<crate::Result<_>>()?;
         }
+
+        let printer_options = crate::ast::Print::new(self.indentation);
+        let write_function_definitions = |(index, definition): (usize, code::Definition)| {
+            // TODO: Use some average # of Rust bytes per # of Wasm bytes
+            let mut out = crate::buffer::Writer::new(buffer_pool);
+
+            let id = crate::ast::FuncId(index as u32);
+            // TODO: Write function signature
+
+            printer_options.print_statements(&mut out, &definition.arena, &definition.body);
+
+            definition.finish(allocations);
+            out.finish()
+        };
+
+        let function_items: Vec<crate::buffer::Buffer>;
+
+        {
+            use rayon::prelude::*;
+
+            function_items = function_definitions
+                .into_par_iter()
+                .enumerate()
+                .map(write_function_definitions)
+                .flatten()
+                .collect();
+        }
+
+        #[cfg(not(feature = "rayon"))]
+        {
+            function_items = function_definitions
+                .into_iter()
+                .enumerate()
+                .map(write_function_definitions)
+                .flatten()
+                .collect();
+        }
+
+        crate::buffer::write_all_vectored(
+            output,
+            &function_items,
+            &mut Vec::with_capacity(function_items.len()),
+        )?;
 
         todo!()
     }

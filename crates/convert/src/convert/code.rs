@@ -5,11 +5,41 @@ pub(in crate::convert) struct Code<'wasm> {
     validator: wasmparser::FuncToValidate<wasmparser::ValidatorResources>,
 }
 
+pub(in crate::convert) enum CallKind {
+    /// No additional argument is added. The generated Rust function is an associated
+    /// function.
+    Function,
+    /// A `self` argument is added. The generated Rust function is a method.
+    ///
+    /// A function generated with this [`CallKind`] is always correct.
+    Method,
+    // /// The function only accesses a linear memory.
+    // WithMemory(u32),
+}
+
+#[must_use]
+pub(in crate::convert) struct Definition {
+    // TODO: bitvec of which locals are mutable
+    pub(in crate::convert) call_kind: CallKind,
+
+    // Caller is responsible for returning these to the pool.
+    pub(in crate::convert) body: Vec<crate::ast::Statement>,
+    pub(in crate::convert) arena: crate::ast::Arena,
+}
+
+impl Definition {
+    pub(in crate::convert) fn finish(self, allocations: &crate::Allocations) {
+        allocations.return_statement_buffer(self.body);
+        allocations.return_ast_arena(self.arena);
+    }
+}
+
 #[must_use]
 struct StatementBuilder {
     wasm_operand_stack: Vec<crate::ast::ExprId>,
     buffer: Vec<crate::ast::Statement>,
     ast_arena: crate::ast::Arena,
+    call_kind: CallKind,
 }
 
 impl StatementBuilder {
@@ -20,6 +50,7 @@ impl StatementBuilder {
             wasm_operand_stack: Vec::new(),
             buffer: allocations.take_statement_buffer(),
             ast_arena: allocations.take_ast_arena(),
+            call_kind: CallKind::Method,
         }
     }
 
@@ -54,16 +85,14 @@ impl StatementBuilder {
         self.emit_statement_inner(statement.into())
     }
 
-    fn finish(self, allocations: &crate::Allocations) -> Vec<crate::ast::Statement> {
-        let Self {
-            wasm_operand_stack,
-            buffer,
-            ast_arena,
-        } = self;
+    fn finish(self) -> Definition {
+        debug_assert!(self.wasm_operand_stack.is_empty());
 
-        debug_assert!(wasm_operand_stack.is_empty());
-        allocations.return_ast_arena(ast_arena);
-        buffer
+        Definition {
+            call_kind: self.call_kind,
+            body: self.buffer,
+            arena: self.ast_arena,
+        }
     }
 }
 
@@ -91,15 +120,15 @@ impl<'wasm> Code<'wasm> {
         module: &crate::convert::Module<'wasm>,
         options: &crate::Convert<'_>,
         allocations: &crate::Allocations,
-    ) -> crate::Result<(crate::ast::FuncId, Vec<crate::ast::Statement>)> {
+    ) -> crate::Result<Definition> {
         use anyhow::Context;
 
         let mut validator = self
             .validator
             .into_validator(allocations.take_func_validator_allocations());
 
-        let func_idx = validator.index();
-        let func_type = module.types[module.types.core_function_at(func_idx)].unwrap_func();
+        let func_type =
+            module.types[module.types.core_function_at(validator.index())].unwrap_func();
 
         let _locals = self.body.get_locals_reader()?;
 
@@ -180,10 +209,7 @@ impl<'wasm> Code<'wasm> {
 
         allocations.return_func_validator_allocations(validator.into_allocations());
 
-        // TODO: Collect info for optimizations (e.g. is &self parameter needed?).
-        let output = builder.finish(allocations);
-
-        // Caller is responsible for returning this buffer to the pool.
-        Ok((crate::ast::FuncId(func_idx), output))
+        // TODO: Collect info for optimizations (e.g. is &self parameter needed, what locals were mutated?).
+        Ok(builder.finish())
     }
 }

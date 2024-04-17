@@ -38,7 +38,7 @@ impl Indentation {
             IndentationKind::Spaces(amount) => {
                 const SPACES: &str = match std::str::from_utf8(&[b' '; 255]) {
                     Ok(s) => s,
-                    Err(e) => panic!("e"),
+                    Err(_) => panic!("spaces should be valid UTF-8"),
                 };
 
                 &SPACES[..amount.get() as usize]
@@ -54,7 +54,7 @@ impl Default for Indentation {
 }
 
 impl crate::ast::Literal {
-    fn print(&self, out: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    fn print(&self, out: &mut crate::buffer::Writer) {
         match self {
             Self::I32(i) => write!(out, "{i:#010X}i32"),
             Self::I64(i) => write!(out, "{i:#018X}i64"),
@@ -65,77 +65,60 @@ impl crate::ast::Literal {
 }
 
 impl crate::ast::ExprId {
-    fn print(
-        self,
-        out: &mut dyn std::fmt::Write,
-        arena: &crate::ast::Arena,
-        nested: bool,
-    ) -> std::fmt::Result {
+    fn print(self, out: &mut crate::buffer::Writer, arena: &crate::ast::Arena, nested: bool) {
         arena.get(self).print(out, arena, nested)
     }
 }
 
 impl crate::ast::ExprListId {
-    fn print(
-        self,
-        out: &mut dyn std::fmt::Write,
-        arena: &crate::ast::Arena,
-        enclosed: bool,
-    ) -> std::fmt::Result {
+    fn print(self, out: &mut crate::buffer::Writer, arena: &crate::ast::Arena, enclosed: bool) {
         if enclosed {
-            out.write_char('(')?;
+            out.write_str("(");
         }
 
         for (i, expr) in arena.get_list(self).iter().enumerate() {
             if i > 0 {
-                out.write_str(", ")?;
+                out.write_str(", ");
             }
 
-            expr.print(out, arena, false)?;
+            expr.print(out, arena, false);
         }
 
         if enclosed {
-            out.write_char(')')?;
+            out.write_str(")");
         }
-
-        Ok(())
     }
 }
 
 impl crate::ast::Expr {
-    fn print(
-        &self,
-        out: &mut dyn std::fmt::Write,
-        arena: &crate::ast::Arena,
-        nested: bool,
-    ) -> std::fmt::Result {
+    fn print(&self, out: &mut crate::buffer::Writer<'_>, arena: &crate::ast::Arena, nested: bool) {
         use crate::ast::{BinOp, Operator};
 
         // macro_rules! nested_expr {
         //     {$($stmt:stmt)*} => {{
         //         if nested {
-        //             out.write_char('(')?;
+        //             out.write_str('(')?;
         //         }
         //
         //         $($stmt)*
         //
         //         if nested {
-        //             out.write_char(')')?;
+        //             out.write_str(')')?;
         //         }
         //     }};
         // }
 
         match self {
-            Self::Literal(literal) => literal.print(out)?,
+            Self::Literal(literal) => literal.print(out),
             Self::Operator(op) => match op {
                 Operator::Binary { kind, c_1, c_2 } => {
                     macro_rules! bin_op {
                         ($name:literal) => {{
-                            out.write_str(concat!($name, "("))?;
-                            c_1.print(out, arena, false)?;
-                            out.write_str(", ")?;
-                            c_2.print(out, arena, false)?;
-                            out.write_char(')')?;
+                            out.write_str(concat!($name, "("));
+                            c_1.print(out, arena, false);
+                            out.write_str(", ");
+                            c_2.print(out, arena, false);
+                            out.write_str(")");
                         }};
                     }
 
@@ -149,26 +132,24 @@ impl crate::ast::Expr {
                 todo!("cannot generate call, need to figure out if self should be passed")
             }
         }
-
-        Ok(())
     }
 }
 
-pub(crate) struct Print<'a> {
-    arena: &'a crate::ast::Arena,
+pub(crate) struct Print {
     indentation: Indentation,
 }
 
-impl<'a> Print<'a> {
-    pub(crate) const fn new(arena: &'a crate::ast::Arena, indentation: Indentation) -> Self {
-        Self { arena, indentation }
+impl Print {
+    pub(crate) const fn new(indentation: Indentation) -> Self {
+        Self { indentation }
     }
 
     pub(crate) fn print_statements(
         &self,
+        out: &mut crate::buffer::Writer<'_>,
+        arena: &crate::ast::Arena,
         statements: &[crate::ast::Statement],
-        out: &mut dyn std::fmt::Write,
-    ) -> std::fmt::Result {
+    ) {
         use crate::ast::Statement;
 
         let mut indent_level = 0usize;
@@ -176,34 +157,32 @@ impl<'a> Print<'a> {
             let is_last = n == statements.len() - 1;
 
             for _ in 0..indent_level {
-                out.write_str(self.indentation.to_str())?;
+                out.write_str(self.indentation.to_str());
             }
 
             match stmt {
                 Statement::Expr(expr) => {
-                    expr.print(out, self.arena, false)?;
-                    out.write_char(';')?;
+                    expr.print(out, arena, false);
+                    out.write_str(";");
                 }
                 Statement::Return(results) => {
                     if is_last {
-                        out.write_str("return")?;
+                        out.write_str("return");
 
                         if !results.is_empty() {
-                            out.write_char(' ')?;
+                            out.write_str(" ");
                         }
                     }
 
-                    results.print(out, self.arena, results.len() != 1)?;
+                    results.print(out, arena, results.len() != 1);
 
                     if is_last {
-                        out.write_char(';')?;
+                        out.write_str(";");
                     }
                 }
             }
 
-            out.write_char('\n')?;
+            out.write_str("\n");
         }
-
-        Ok(())
     }
 }
