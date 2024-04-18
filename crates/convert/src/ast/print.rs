@@ -53,6 +53,17 @@ impl Default for Indentation {
     }
 }
 
+impl crate::ast::ValType {
+    pub(crate) fn print(&self, out: &mut crate::buffer::Writer) {
+        match self {
+            Self::I32 => out.write_str("i32"),
+            Self::I64 => out.write_str("i64"),
+            Self::F32 => out.write_str("f32"),
+            Self::F64 => out.write_str("f64"),
+        }
+    }
+}
+
 impl crate::ast::Literal {
     fn print(&self, out: &mut crate::buffer::Writer) {
         match self {
@@ -62,8 +73,8 @@ impl crate::ast::Literal {
             Self::I64(i) if *i <= 9 => write!(out, "{i}i64"),
             Self::I64(i) if *i <= 0xFFFF => write!(out, "{i:#X}i64"),
             Self::I64(i) => write!(out, "{i:#018X}i64"),
-            Self::F32(z) => write!(out, "::core::primitive::f32::from_bits({z:#010X})"),
-            Self::F64(z) => write!(out, "::core::primitive::f64::from_bits({z:#018X})"),
+            Self::F32(z) => write!(out, "f32::from_bits({z:#010X})"),
+            Self::F64(z) => write!(out, "f64::from_bits({z:#018X})"),
         }
     }
 }
@@ -127,8 +138,8 @@ impl crate::ast::Expr {
                     }
 
                     match *kind {
-                        BinOp::I32Add => bin_op!("::core::primitive::i32::wrapping_add"),
-                        BinOp::I64Add => bin_op!("::core::primitive::i64::wrapping_add"),
+                        BinOp::I32Add => bin_op!("i32::wrapping_add"),
+                        BinOp::I64Add => bin_op!("i64::wrapping_add"),
                     }
                 }
             },

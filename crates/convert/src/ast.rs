@@ -14,6 +14,12 @@ pub(crate) use print::Print;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct FuncId(pub(crate) u32);
 
+impl std::fmt::Display for FuncId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_f{}", self.0)
+    }
+}
+
 /// Represents a WebAssembly local variable in a function body.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct LocalId(pub(crate) u32);
@@ -21,6 +27,27 @@ pub(crate) struct LocalId(pub(crate) u32);
 impl std::fmt::Display for LocalId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "_l{}", self.0)
+    }
+}
+
+pub(crate) enum ValType {
+    I32,
+    I64,
+    F32,
+    F64,
+}
+
+impl From<wasmparser::ValType> for ValType {
+    fn from(ty: wasmparser::ValType) -> Self {
+        use wasmparser::ValType;
+
+        match ty {
+            ValType::I32 => Self::I32,
+            ValType::I64 => Self::I64,
+            ValType::F32 => Self::F32,
+            ValType::F64 => Self::F64,
+            _ => todo!("{ty:?} is not yet supported"),
+        }
     }
 }
 

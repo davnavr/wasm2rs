@@ -301,15 +301,67 @@ impl Convert<'_> {
                 .collect::<crate::Result<_>>()?;
         }
 
+        fn print_result_type(
+            out: &mut crate::buffer::Writer,
+            types: &[wasmparser::ValType],
+            mut f: impl FnMut(&mut crate::buffer::Writer, u32),
+        ) {
+            for (ty, i) in types.iter().copied().zip(0u32..=u32::MAX) {
+                if i > 0 {
+                    out.write_str(", ");
+                }
+
+                f(out, i);
+                crate::ast::ValType::from(ty).print(out);
+            }
+        }
+
         let printer_options = crate::ast::Print::new(self.indentation);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
             // TODO: Use some average # of Rust bytes per # of Wasm bytes
             let mut out = crate::buffer::Writer::new(allocations.byte_buffer_pool());
 
             let id = crate::ast::FuncId(index as u32);
-            // TODO: Write function signature
+            let signature = module.types[module.types.core_function_at(id.0)].unwrap_func();
+
+            write!(out, "fn {id}(");
+
+            match definition.call_kind {
+                code::CallKind::Function => (),
+                code::CallKind::Method => out.write_str("&self"),
+            }
+
+            if !matches!(definition.call_kind, code::CallKind::Function)
+                && !signature.params().is_empty()
+            {
+                out.write_str(", ");
+            }
+
+            print_result_type(&mut out, signature.params(), |out, i| {
+                write!(out, "{}: ", crate::ast::LocalId(i))
+            });
+
+            out.write_str(")");
+
+            if !signature.params().is_empty() {
+                out.write_str(" -> ");
+
+                if signature.params().len() > 1 {
+                    out.write_str("(");
+                }
+            }
+
+            print_result_type(&mut out, signature.results(), |_, _| ());
+
+            if signature.params().len() > 1 {
+                out.write_str(")");
+            }
+
+            out.write_str(" {\n");
 
             printer_options.print_statements(&mut out, &definition.arena, &definition.body);
+
+            out.write_str("}\n");
 
             definition.finish(allocations);
             out.finish()
