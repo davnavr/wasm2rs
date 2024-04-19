@@ -149,6 +149,16 @@ fn convert_impl<'wasm, 'types>(
             continue;
         }
 
+        macro_rules! un_op {
+            ($name:ident) => {{
+                let c_1 = builder.pop_wasm_operand();
+                builder.push_wasm_operand(crate::ast::Expr::UnaryOperator {
+                    kind: crate::ast::UnOp::$name,
+                    c_1,
+                })?;
+            }};
+        }
+
         macro_rules! bin_op {
             ($name:ident) => {{
                 let c_2 = builder.pop_wasm_operand();
@@ -216,7 +226,7 @@ fn convert_impl<'wasm, 'types>(
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
             }
-            //Eqz
+            Operator::I32Eqz | Operator::I64Eqz => un_op!(IxxEqz),
             Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => bin_op!(Eq),
             Operator::I32Ne | Operator::I64Ne | Operator::F32Ne | Operator::F64Ne => bin_op!(Ne),
             Operator::I32LtS | Operator::I64LtS => bin_op!(IxxLtS),
@@ -233,6 +243,12 @@ fn convert_impl<'wasm, 'types>(
             Operator::I64GeU => bin_op!(I64GeU),
             // TODO: See if Rust's implementation of float comparison follows WebAssembly.
             Operator::F32Gt | Operator::F64Gt => bin_op!(FxxGt),
+            Operator::I32Clz => un_op!(I32Clz),
+            Operator::I64Clz => un_op!(I64Clz),
+            Operator::I32Ctz => un_op!(I32Ctz),
+            Operator::I64Ctz => un_op!(I64Ctz),
+            Operator::I32Popcnt => un_op!(I32Popcnt),
+            Operator::I64Popcnt => un_op!(I64Popcnt),
             Operator::I32Add => bin_op!(I32Add),
             Operator::I64Add => bin_op!(I64Add),
             Operator::I32Sub => bin_op!(I32Sub),
@@ -260,6 +276,39 @@ fn convert_impl<'wasm, 'types>(
             Operator::I64Rotl => bin_op!(I64Rotl),
             Operator::I32Rotr => bin_op!(I32Rotr),
             Operator::I64Rotr => bin_op!(I64Rotr),
+            Operator::F32Neg | Operator::F64Neg => un_op!(FxxNeg),
+            Operator::I32WrapI64 => un_op!(I32WrapI64),
+            Operator::I32TruncF32S => un_op!(I32TruncF32S),
+            Operator::I32TruncF32U => un_op!(I32TruncF32U),
+            Operator::I32TruncF64S => un_op!(I32TruncF64S),
+            Operator::I32TruncF64U => un_op!(I32TruncF64U),
+            Operator::I64ExtendI32S => un_op!(I64ExtendI32S),
+            Operator::I64ExtendI32U => un_op!(I64ExtendI32U),
+            Operator::I64TruncF32S => un_op!(I64TruncF32S),
+            Operator::I64TruncF32U => un_op!(I64TruncF32U),
+            Operator::I64TruncF64S => un_op!(I64TruncF64S),
+            Operator::I64TruncF64U => un_op!(I64TruncF64U),
+            Operator::F32ConvertI32S | Operator::F32ConvertI64S => un_op!(F32ConvertIxxS),
+            Operator::F32ConvertI32U => un_op!(F32ConvertI32U),
+            Operator::F32ConvertI64U => un_op!(F32ConvertI64U),
+            Operator::F32DemoteF64 => un_op!(F32DemoteF64),
+            Operator::F64ConvertI32S | Operator::F64ConvertI64S => un_op!(F64ConvertIxxS),
+            Operator::F64ConvertI32U => un_op!(F64ConvertI32U),
+            Operator::F64ConvertI64U => un_op!(F64ConvertI64U),
+            Operator::F64PromoteF32 => un_op!(F64PromoteF32),
+            Operator::I32ReinterpretF32 => un_op!(I32ReinterpretF32),
+            Operator::I64ReinterpretF64 => un_op!(I64ReinterpretF64),
+            Operator::F32ReinterpretI32 => un_op!(F32ReinterpretI32),
+            Operator::F64ReinterpretI64 => un_op!(F64ReinterpretI64),
+            Operator::I32Extend8S => un_op!(I32Extend8S),
+            Operator::I32Extend16S => un_op!(I32Extend16S),
+            Operator::I64Extend8S => un_op!(I64Extend8S),
+            Operator::I64Extend16S => un_op!(I64Extend16S),
+            Operator::I64Extend32S => un_op!(I64Extend32S),
+            Operator::I32TruncSatF32S | Operator::I32TruncSatF64S => un_op!(I32TruncSatFxxS),
+            Operator::I32TruncSatF32U | Operator::I32TruncSatF64U => un_op!(I32TruncSatFxxU),
+            Operator::I64TruncSatF32S | Operator::I64TruncSatF64S => un_op!(I64TruncSatFxxS),
+            Operator::I64TruncSatF32U | Operator::I64TruncSatF64U => un_op!(I64TruncSatFxxU),
             _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
         }
 

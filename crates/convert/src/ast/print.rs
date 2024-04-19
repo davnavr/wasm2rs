@@ -112,8 +112,6 @@ impl crate::ast::ExprListId {
 
 impl crate::ast::Expr {
     fn print(&self, out: &mut crate::buffer::Writer<'_>, arena: &crate::ast::Arena, nested: bool) {
-        use crate::ast::BinOp;
-
         macro_rules! nested_expr {
             {$($stmt:stmt;)*} => {{
                 if nested {
@@ -130,7 +128,146 @@ impl crate::ast::Expr {
 
         match self {
             Self::Literal(literal) => literal.print(out),
+            Self::UnaryOperator { kind, c_1 } => {
+                use crate::ast::UnOp;
+
+                macro_rules! rt_math_function {
+                    ($name:ident) => {{
+                        out.write_str(paths::RT_MATH);
+                        out.write_str(concat!("::", stringify!($name), "("));
+                        c_1.print(out, arena, true);
+                        out.write_str(")?");
+                    }};
+                }
+
+                macro_rules! simple_cast {
+                    ($to:ident) => {
+                        nested_expr! {
+                            c_1.print(out, arena, true);
+                            out.write_str(concat!(" as ", stringify!($to)));
+                        }
+                    };
+                }
+
+                macro_rules! double_cast {
+                    ($start:ident as $end:ident) => {
+                        nested_expr! {
+                            c_1.print(out, arena, true);
+                            out.write_str(concat!(
+                                " as ",
+                                stringify!($start),
+                                " as ",
+                                stringify!($end)
+                            ));
+                        }
+                    };
+                }
+
+                match kind {
+                    UnOp::IxxEqz => nested_expr! {
+                        out.write_str("(");
+                        c_1.print(out, arena, false);
+                        out.write_str(" == 0) as i32");
+                    },
+                    UnOp::I32Clz => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(".leading_zeros() as i32");
+                    },
+                    UnOp::I64Clz => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(".leading_zeros() as i64");
+                    },
+                    UnOp::I32Ctz => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(".trailing_zeros() as i32");
+                    },
+                    UnOp::I64Ctz => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(".trailing_zeros() as i64");
+                    },
+                    UnOp::I32Popcnt => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(".count_ones() as i32");
+                    },
+                    UnOp::I64Popcnt => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(".count_ones() as i64");
+                    },
+                    UnOp::FxxNeg => nested_expr! {
+                        // `::core::ops::Neg` on `f32` and `f64` do the same operation in Rust.
+                        out.write_str("-");
+                        c_1.print(out, arena, true);
+                    },
+                    UnOp::I32WrapI64 | UnOp::I32TruncSatFxxS => simple_cast!(i32),
+                    UnOp::I32TruncF32S => rt_math_function!(i32_trunc_f32_s),
+                    UnOp::I32TruncF32U => rt_math_function!(i32_trunc_f32_u),
+                    UnOp::I32TruncF64S => rt_math_function!(i32_trunc_f64_s),
+                    UnOp::I32TruncF64U => rt_math_function!(i32_trunc_f64_u),
+                    UnOp::I64ExtendI32S | UnOp::I64TruncSatFxxS => simple_cast!(i64),
+                    UnOp::I64ExtendI32U => double_cast!(u32 as i64),
+                    UnOp::I64TruncF32S => rt_math_function!(i64_trunc_f32_s),
+                    UnOp::I64TruncF32U => rt_math_function!(i64_trunc_f32_u),
+                    UnOp::I64TruncF64S => rt_math_function!(i64_trunc_f64_s),
+                    UnOp::I64TruncF64U => rt_math_function!(i64_trunc_f64_u),
+                    UnOp::F32ConvertIxxS => nested_expr! {
+                        // - Rust uses "roundTiesToEven".
+                        // - WebAssembly specifies round-to-nearest ties-to-even.
+                        //
+                        // Are they the same?
+                        //
+                        // Rust: https://doc.rust-lang.org/reference/expressions/operator-expr.html#numeric-cast
+                        // WASM: https://webassembly.github.io/spec/core/exec/numerics.html#rounding
+                        simple_cast!(f32);
+                    },
+                    UnOp::F32ConvertI32U => double_cast!(u32 as f32),
+                    UnOp::F32ConvertI64U => double_cast!(u64 as f32),
+                    UnOp::F32DemoteF64 => nested_expr! {
+                        // TODO: Does Rust's conversion of `f64` to `f32` preserve the "canonical NaN"
+                        out.write_str("/* f32.demote_f64 */ ");
+                        c_1.print(out, arena, true);
+                        out.write_str(" as f32");
+                    },
+                    UnOp::F64ConvertIxxS => simple_cast!(f64),
+                    UnOp::F64ConvertI32U => double_cast!(u32 as f64),
+                    UnOp::F64ConvertI64U => double_cast!(u64 as f64),
+                    UnOp::F64PromoteF32 => nested_expr! {
+                        // TODO: Does Rust's conversion of `f32` to `f64` preserve the "canonical NaN"
+                        out.write_str("/* f64.promote_f32 */ ");
+                        simple_cast!(f64);
+                    },
+                    UnOp::I32ReinterpretF32 => nested_expr! {
+                        out.write_str("f32::to_bits(");
+                        c_1.print(out, arena, false);
+                        out.write_str(") as i32");
+                    },
+                    UnOp::I64ReinterpretF64 => nested_expr! {
+                        out.write_str("f64::to_bits(");
+                        c_1.print(out, arena, false);
+                        out.write_str(") as i64");
+                    },
+                    UnOp::F32ReinterpretI32 => {
+                        out.write_str("f32::from_bits(");
+                        c_1.print(out, arena, false);
+                        out.write_str(" as u32)");
+                    }
+                    UnOp::F64ReinterpretI64 => {
+                        out.write_str("f64::from_bits(");
+                        c_1.print(out, arena, false);
+                        out.write_str(" as u64)");
+                    }
+                    UnOp::I32Extend8S => double_cast!(i8 as i32),
+                    UnOp::I32Extend16S => double_cast!(i16 as i32),
+                    UnOp::I64Extend8S => double_cast!(i8 as i64),
+                    UnOp::I64Extend16S => double_cast!(i16 as i64),
+                    UnOp::I64Extend32S => double_cast!(i32 as i64),
+                    // Float-to-integer saturation operations translate exactly to Rust casts.
+                    UnOp::I32TruncSatFxxU => double_cast!(u32 as i32),
+                    UnOp::I64TruncSatFxxU => double_cast!(u64 as i64),
+                }
+            }
             Self::BinaryOperator { kind, c_1, c_2 } => {
+                use crate::ast::BinOp;
+
                 macro_rules! infix_operator {
                     ($operator:literal) => {
                         nested_expr! {

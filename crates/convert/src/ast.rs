@@ -61,6 +61,52 @@ pub(crate) enum Literal {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum UnOp {
+    /// Compares an integer value to `0`. Corresponds to the `i32.eqz` and `i64.eqz` instuctions.
+    IxxEqz,
+    I32Clz,
+    I64Clz,
+    I32Ctz,
+    I64Ctz,
+    I32Popcnt,
+    I64Popcnt,
+    /// Corresponds to the `f32.neg` and `f64.neg` instructions.
+    FxxNeg,
+    I32WrapI64,
+    I32TruncF32S,
+    I32TruncF32U,
+    I32TruncF64S,
+    I32TruncF64U,
+    I64ExtendI32S,
+    I64ExtendI32U,
+    I64TruncF32S,
+    I64TruncF32U,
+    I64TruncF64S,
+    I64TruncF64U,
+    F32ConvertIxxS,
+    F32ConvertI32U,
+    F32ConvertI64U,
+    F32DemoteF64,
+    F64ConvertIxxS,
+    F64ConvertI32U,
+    F64ConvertI64U,
+    F64PromoteF32,
+    I32ReinterpretF32,
+    I64ReinterpretF64,
+    F32ReinterpretI32,
+    F64ReinterpretI64,
+    I32Extend8S,
+    I32Extend16S,
+    I64Extend8S,
+    I64Extend16S,
+    I64Extend32S,
+    I32TruncSatFxxS,
+    I32TruncSatFxxU,
+    I64TruncSatFxxS,
+    I64TruncSatFxxU,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum BinOp {
     /// Equality comparison (`c_1 == c_2`). Corresponds to the `i32.eq`, `i64.eq`, `f32.eq`, and
     /// `f64.eq` instructions.
@@ -122,6 +168,13 @@ pub(crate) enum BinOp {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Expr {
     Literal(Literal),
+    /// Represents instructions of the form [*t.unop*] (`unop(c_1)`).
+    ///
+    /// [*t.unop*]: https://webassembly.github.io/spec/core/exec/instructions.html#exec-instr-numeric
+    UnaryOperator {
+        kind: UnOp,
+        c_1: ExprId,
+    },
     /// Represents instructions of the form [*t.binop*] (`binop(c_1, c_2)`).
     ///
     /// [*t.binop*]: https://webassembly.github.io/spec/core/exec/instructions.html#exec-instr-numeric
