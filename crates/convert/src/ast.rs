@@ -30,7 +30,7 @@ impl std::fmt::Display for LocalId {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum ValType {
     I32,
     I64,
@@ -190,7 +190,7 @@ pub(crate) enum Expr {
     },
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Statement {
     /// An expression that is evaluated, with any results discarded.
     Expr(ExprId),
@@ -211,6 +211,12 @@ pub(crate) enum Statement {
         function: FuncId,
         /// An offset from the start of the code section entry of the function to the `unreachable`
         /// instruction.
+        offset: u32,
+    },
+    /// Used to indicate that a code generation bug occured, and that the output Rust source code
+    /// is incorrect.
+    ValueStackUnderflowBug {
+        /// An offset from the start of the code section entry to the WebAssembly instruction.
         offset: u32,
     },
 }
