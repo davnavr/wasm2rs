@@ -149,6 +149,25 @@ fn convert_impl<'wasm, 'types>(
             continue;
         }
 
+        macro_rules! bin_op {
+            ($name:ident) => {{
+                let c_2 = builder.pop_wasm_operand();
+                let c_1 = builder.pop_wasm_operand();
+                builder.push_wasm_operand(crate::ast::Expr::BinaryOperator {
+                    kind: crate::ast::BinOp::$name,
+                    c_1,
+                    c_2,
+                })?;
+            }};
+        }
+
+        macro_rules! bin_op_trapping {
+            ($name:ident) => {{
+                builder.can_trap();
+                bin_op!($name);
+            }};
+        }
+
         match op {
             Operator::Unreachable => {
                 builder.can_trap();
@@ -197,16 +216,50 @@ fn convert_impl<'wasm, 'types>(
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
             }
-            Operator::I32Add => {
-                // TODO: Macro for binop, are these popped in the correct order?
-                let c_2 = builder.pop_wasm_operand();
-                let c_1 = builder.pop_wasm_operand();
-                builder.push_wasm_operand(crate::ast::Operator::Binary {
-                    kind: crate::ast::BinOp::I32Add,
-                    c_1,
-                    c_2,
-                })?;
-            }
+            //Eqz
+            Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => bin_op!(Eq),
+            Operator::I32Ne | Operator::I64Ne | Operator::F32Ne | Operator::F64Ne => bin_op!(Ne),
+            Operator::I32LtS | Operator::I64LtS => bin_op!(IxxLtS),
+            Operator::I32LtU => bin_op!(I32LtU),
+            Operator::I32GtS | Operator::I64GtS => bin_op!(IxxGtS),
+            Operator::I32GtU => bin_op!(I32GtU),
+            Operator::I64LtU => bin_op!(I64LtU),
+            Operator::I64GtU => bin_op!(I64GtU),
+            Operator::I32LeS | Operator::I64LeS => bin_op!(IxxLeS),
+            Operator::I32LeU => bin_op!(I32LeU),
+            Operator::I32GeS | Operator::I64GeS => bin_op!(IxxGeS),
+            Operator::I32GeU => bin_op!(I32GeU),
+            Operator::I64LeU => bin_op!(I64LeU),
+            Operator::I64GeU => bin_op!(I64GeU),
+            // TODO: See if Rust's implementation of float comparison follows WebAssembly.
+            Operator::F32Gt | Operator::F64Gt => bin_op!(FxxGt),
+            Operator::I32Add => bin_op!(I32Add),
+            Operator::I64Add => bin_op!(I64Add),
+            Operator::I32Sub => bin_op!(I32Sub),
+            Operator::I64Sub => bin_op!(I64Sub),
+            Operator::I32Mul => bin_op!(I32Mul),
+            Operator::I64Mul => bin_op!(I64Mul),
+            Operator::I32DivS => bin_op_trapping!(I32DivS),
+            Operator::I64DivS => bin_op_trapping!(I64DivS),
+            Operator::I32DivU => bin_op_trapping!(I32DivU),
+            Operator::I64DivU => bin_op_trapping!(I64DivU),
+            Operator::I32RemS => bin_op_trapping!(I32RemS),
+            Operator::I64RemS => bin_op_trapping!(I64RemS),
+            Operator::I32RemU => bin_op_trapping!(I32RemU),
+            Operator::I64RemU => bin_op_trapping!(I64RemU),
+            Operator::I32And | Operator::I64And => bin_op!(IxxAnd),
+            Operator::I32Or | Operator::I64Or => bin_op!(IxxOr),
+            Operator::I32Xor | Operator::I64Xor => bin_op!(IxxXor),
+            Operator::I32Shl => bin_op!(I32Shl),
+            Operator::I64Shl => bin_op!(I64Shl),
+            Operator::I32ShrS => bin_op!(I32ShrS),
+            Operator::I64ShrS => bin_op!(I64ShrS),
+            Operator::I32ShrU => bin_op!(I32ShrU),
+            Operator::I64ShrU => bin_op!(I64ShrU),
+            Operator::I32Rotl => bin_op!(I32Rotl),
+            Operator::I64Rotl => bin_op!(I64Rotl),
+            Operator::I32Rotr => bin_op!(I32Rotr),
+            Operator::I64Rotr => bin_op!(I64Rotr),
             _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
         }
 

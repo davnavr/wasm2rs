@@ -1297,112 +1297,111 @@ pub(in crate::translation) fn write_definition(
                     result_value, result_value
                 );
             }
-            Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => {
+            /* Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => {
                 let result_value = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {result_value:#}: i32 = ({result_value} == {}) as i32;",
                     PoppedValue::pop(validator, 0)
                 );
-            }
-            Operator::I32Ne | Operator::I64Ne | Operator::F32Ne | Operator::F64Ne => {
+            } */
+            /* Operator::I32Ne | Operator::I64Ne | Operator::F32Ne | Operator::F64Ne => {
                 let result_value = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {result_value:#}: i32 = ({result_value} != {}) as i32;",
                     PoppedValue::pop(validator, 0)
                 );
-            }
-            Operator::I32LtS | Operator::I64LtS => {
+            } */
+            /* Operator::I32LtS | Operator::I64LtS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#}: i32 = ({c_1} < {c_2}) as i32;");
-            }
-            Operator::I32LtU => {
+            } */
+            /* Operator::I32LtU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {c_1:#}: i32 = (({c_1} as u32) < ({c_2} as u32)) as i32;"
                 );
-            }
-            Operator::I32GtS | Operator::I64GtS => {
+            } */
+            /* Operator::I32GtS | Operator::I64GtS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#}: i32 = ({c_1} > {c_2}) as i32;");
-            }
-            Operator::I32GtU => {
+            } */
+            /* Operator::I32GtU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {c_1:#}: i32 = (({c_1} as u32) > ({c_2} as u32)) as i32;"
                 );
-            }
-            Operator::I32LeS | Operator::I64LeS => {
+            } */
+            /* Operator::I32LeS | Operator::I64LeS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#}: i32 = ({c_1} <= {c_2}) as i32;");
-            }
-            Operator::I32LeU => {
+            } */
+            /* Operator::I32LeU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {c_1:#}: i32 = (({c_1} as u32) <= ({c_2} as u32)) as i32;"
                 );
-            }
-            Operator::I32GeS | Operator::I64GeS => {
+            } */
+            /* Operator::I32GeS | Operator::I64GeS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#}: i32 = ({c_1} >= {c_2}) as i32;");
-            }
-            Operator::I32GeU => {
+            } */
+            /* Operator::I32GeU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {c_1:#}: i32 = (({c_1} as u32) > ({c_2} as u32)) as i32;"
                 );
-            }
-            Operator::I64LtU => {
+            } */
+            /* Operator::I64LtU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {c_1:#}: i32 = (({c_1} as u64) < ({c_2} as u64)) as i32;"
                 );
-            }
-            Operator::I64GtU => {
+            } */
+            /* Operator::I64GtU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {c_1:#}: i32 = (({c_1} as u64) > ({c_2} as u64)) as i32;"
                 );
-            }
-            Operator::I64LeU => {
+            } */
+            /* Operator::I64LeU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {c_1:#}: i32 = (({c_1} as u64) <= ({c_2} as u64)) as i32;"
                 );
-            }
-            Operator::I64GeU => {
+            } */
+            /* Operator::I64GeU => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {c_1:#}: i32 = (({c_1} as u64) >= ({c_2} as u64)) as i32;"
                 );
-            }
-            Operator::F32Gt | Operator::F64Gt => {
-                // TODO: See if Rust's implementation of float comparison follows WebAssembly.
+            } */
+            /* Operator::F32Gt | Operator::F64Gt => {
                 let z_2 = PoppedValue::pop(validator, 0);
                 let z_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {z_1:#}: i32 = ({z_1} > {z_2}) as i32;");
-            }
+            } */
             Operator::I32Clz => {
                 let c = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {c:#}: i32 = i32::leading_zeros({c}) as i32;");
@@ -1411,15 +1410,15 @@ pub(in crate::translation) fn write_definition(
                 let c = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {c:#}: i32 = i32::trailing_zeros({c}) as i32;");
             }
-            Operator::I32Add => {
+            /* Operator::I32Add => {
                 let result_value = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
                     "let {result_value:#}: i32 = i32::wrapping_add({result_value}, {});",
                     PoppedValue::pop(validator, 0)
                 );
-            }
-            Operator::I32Sub => {
+            } */
+            /* Operator::I32Sub => {
                 let result_value = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
@@ -1434,8 +1433,8 @@ pub(in crate::translation) fn write_definition(
                     "let {result_value:#}: i32 = i32::wrapping_mul({result_value}, {});",
                     PoppedValue::pop(validator, 0)
                 );
-            }
-            Operator::I32DivS => {
+            } */
+            /* Operator::I32DivS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
@@ -1450,8 +1449,8 @@ pub(in crate::translation) fn write_definition(
                     out,
                     "let {c_1:#}: i32 = {MATH}::i32_div_u({c_1}, {c_2}, &self.embedder)?;",
                 );
-            }
-            Operator::I32RemS => {
+            } */
+            /* Operator::I32RemS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
@@ -1466,8 +1465,8 @@ pub(in crate::translation) fn write_definition(
                     out,
                     "let {c_1:#}: i32 = {MATH}::i32_rem_u({c_1}, {c_2}, &self.embedder)?;",
                 );
-            }
-            Operator::I32And | Operator::I64And => {
+            } */
+            /* Operator::I32And | Operator::I64And => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#} = {c_1} & {c_2};",);
@@ -1481,13 +1480,13 @@ pub(in crate::translation) fn write_definition(
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#} = {c_1} ^ {c_2};",);
-            }
-            Operator::I32Shl => {
+            } */
+            /* Operator::I32Shl => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#}: i32 = {c_1} << ({c_2} as u32 % 32);");
-            }
-            Operator::I32ShrS => {
+            } */
+            /* Operator::I32ShrS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#}: i32 = {c_1} >> ({c_2} as u32 % 32);");
@@ -1515,7 +1514,7 @@ pub(in crate::translation) fn write_definition(
                     out,
                     "let {c_1:#}: i32 = {c_1}.rotate_right(({c_2} % 32) as u32);"
                 );
-            }
+            } */
             Operator::I64Clz => {
                 let c = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
@@ -1534,7 +1533,7 @@ pub(in crate::translation) fn write_definition(
                 let i = PoppedValue::pop(validator, 0);
                 let _ = writeln!(out, "let {i:#}: i64 = i64::count_ones({i}) as i64;");
             }
-            Operator::I64Add => {
+            /* Operator::I64Add => {
                 let result_value = PoppedValue::pop(validator, 1);
                 let _ = writeln!(
                     out,
@@ -1589,13 +1588,13 @@ pub(in crate::translation) fn write_definition(
                     out,
                     "let {c_1:#}: i64 = {MATH}::i64_rem_u({c_1}, {c_2}, &self.embedder)?;",
                 );
-            }
-            Operator::I64Shl => {
+            } */
+            /* Operator::I64Shl => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#}: i64 = {c_1} << ({c_2} as u64 % 64);");
-            }
-            Operator::I64ShrS => {
+            } */
+            /* Operator::I64ShrS => {
                 let c_2 = PoppedValue::pop(validator, 0);
                 let c_1 = PoppedValue::pop(validator, 1);
                 let _ = writeln!(out, "let {c_1:#}: i64 = {c_1} >> ({c_2} as u64 % 64);");
@@ -1623,7 +1622,7 @@ pub(in crate::translation) fn write_definition(
                     out,
                     "let {c_1:#}: i64 = {c_1}.rotate_right(({c_2} % 64) as u32);"
                 );
-            }
+            } */
             Operator::F32Neg | Operator::F64Neg => {
                 // `::core::ops::Neg` on `f32` and `f64` do the same operation in Rust.
                 let z = PoppedValue::pop(validator, 0);

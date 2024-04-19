@@ -53,6 +53,11 @@ impl Default for Indentation {
     }
 }
 
+/// Rust paths to embedder or runtime support code, typically implemented in `wasm2rs-rt`.
+mod paths {
+    pub(super) const RT_MATH: &str = "embedder::rt::math";
+}
+
 impl crate::ast::ValType {
     pub(crate) fn print(&self, out: &mut crate::buffer::Writer) {
         match self {
@@ -107,42 +112,167 @@ impl crate::ast::ExprListId {
 
 impl crate::ast::Expr {
     fn print(&self, out: &mut crate::buffer::Writer<'_>, arena: &crate::ast::Arena, nested: bool) {
-        use crate::ast::{BinOp, Operator};
+        use crate::ast::BinOp;
 
-        // macro_rules! nested_expr {
-        //     {$($stmt:stmt)*} => {{
-        //         if nested {
-        //             out.write_str('(')?;
-        //         }
-        //
-        //         $($stmt)*
-        //
-        //         if nested {
-        //             out.write_str(')')?;
-        //         }
-        //     }};
-        // }
+        macro_rules! nested_expr {
+            {$($stmt:stmt;)*} => {{
+                if nested {
+                    out.write_str("(");
+                }
+
+                $($stmt)*
+
+                if nested {
+                    out.write_str(")");
+                }
+            }};
+        }
 
         match self {
             Self::Literal(literal) => literal.print(out),
-            Self::Operator(op) => match op {
-                Operator::Binary { kind, c_1, c_2 } => {
-                    macro_rules! bin_op {
-                        ($name:literal) => {{
-                            out.write_str(concat!($name, "("));
-                            c_1.print(out, arena, false);
-                            out.write_str(", ");
-                            c_2.print(out, arena, false);
-                            out.write_str(")");
-                        }};
-                    }
+            Self::BinaryOperator { kind, c_1, c_2 } => {
+                macro_rules! infix_operator {
+                    ($operator:literal) => {
+                        nested_expr! {
+                            c_1.print(out, arena, true);
+                            out.write_str(concat!(" ", $operator, " "));
+                            c_2.print(out, arena, true);
+                        }
+                    };
+                }
 
-                    match *kind {
-                        BinOp::I32Add => bin_op!("i32::wrapping_add"),
-                        BinOp::I64Add => bin_op!("i64::wrapping_add"),
+                macro_rules! infix_comparison {
+                    ($operator:literal $(as $cast:ident)?) => {{
+                        out.write_str("(");
+                        c_1.print(out, arena, true);
+                        out.write_str(concat!(
+                            $(" as ", stringify!($cast),)?
+                            " ",
+                            $operator,
+                            " ",
+                        ));
+                        c_2.print(out, arena, true);
+                        out.write_str(concat!(
+                            $(" as ", stringify!($cast),)?
+                            ") as i32"
+                        ));
+                    }};
+                }
+
+                macro_rules! function {
+                    ($($name:expr),+) => {{
+                        $(out.write_str($name);)+
+                        out.write_str("(");
+                        c_1.print(out, arena, false);
+                        out.write_str(", ");
+                        c_2.print(out, arena, false);
+                        out.write_str(")");
+                    }};
+                }
+
+                macro_rules! rt_math_function {
+                    ($name:ident) => {{
+                        function!(paths::RT_MATH, concat!("::", stringify!($name)));
+                        out.write_str("?");
+                    }};
+                }
+
+                match *kind {
+                    BinOp::Eq => infix_comparison!("=="),
+                    BinOp::Ne => infix_comparison!("!="),
+                    BinOp::IxxLtS => infix_comparison!("<"),
+                    BinOp::IxxGtS | BinOp::FxxGt => infix_comparison!(">"),
+                    BinOp::I32LtU => infix_comparison!("<" as u32),
+                    BinOp::I32GtU => infix_comparison!(">" as u32),
+                    BinOp::I64LtU => infix_comparison!("<" as u64),
+                    BinOp::I64GtU => infix_comparison!(">" as u64),
+                    BinOp::IxxLeS => infix_comparison!("<="),
+                    BinOp::IxxGeS => infix_comparison!(">="),
+                    BinOp::I32LeU => infix_comparison!("<=" as u32),
+                    BinOp::I32GeU => infix_comparison!(">=" as u32),
+                    BinOp::I64LeU => infix_comparison!("<=" as u64),
+                    BinOp::I64GeU => infix_comparison!(">=" as u64),
+                    BinOp::I32Add => function!("i32::wrapping_add"),
+                    BinOp::I64Add => function!("i64::wrapping_add"),
+                    BinOp::I32Sub => function!("i32::wrapping_sub"),
+                    BinOp::I64Sub => function!("i64::wrapping_sub"),
+                    BinOp::I32Mul => function!("i32::wrapping_mul"),
+                    BinOp::I64Mul => function!("i64::wrapping_mul"),
+                    BinOp::I32DivS => rt_math_function!(i32_div_s),
+                    BinOp::I64DivS => rt_math_function!(i64_div_s),
+                    BinOp::I32DivU => rt_math_function!(i32_div_u),
+                    BinOp::I64DivU => rt_math_function!(i64_div_u),
+                    BinOp::I32RemS => rt_math_function!(i32_rem_s),
+                    BinOp::I64RemS => rt_math_function!(i64_rem_s),
+                    BinOp::I32RemU => rt_math_function!(i32_rem_u),
+                    BinOp::I64RemU => rt_math_function!(i64_rem_u),
+                    BinOp::IxxAnd => infix_operator!("&"),
+                    BinOp::IxxOr => infix_operator!("|"),
+                    BinOp::IxxXor => infix_operator!("^"),
+                    BinOp::I32Shl => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(" << (");
+                        c_2.print(out, arena, true);
+                        out.write_str(" as u32 % 32)");
+                    },
+                    BinOp::I64Shl => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(" << (");
+                        c_2.print(out, arena, true);
+                        out.write_str(" as u64 % 64)");
+                    },
+                    BinOp::I32ShrS => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(" >> (");
+                        c_2.print(out, arena, true);
+                        out.write_str(" as u32 % 32)");
+                    },
+                    BinOp::I64ShrS => nested_expr! {
+                        c_1.print(out, arena, true);
+                        out.write_str(" >> (");
+                        c_2.print(out, arena, true);
+                        out.write_str(" as u64 % 64)");
+                    },
+                    BinOp::I32ShrU => nested_expr! {
+                        out.write_str("(");
+                        c_1.print(out, arena, true);
+                        out.write_str(" as u32 >> (");
+                        c_2.print(out, arena, true);
+                        out.write_str(" as u32 % 32)) as i32");
+                    },
+                    BinOp::I64ShrU => nested_expr! {
+                        out.write_str("(");
+                        c_1.print(out, arena, true);
+                        out.write_str(" as u64 >> (");
+                        c_2.print(out, arena, true);
+                        out.write_str(" as u64 % 64) as i64");
+                    },
+                    BinOp::I32Rotl => {
+                        c_1.print(out, arena, true);
+                        out.write_str(".rotate_left((");
+                        c_2.print(out, arena, true);
+                        out.write_str(" % 32) as u32)");
+                    }
+                    BinOp::I64Rotl => {
+                        c_1.print(out, arena, true);
+                        out.write_str(".rotate_left((");
+                        c_2.print(out, arena, true);
+                        out.write_str(" % 64) as u64)");
+                    }
+                    BinOp::I32Rotr => {
+                        c_1.print(out, arena, true);
+                        out.write_str(".rotate_right((");
+                        c_2.print(out, arena, true);
+                        out.write_str(" % 32) as u32)");
+                    }
+                    BinOp::I64Rotr => {
+                        c_1.print(out, arena, true);
+                        out.write_str(".rotate_right((");
+                        c_2.print(out, arena, true);
+                        out.write_str(" % 64) as u64)");
                     }
                 }
-            },
+            }
             Self::GetLocal(local) => write!(out, "{local}"),
             Self::Call { callee, arguments } => {
                 todo!("cannot generate call, need to figure out if self should be passed")

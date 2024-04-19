@@ -62,50 +62,79 @@ pub(crate) enum Literal {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum BinOp {
+    /// Equality comparison (`c_1 == c_2`). Corresponds to the `i32.eq`, `i64.eq`, `f32.eq`, and
+    /// `f64.eq` instructions.
+    Eq,
+    Ne,
+    /// Signed integer comparison (`c_1 < c_2`). Corresponds to the `i32.lt_s` and `i64.lt_s`
+    /// instructions.
+    IxxLtS,
+    IxxGtS,
+    I32LtU,
+    I32GtU,
+    I64LtU,
+    I64GtU,
+    IxxLeS,
+    IxxGeS,
+    I32LeU,
+    I32GeU,
+    I64LeU,
+    I64GeU,
+    FxxGt,
     /// Wrapping addition on `i32`s (`c_1 + c_2`).
     I32Add,
-    // /// `c_1 / c_2`
-    // I32Div { c_1: ExprId, c_2: ExprId },
     /// Wrapping addition on `i64`s (`c_1 + c_2`).
     I64Add,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum Operator {
-    /// Represents instructions of the form [*t.binop*] (`binop(c_1, c_2)`).
-    ///
-    /// [*t.binop*]: https://webassembly.github.io/spec/core/exec/instructions.html#exec-instr-numeric
-    Binary {
-        kind: BinOp,
-        c_1: ExprId,
-        c_2: ExprId,
-    },
-}
-
-macro_rules! from_conversions {
-    ($($src:ident => $dst:ty;)*) => {$(
-        impl From<$src> for $dst {
-            fn from(value: $src) -> $dst {
-                <$dst>::$src(value)
-            }
-        }
-    )*};
+    I32Sub,
+    I64Sub,
+    I32Mul,
+    I64Mul,
+    /// Signed division on `i32`s, trapping when the denominator is `0` (`c_1 / c_2`). Corresponds
+    /// to the `i32.div_s` instruction.
+    I32DivS,
+    I64DivS,
+    /// Signed division on `i64`s, trapping when the denominator is `0` (`c_1 / c_2`). Corresponds
+    /// to the `i64.div_u` instruction.
+    I32DivU,
+    I64DivU,
+    I32RemS,
+    I64RemS,
+    I32RemU,
+    I64RemU,
+    /// Bitwise integer AND (`c_1 & c_2`). Corresponds to the `i32.and` and `i64.and` instructions.
+    IxxAnd,
+    /// Bitwise integer OR (`c_1 | c_2`). Corresponds to the `i32.or` and `i64.or` instructions.
+    IxxOr,
+    /// Bitwise integer XOR (`c_1 | c_2`). Corresponds to the `i32.xor` and `i64.xor` instructions.
+    IxxXor,
+    I32Shl,
+    I64Shl,
+    I32ShrS,
+    I64ShrS,
+    I32ShrU,
+    I64ShrU,
+    I32Rotl,
+    I64Rotl,
+    I32Rotr,
+    I64Rotr,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Expr {
     Literal(Literal),
-    Operator(Operator),
+    /// Represents instructions of the form [*t.binop*] (`binop(c_1, c_2)`).
+    ///
+    /// [*t.binop*]: https://webassembly.github.io/spec/core/exec/instructions.html#exec-instr-numeric
+    BinaryOperator {
+        kind: BinOp,
+        c_1: ExprId,
+        c_2: ExprId,
+    },
     GetLocal(LocalId),
     Call {
         callee: FuncId,
         arguments: ExprListId,
     },
-}
-
-from_conversions! {
-    Literal => Expr;
-    Operator => Expr;
 }
 
 #[derive(Clone, Copy)]
@@ -131,4 +160,19 @@ pub(crate) enum Statement {
         /// instruction.
         offset: u32,
     },
+}
+
+macro_rules! from_conversions {
+    ($($src:ident => $dst:ident::$case:ident;)*) => {$(
+        impl From<$src> for $dst {
+            fn from(value: $src) -> $dst {
+                <$dst>::$case(value)
+            }
+        }
+    )*};
+}
+
+from_conversions! {
+    Literal => Expr::Literal;
+    ExprId => Statement::Expr;
 }
