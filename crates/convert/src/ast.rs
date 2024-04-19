@@ -113,4 +113,13 @@ pub(crate) enum Statement {
     Expr(ExprId),
     /// Expressions that are evaluated, and used as the return values for the function.
     Return(ExprListId),
+    /// Corresponds to the [`unreachable`] instruction, which always produces a trap.
+    ///
+    /// [`unreachable`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions
+    Unreachable {
+        function: FuncId,
+        /// An offset from the start of the code section entry of the function to the `unreachable`
+        /// instruction.
+        offset: u32,
+    },
 }

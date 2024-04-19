@@ -316,8 +316,34 @@ impl Convert<'_> {
             }
         }
 
+        fn print_return_types(
+            out: &mut crate::buffer::Writer,
+            types: &[wasmparser::ValType],
+            no_unwind: bool,
+        ) {
+            if !no_unwind {
+                out.write_str("::core::result::Result<");
+            }
+
+            if types.len() != 1 {
+                out.write_str("(");
+            }
+
+            print_result_type(out, types, |_, _| ());
+
+            if types.len() != 1 {
+                out.write_str(")");
+            }
+
+            if !no_unwind {
+                out.write_str(", embedder::Trap>");
+            }
+        }
+
         let printer_options = crate::ast::Print::new(self.indentation);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
+            use crate::context::CallKind;
+
             // TODO: Use some average # of Rust bytes per # of Wasm bytes
             let mut out = crate::buffer::Writer::new(allocations.byte_buffer_pool());
 
@@ -326,12 +352,13 @@ impl Convert<'_> {
 
             write!(out, "fn {id}(");
 
-            match definition.call_kind {
-                code::CallKind::Function => (),
-                code::CallKind::Method => out.write_str("&self"),
+            match definition.context.call_kind {
+                CallKind::Function => (),
+                CallKind::Method => out.write_str("&self"),
+                // CallKind::WithEmbedder => out.write_str("_embedder: &embedder::State"),
             }
 
-            if !matches!(definition.call_kind, code::CallKind::Function)
+            if !matches!(definition.context.call_kind, CallKind::Function)
                 && !signature.params().is_empty()
             {
                 out.write_str(", ");
@@ -343,23 +370,25 @@ impl Convert<'_> {
 
             out.write_str(")");
 
-            if !signature.params().is_empty() {
+            // Omit return type for functions that return nothing and can't unwind
+            if !signature.results().is_empty() || definition.context.can_unwind() {
                 out.write_str(" -> ");
 
-                if signature.params().len() > 1 {
-                    out.write_str("(");
-                }
-            }
-
-            print_result_type(&mut out, signature.results(), |_, _| ());
-
-            if signature.params().len() > 1 {
-                out.write_str(")");
+                print_return_types(
+                    &mut out,
+                    signature.results(),
+                    !definition.context.can_unwind(),
+                )
             }
 
             out.write_str(" {\n");
 
-            printer_options.print_statements(&mut out, &definition.arena, &definition.body);
+            printer_options.print_statements(
+                &mut out,
+                &definition.arena,
+                &definition.context,
+                &definition.body,
+            );
 
             out.write_str("}\n");
 

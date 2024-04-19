@@ -15,6 +15,7 @@ pub mod buffer;
 pub mod ident;
 
 mod ast;
+mod context;
 mod convert;
 mod pool;
 

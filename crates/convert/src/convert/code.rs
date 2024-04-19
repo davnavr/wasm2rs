@@ -5,22 +5,9 @@ pub(in crate::convert) struct Code<'wasm> {
     validator: wasmparser::FuncToValidate<wasmparser::ValidatorResources>,
 }
 
-pub(in crate::convert) enum CallKind {
-    /// No additional argument is added. The generated Rust function is an associated
-    /// function.
-    Function,
-    /// A `self` argument is added. The generated Rust function is a method.
-    ///
-    /// A function generated with this [`CallKind`] is always correct.
-    Method,
-    // /// The function only accesses a linear memory.
-    // WithMemory(u32),
-}
-
 #[must_use]
 pub(in crate::convert) struct Definition {
-    // TODO: bitvec of which locals are mutable
-    pub(in crate::convert) call_kind: CallKind,
+    pub(in crate::convert) context: crate::context::Context,
 
     // Caller is responsible for returning these to the pool.
     pub(in crate::convert) body: Vec<crate::ast::Statement>,
@@ -39,7 +26,7 @@ struct StatementBuilder {
     wasm_operand_stack: Vec<crate::ast::ExprId>,
     buffer: Vec<crate::ast::Statement>,
     ast_arena: crate::ast::Arena,
-    call_kind: CallKind,
+    context: crate::context::Context,
 }
 
 impl StatementBuilder {
@@ -50,8 +37,15 @@ impl StatementBuilder {
             wasm_operand_stack: Vec::new(),
             buffer: allocations.take_statement_buffer(),
             ast_arena: allocations.take_ast_arena(),
-            call_kind: CallKind::Function,
+            context: crate::context::Context {
+                call_kind: crate::context::CallKind::Function,
+                can_trap: false,
+            },
         }
+    }
+
+    fn can_trap(&mut self) {
+        self.context.can_trap = true;
     }
 
     fn push_wasm_operand(
@@ -72,10 +66,14 @@ impl StatementBuilder {
         }
     }
 
+    fn flush_operands_to_temporaries(&mut self) {
+        todo!("flushing of wasm operand stack to temporaries not yet implemented");
+        // TODO: iter_mut for self.wasm_operand_stack, write temporaries
+    }
+
     fn emit_statement_inner(&mut self, statement: crate::ast::Statement) {
         if !self.wasm_operand_stack.is_empty() {
-            todo!("flushing of wasm operand stack to temporaries not yet implemented");
-            // TODO: iter_mut for self.wasm_operand_stack, write temporaries
+            self.flush_operands_to_temporaries();
         }
 
         self.buffer.push(statement);
@@ -86,12 +84,19 @@ impl StatementBuilder {
     }
 
     fn finish(self) -> Definition {
-        debug_assert!(self.wasm_operand_stack.is_empty());
+        let Self {
+            wasm_operand_stack,
+            buffer: body,
+            ast_arena: arena,
+            context,
+        } = self;
+
+        debug_assert!(wasm_operand_stack.is_empty());
 
         Definition {
-            call_kind: self.call_kind,
-            body: self.buffer,
-            arena: self.ast_arena,
+            context,
+            body,
+            arena,
         }
     }
 }
@@ -116,7 +121,7 @@ impl<'wasm> Code<'wasm> {
     /// [WebAssembly function body]: https://webassembly.github.io/spec/core/syntax/modules.html#syntax-func
     /// [`Statement`]: crate::ast::Statement
     pub(in crate::convert) fn convert(
-        mut self,
+        self,
         module: &crate::convert::Module<'wasm>,
         options: &crate::Convert<'_>,
         allocations: &crate::Allocations,
@@ -127,8 +132,8 @@ impl<'wasm> Code<'wasm> {
             .validator
             .into_validator(allocations.take_func_validator_allocations());
 
-        let func_type =
-            module.types[module.types.core_function_at(validator.index())].unwrap_func();
+        let func_id = crate::ast::FuncId(validator.index());
+        let func_type = module.types[module.types.core_function_at(func_id.0)].unwrap_func();
 
         let _locals = self.body.get_locals_reader()?;
 
@@ -160,6 +165,14 @@ impl<'wasm> Code<'wasm> {
             }
 
             match op {
+                Operator::Unreachable => {
+                    builder.can_trap();
+                    builder.emit_statement(crate::ast::Statement::Unreachable {
+                        function: func_id,
+                        offset: u32::try_from(op_offset - self.body.range().start)
+                            .unwrap_or(u32::MAX),
+                    });
+                }
                 Operator::Nop => (),
                 Operator::End => {
                     if validator.control_stack_height() > 1 {
@@ -169,7 +182,7 @@ impl<'wasm> Code<'wasm> {
 
                         debug_assert_eq!(
                             current_frame.height + result_count,
-                            builder.wasm_operand_stack.len(),
+                            builder.wasm_operand_stack.len() - current_frame.height,
                             "value stack height mismatch"
                         );
 

@@ -153,6 +153,8 @@ impl crate::ast::Expr {
 
 pub(crate) struct Print {
     indentation: Indentation,
+    // TODO: Info about globals, memories, etc.
+    // TODO: Info about function signatures and CallKinds
 }
 
 impl Print {
@@ -164,6 +166,7 @@ impl Print {
         &self,
         out: &mut crate::buffer::Writer<'_>,
         arena: &crate::ast::Arena,
+        context: &crate::context::Context,
         statements: &[crate::ast::Statement],
     ) {
         use crate::ast::Statement;
