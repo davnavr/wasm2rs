@@ -499,13 +499,6 @@ impl<'types, 'a> Print<'types, 'a> {
                         "return ::core::result::Err(embedder::Trap::with_code())"
                     );
                 }
-                Statement::ValueStackUnderflowBug { offset } => {
-                    writeln!(
-                        out,
-                        "::core::todo!(\"code generation bug due to value stack underflow at \
-                        instruction {offset:#X}\")"
-                    );
-                }
             }
 
             if is_last {

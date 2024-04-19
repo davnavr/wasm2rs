@@ -55,6 +55,7 @@ fn convert_impl<'wasm, 'types>(
     let mut operators = body
         .get_operators_reader()
         .context("could not obtain operators")?;
+
     while !operators.eof() {
         use wasmparser::Operator;
 
@@ -66,10 +67,13 @@ fn convert_impl<'wasm, 'types>(
             .get_control_frame(0)
             .context("control frame stack was unexpectedly empty")?;
 
-        if current_frame.unreachable && !matches!(op, Operator::End | Operator::Else) {
-            // Although code is unreachable, WASM spec still requires it to be validated.
-            validator.op(op_offset, &op)?;
+        let operand_stack_bottom = current_frame.height;
+        let is_unreachable = current_frame.unreachable;
 
+        // Validates all instructions, even "unreachable" ones
+        validator.op(op_offset, &op)?;
+
+        if is_unreachable && !matches!(op, Operator::End | Operator::Else) {
             // Don't generate Rust code for unreachable instructions.
             continue;
         }
@@ -113,26 +117,40 @@ fn convert_impl<'wasm, 'types>(
             }
             Operator::Nop => (),
             Operator::End => {
-                if validator.control_stack_height() > 1 {
+                if validator.control_stack_height() >= 1 {
                     anyhow::bail!("TODO: block support not yet implemented");
-                } else if !current_frame.unreachable {
+                } else if is_unreachable {
+                    builder.wasm_operand_stack_truncate(operand_stack_bottom);
+                } else {
                     let result_count = func_type.results().len();
 
                     debug_assert_eq!(
-                        current_frame.height + result_count,
-                        builder.wasm_operand_stack().len() - current_frame.height,
-                        "value stack height mismatch"
+                        operand_stack_bottom + result_count,
+                        builder.wasm_operand_stack().len() - operand_stack_bottom,
+                        "value stack height mismatch ({:?})",
+                        builder.wasm_operand_stack()
                     );
 
-                    let results = builder.wasm_operand_stack_pop_to_height(current_frame.height)?;
+                    let results = builder.wasm_operand_stack_pop_to_height(operand_stack_bottom)?;
 
-                    debug_assert_eq!(builder.wasm_operand_stack().len(), current_frame.height);
                     debug_assert_eq!(result_count, results.len() as usize);
 
                     builder.emit_statement(crate::ast::Statement::Return(results));
                 }
             }
-            // Operator::Return => {}
+            Operator::Return => {
+                // Unlike the last `end` instruction, `return` allows values on the stack that
+                // weren't popped.
+
+                let result_count = func_type.results().len();
+
+                debug_assert!(builder.wasm_operand_stack().len() >= result_count);
+
+                let results = builder.wasm_operand_stack_pop_list(result_count)?;
+
+                // Any values that weren't popped are spilled into temporaries.
+                builder.emit_statement(crate::ast::Statement::Return(results));
+            }
             Operator::LocalGet { local_index } => {
                 builder.push_wasm_operand(crate::ast::Expr::GetLocal(crate::ast::LocalId(
                     local_index,
@@ -234,7 +252,16 @@ fn convert_impl<'wasm, 'types>(
             _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
         }
 
-        validator.op(op_offset, &op)?;
+        if !operators.eof() {
+            // Ensure that the two operand stacks stay in sync
+            debug_assert_eq!(
+                validator.operand_stack_height() as usize,
+                builder.wasm_operand_stack().len(),
+                "expected operand stack {:?} after {op:?} (top of validator's stack was {:?})",
+                builder.wasm_operand_stack(),
+                validator.get_operand_type(0),
+            );
+        }
     }
 
     // `Statement::Return` already generated when last `end` is handled.

@@ -30,6 +30,14 @@ impl<'a> Builder<'a> {
         &self.wasm_operand_stack
     }
 
+    pub(super) fn wasm_operand_stack_truncate(&mut self, height: usize) {
+        if !self.wasm_operand_stack.is_empty() {
+            self.flush_operands_to_temporaries();
+        }
+
+        self.wasm_operand_stack.truncate(height);
+    }
+
     pub(super) fn wasm_operand_stack_pop_to_height(
         &mut self,
         height: usize,
@@ -43,6 +51,10 @@ impl<'a> Builder<'a> {
         debug_assert_eq!(self.wasm_operand_stack.len(), height);
 
         Ok(result_exprs)
+    }
+
+    pub(super) fn wasm_operand_stack_pop_list(&mut self, count: usize) -> Result<crate::ast::ExprListId, crate::ast::ArenaError> {
+        self.wasm_operand_stack_pop_to_height(self.wasm_operand_stack.len() - count)
     }
 
     pub(super) fn can_trap(&mut self) {
@@ -70,6 +82,7 @@ impl<'a> Builder<'a> {
     pub(super) fn flush_operands_to_temporaries(&mut self) {
         todo!("flushing of wasm operand stack to temporaries not yet implemented");
         // TODO: iter_mut for self.wasm_operand_stack, write temporaries
+        // TODO: have a height value to keep track of the temporaries that were already spilled
     }
 
     fn emit_statement_inner(&mut self, statement: crate::ast::Statement) {

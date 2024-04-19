@@ -213,12 +213,6 @@ pub(crate) enum Statement {
         /// instruction.
         offset: u32,
     },
-    /// Used to indicate that a code generation bug occured, and that the output Rust source code
-    /// is incorrect.
-    ValueStackUnderflowBug {
-        /// An offset from the start of the code section entry to the WebAssembly instruction.
-        offset: u32,
-    },
 }
 
 macro_rules! from_conversions {
