@@ -211,6 +211,7 @@ impl std::fmt::Debug for ExprListId {
 /// An arena used to contain [`Expr`]essions.
 ///
 /// [`Expr`]: crate::ast::Expr
+#[derive(Debug)]
 pub(crate) struct Arena {
     arena: Vec<crate::ast::Expr>,
 }

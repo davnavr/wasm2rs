@@ -1,5 +1,7 @@
 //! The entrypoint for converting a WebAssembly byte code into Rust source code.
 
+mod builder;
+
 pub(in crate::convert) struct Code<'wasm> {
     body: wasmparser::FunctionBody<'wasm>,
     validator: wasmparser::FuncToValidate<wasmparser::ValidatorResources>,
@@ -19,83 +21,6 @@ impl Definition {
     }
 }
 
-#[must_use]
-struct StatementBuilder<'a> {
-    wasm_operand_stack: Vec<crate::ast::ExprId>,
-    buffer: Vec<crate::ast::Statement>,
-    ast_arena: crate::ast::Arena,
-    calling_convention: crate::context::CallConv<'a>,
-}
-
-impl<'a> StatementBuilder<'a> {
-    fn new(allocations: &crate::Allocations, wasm_signature: &'a wasmparser::FuncType) -> Self {
-        // TODO: Value stack should be taken from `allocations`.
-        Self {
-            // TODO: Reserve space in Vec<ExprId>, collect data on avg. max stack height
-            wasm_operand_stack: Vec::new(),
-            buffer: allocations.take_statement_buffer(),
-            ast_arena: allocations.take_ast_arena(),
-            calling_convention: crate::context::CallConv {
-                call_kind: crate::context::CallKind::Function,
-                can_trap: false,
-                wasm_signature,
-            },
-        }
-    }
-
-    fn can_trap(&mut self) {
-        self.calling_convention.can_trap = true;
-    }
-
-    fn push_wasm_operand(
-        &mut self,
-        operand: impl Into<crate::ast::Expr>,
-    ) -> Result<(), crate::ast::ArenaError> {
-        self.ast_arena
-            .allocate(operand)
-            .map(|expr| self.wasm_operand_stack.push(expr))
-    }
-
-    fn pop_wasm_operand(&mut self) -> crate::ast::ExprId {
-        // Stack underflows are handled later by a `FuncValidator`, so this can't panic.
-        if let Some(expr) = self.wasm_operand_stack.pop() {
-            expr
-        } else {
-            todo!("special Expr value for operand stack underflow bugs")
-        }
-    }
-
-    fn flush_operands_to_temporaries(&mut self) {
-        todo!("flushing of wasm operand stack to temporaries not yet implemented");
-        // TODO: iter_mut for self.wasm_operand_stack, write temporaries
-    }
-
-    fn emit_statement_inner(&mut self, statement: crate::ast::Statement) {
-        if !self.wasm_operand_stack.is_empty() {
-            self.flush_operands_to_temporaries();
-        }
-
-        self.buffer.push(statement);
-    }
-
-    fn emit_statement(&mut self, statement: impl Into<crate::ast::Statement>) {
-        self.emit_statement_inner(statement.into())
-    }
-
-    fn finish(self) -> (crate::context::CallConv<'a>, Definition) {
-        let Self {
-            wasm_operand_stack,
-            buffer: body,
-            ast_arena: arena,
-            calling_convention,
-        } = self;
-
-        debug_assert!(wasm_operand_stack.is_empty());
-
-        (calling_convention, Definition { body, arena })
-    }
-}
-
 fn convert_impl<'wasm, 'types>(
     mut validator: wasmparser::FuncValidator<wasmparser::ValidatorResources>,
     body: wasmparser::FunctionBody<'wasm>,
@@ -109,7 +34,7 @@ fn convert_impl<'wasm, 'types>(
     let func_type = module.types[module.types.core_function_at(func_id.0)].unwrap_func();
 
     // TODO: Reserve space in Vec<Statement>, collect data on avg. # of statements per byte of code
-    let mut builder = StatementBuilder::new(allocations, func_type);
+    let mut builder = builder::Builder::new(allocations, func_type);
 
     {
         let mut locals = body
@@ -195,22 +120,19 @@ fn convert_impl<'wasm, 'types>(
 
                     debug_assert_eq!(
                         current_frame.height + result_count,
-                        builder.wasm_operand_stack.len() - current_frame.height,
+                        builder.wasm_operand_stack().len() - current_frame.height,
                         "value stack height mismatch"
                     );
 
-                    let results = builder.wasm_operand_stack.drain(current_frame.height..);
-                    debug_assert_eq!(result_count, results.as_slice().len());
+                    let results = builder.wasm_operand_stack_pop_to_height(current_frame.height)?;
 
-                    // TODO: Fix, operands are EVALUATED in reverse order in generated code!
-                    // Last result is popped first, so operands have to be in reverse order.
-                    let result_exprs = builder.ast_arena.allocate_many(results.rev())?;
+                    debug_assert_eq!(builder.wasm_operand_stack().len(), current_frame.height);
+                    debug_assert_eq!(result_count, results.len() as usize);
 
-                    debug_assert_eq!(builder.wasm_operand_stack.len(), current_frame.height);
-
-                    builder.emit_statement(crate::ast::Statement::Return(result_exprs));
+                    builder.emit_statement(crate::ast::Statement::Return(results));
                 }
             }
+            // Operator::Return => {}
             Operator::LocalGet { local_index } => {
                 builder.push_wasm_operand(crate::ast::Expr::GetLocal(crate::ast::LocalId(
                     local_index,
