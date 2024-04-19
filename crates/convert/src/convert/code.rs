@@ -108,16 +108,24 @@ fn convert_impl<'wasm, 'types>(
     let func_id = crate::ast::FuncId(validator.index());
     let func_type = module.types[module.types.core_function_at(func_id.0)].unwrap_func();
 
-    let _locals = body
-        .get_locals_reader()
-        .context("could not obtain locals")?;
-
-    if _locals.get_count() > 0 {
-        anyhow::bail!("TODO: Processing of locals is not yet implemented!");
-    }
-
     // TODO: Reserve space in Vec<Statement>, collect data on avg. # of statements per byte of code
     let mut builder = StatementBuilder::new(allocations, func_type);
+
+    {
+        let mut locals = body
+            .get_locals_reader()
+            .context("could not obtain locals")?;
+
+        let mut id = crate::ast::LocalId(func_type.params().len() as u32);
+        for _ in 0..locals.get_count() {
+            let (count, ty) = locals.read().context("could not read local variables")?;
+            validator.define_locals(locals.original_position(), count, ty)?;
+            for _ in 0..count {
+                builder.emit_statement(crate::ast::Statement::LocalDefinition(id, ty.into()));
+                id.0 += 1;
+            }
+        }
+    }
 
     let mut operators = body
         .get_operators_reader()
@@ -178,6 +186,13 @@ fn convert_impl<'wasm, 'types>(
                 builder.push_wasm_operand(crate::ast::Expr::GetLocal(crate::ast::LocalId(
                     local_index,
                 )))?;
+            }
+            Operator::LocalSet { local_index } => {
+                let value = builder.pop_wasm_operand();
+                builder.emit_statement(crate::ast::Statement::LocalSet {
+                    local: crate::ast::LocalId(local_index),
+                    value,
+                });
             }
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;

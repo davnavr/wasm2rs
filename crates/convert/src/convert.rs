@@ -299,7 +299,7 @@ impl Convert<'_> {
         let (module, code) = validate_payloads(&wasm).context("validation failed")?;
 
         let new_allocations;
-        let allocations = match &self.allocations {
+        let allocations = match self.allocations {
             Some(existing) => existing,
             None => {
                 new_allocations = Allocations::default();

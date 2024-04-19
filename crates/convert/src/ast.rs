@@ -30,6 +30,7 @@ impl std::fmt::Display for LocalId {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) enum ValType {
     I32,
     I64,
@@ -113,6 +114,14 @@ pub(crate) enum Statement {
     Expr(ExprId),
     /// Expressions that are evaluated, and used as the return values for the function.
     Return(ExprListId),
+    /// Defines a local variable. These statements should be placed at the start of the function.
+    ///
+    /// These correspond to the local variables of a WebAssembly code section entry.
+    LocalDefinition(LocalId, ValType),
+    /// Assigns a value to a local variable. Corresponds to the [`local.set`] instruction.
+    ///
+    /// [`local.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
+    LocalSet { local: LocalId, value: ExprId },
     /// Corresponds to the [`unreachable`] instruction, which always produces a trap.
     ///
     /// [`unreachable`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions

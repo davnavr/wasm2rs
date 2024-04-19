@@ -188,8 +188,9 @@ impl<'types, 'a> Print<'types, 'a> {
 
             match stmt {
                 Statement::Expr(expr) => {
+                    debug_assert!(!is_last, "expected a terminator statement");
+
                     expr.print(out, arena, false);
-                    out.write_str(";");
                 }
                 Statement::Return(results) => {
                     if is_last {
@@ -209,17 +210,32 @@ impl<'types, 'a> Print<'types, 'a> {
                     if calling_convention.can_unwind() {
                         out.write_str(")");
                     }
+                }
+                Statement::LocalDefinition(local, ty) => {
+                    use crate::ast::ValType;
 
-                    if is_last {
-                        out.write_str(";");
+                    write!(out, "let mut {local} = ");
+                    match ty {
+                        ValType::I32 => out.write_str("0i32"),
+                        ValType::I64 => out.write_str("0i64"),
+                        ValType::F32 => out.write_str("0f32"),
+                        ValType::F64 => out.write_str("0f64"),
                     }
+                }
+                Statement::LocalSet { local, value } => {
+                    write!(out, "{local} = ");
+                    value.print(out, arena, false);
                 }
                 Statement::Unreachable { function, offset } => {
                     writeln!(
                         out,
-                        "return ::core::result::Err(embedder::Trap::with_code());"
+                        "return ::core::result::Err(embedder::Trap::with_code())"
                     );
                 }
+            }
+
+            if is_last {
+                out.write_str(";");
             }
 
             out.write_str("\n");
