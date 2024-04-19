@@ -151,6 +151,26 @@ fn convert_impl<'wasm, 'types>(
                 // Any values that weren't popped are spilled into temporaries.
                 builder.emit_statement(crate::ast::Statement::Return(results));
             }
+            Operator::Call { function_index } => {
+                let signature =
+                    module.types[module.types.core_function_at(function_index)].unwrap_func();
+
+                let arguments = builder.wasm_operand_stack_pop_list(signature.params().len())?;
+
+                debug_assert!(
+                    signature.results().len() <= 1,
+                    "multi results not yet supported, have to put results into temporaries"
+                );
+
+                // TODO: Fix, call_conv of current function has to support call_convs of called functions, so fix it up later
+                builder.can_trap();
+                builder.needs_self();
+
+                builder.push_wasm_operand(crate::ast::Expr::Call {
+                    callee: crate::ast::FuncId(function_index),
+                    arguments,
+                })?;
+            }
             Operator::LocalGet { local_index } => {
                 builder.push_wasm_operand(crate::ast::Expr::GetLocal(crate::ast::LocalId(
                     local_index,

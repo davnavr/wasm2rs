@@ -85,13 +85,27 @@ impl crate::ast::Literal {
 }
 
 impl crate::ast::ExprId {
-    fn print(self, out: &mut crate::buffer::Writer, arena: &crate::ast::Arena, nested: bool) {
-        arena.get(self).print(out, arena, nested)
+    fn print(
+        self,
+        out: &mut crate::buffer::Writer,
+        arena: &crate::ast::Arena,
+        nested: bool,
+        calling_conventions: &[crate::context::CallConv],
+    ) {
+        arena
+            .get(self)
+            .print(out, arena, nested, calling_conventions)
     }
 }
 
 impl crate::ast::ExprListId {
-    fn print(self, out: &mut crate::buffer::Writer, arena: &crate::ast::Arena, enclosed: bool) {
+    fn print(
+        self,
+        out: &mut crate::buffer::Writer,
+        arena: &crate::ast::Arena,
+        enclosed: bool,
+        calling_conventions: &[crate::context::CallConv],
+    ) {
         if enclosed {
             out.write_str("(");
         }
@@ -101,7 +115,7 @@ impl crate::ast::ExprListId {
                 out.write_str(", ");
             }
 
-            expr.print(out, arena, false);
+            expr.print(out, arena, false, calling_conventions);
         }
 
         if enclosed {
@@ -111,7 +125,13 @@ impl crate::ast::ExprListId {
 }
 
 impl crate::ast::Expr {
-    fn print(&self, out: &mut crate::buffer::Writer<'_>, arena: &crate::ast::Arena, nested: bool) {
+    fn print(
+        &self,
+        out: &mut crate::buffer::Writer<'_>,
+        arena: &crate::ast::Arena,
+        nested: bool,
+        calling_conventions: &[crate::context::CallConv],
+    ) {
         macro_rules! nested_expr {
             {$($stmt:stmt;)*} => {{
                 if nested {
@@ -135,7 +155,7 @@ impl crate::ast::Expr {
                     ($name:ident) => {{
                         out.write_str(paths::RT_MATH);
                         out.write_str(concat!("::", stringify!($name), "("));
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(")?");
                     }};
                 }
@@ -143,7 +163,7 @@ impl crate::ast::Expr {
                 macro_rules! simple_cast {
                     ($to:ident) => {
                         nested_expr! {
-                            c_1.print(out, arena, true);
+                            c_1.print(out, arena, true, calling_conventions);
                             out.write_str(concat!(" as ", stringify!($to)));
                         }
                     };
@@ -152,7 +172,7 @@ impl crate::ast::Expr {
                 macro_rules! double_cast {
                     ($start:ident as $end:ident) => {
                         nested_expr! {
-                            c_1.print(out, arena, true);
+                            c_1.print(out, arena, true, calling_conventions);
                             out.write_str(concat!(
                                 " as ",
                                 stringify!($start),
@@ -166,37 +186,37 @@ impl crate::ast::Expr {
                 match kind {
                     UnOp::IxxEqz => nested_expr! {
                         out.write_str("(");
-                        c_1.print(out, arena, false);
+                        c_1.print(out, arena, false, calling_conventions);
                         out.write_str(" == 0) as i32");
                     },
                     UnOp::I32Clz => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".leading_zeros() as i32");
                     },
                     UnOp::I64Clz => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".leading_zeros() as i64");
                     },
                     UnOp::I32Ctz => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".trailing_zeros() as i32");
                     },
                     UnOp::I64Ctz => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".trailing_zeros() as i64");
                     },
                     UnOp::I32Popcnt => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".count_ones() as i32");
                     },
                     UnOp::I64Popcnt => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".count_ones() as i64");
                     },
                     UnOp::FxxNeg => nested_expr! {
                         // `::core::ops::Neg` on `f32` and `f64` do the same operation in Rust.
                         out.write_str("-");
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                     },
                     UnOp::I32WrapI64 | UnOp::I32TruncSatFxxS => simple_cast!(i32),
                     UnOp::I32TruncF32S => rt_math_function!(i32_trunc_f32_s),
@@ -224,7 +244,7 @@ impl crate::ast::Expr {
                     UnOp::F32DemoteF64 => nested_expr! {
                         // TODO: Does Rust's conversion of `f64` to `f32` preserve the "canonical NaN"
                         out.write_str("/* f32.demote_f64 */ ");
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(" as f32");
                     },
                     UnOp::F64ConvertIxxS => simple_cast!(f64),
@@ -237,22 +257,22 @@ impl crate::ast::Expr {
                     },
                     UnOp::I32ReinterpretF32 => nested_expr! {
                         out.write_str("f32::to_bits(");
-                        c_1.print(out, arena, false);
+                        c_1.print(out, arena, false, calling_conventions);
                         out.write_str(") as i32");
                     },
                     UnOp::I64ReinterpretF64 => nested_expr! {
                         out.write_str("f64::to_bits(");
-                        c_1.print(out, arena, false);
+                        c_1.print(out, arena, false, calling_conventions);
                         out.write_str(") as i64");
                     },
                     UnOp::F32ReinterpretI32 => {
                         out.write_str("f32::from_bits(");
-                        c_1.print(out, arena, false);
+                        c_1.print(out, arena, false, calling_conventions);
                         out.write_str(" as u32)");
                     }
                     UnOp::F64ReinterpretI64 => {
                         out.write_str("f64::from_bits(");
-                        c_1.print(out, arena, false);
+                        c_1.print(out, arena, false, calling_conventions);
                         out.write_str(" as u64)");
                     }
                     UnOp::I32Extend8S => double_cast!(i8 as i32),
@@ -271,9 +291,9 @@ impl crate::ast::Expr {
                 macro_rules! infix_operator {
                     ($operator:literal) => {
                         nested_expr! {
-                            c_1.print(out, arena, true);
+                            c_1.print(out, arena, true, calling_conventions);
                             out.write_str(concat!(" ", $operator, " "));
-                            c_2.print(out, arena, true);
+                            c_2.print(out, arena, true, calling_conventions);
                         }
                     };
                 }
@@ -281,14 +301,14 @@ impl crate::ast::Expr {
                 macro_rules! infix_comparison {
                     ($operator:literal $(as $cast:ident)?) => {{
                         out.write_str("(");
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(concat!(
                             $(" as ", stringify!($cast),)?
                             " ",
                             $operator,
                             " ",
                         ));
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(concat!(
                             $(" as ", stringify!($cast),)?
                             ") as i32"
@@ -300,9 +320,9 @@ impl crate::ast::Expr {
                     ($($name:expr),+) => {{
                         $(out.write_str($name);)+
                         out.write_str("(");
-                        c_1.print(out, arena, false);
+                        c_1.print(out, arena, false, calling_conventions);
                         out.write_str(", ");
-                        c_2.print(out, arena, false);
+                        c_2.print(out, arena, false, calling_conventions);
                         out.write_str(")");
                     }};
                 }
@@ -347,72 +367,108 @@ impl crate::ast::Expr {
                     BinOp::IxxOr => infix_operator!("|"),
                     BinOp::IxxXor => infix_operator!("^"),
                     BinOp::I32Shl => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(" << (");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" as u32 % 32)");
                     },
                     BinOp::I64Shl => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(" << (");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" as u64 % 64)");
                     },
                     BinOp::I32ShrS => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(" >> (");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" as u32 % 32)");
                     },
                     BinOp::I64ShrS => nested_expr! {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(" >> (");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" as u64 % 64)");
                     },
                     BinOp::I32ShrU => nested_expr! {
                         out.write_str("(");
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(" as u32 >> (");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" as u32 % 32)) as i32");
                     },
                     BinOp::I64ShrU => nested_expr! {
                         out.write_str("(");
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(" as u64 >> (");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" as u64 % 64) as i64");
                     },
                     BinOp::I32Rotl => {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".rotate_left((");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" % 32) as u32)");
                     }
                     BinOp::I64Rotl => {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".rotate_left((");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" % 64) as u64)");
                     }
                     BinOp::I32Rotr => {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".rotate_right((");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" % 32) as u32)");
                     }
                     BinOp::I64Rotr => {
-                        c_1.print(out, arena, true);
+                        c_1.print(out, arena, true, calling_conventions);
                         out.write_str(".rotate_right((");
-                        c_2.print(out, arena, true);
+                        c_2.print(out, arena, true, calling_conventions);
                         out.write_str(" % 64) as u64)");
                     }
                 }
             }
             Self::GetLocal(local) => write!(out, "{local}"),
             Self::Call { callee, arguments } => {
-                todo!("cannot generate call, need to figure out if self should be passed")
+                use crate::context::CallKind;
+
+                let call_conv = &calling_conventions[callee.0 as usize];
+
+                debug_assert!(
+                    call_conv.wasm_signature.results().len() <= 1,
+                    "functions with multiple results must be invoked in a separate statement"
+                );
+
+                debug_assert_eq!(
+                    arguments.len(),
+                    call_conv.wasm_signature.params().len() as u32,
+                    "cannot call {callee} with {} arguments, expected {:?}",
+                    arguments.len(),
+                    call_conv.wasm_signature.params()
+                );
+
+                match call_conv.call_kind {
+                    CallKind::Function => out.write_str("Self::"),
+                    CallKind::Method => out.write_str("self."),
+                }
+
+                write!(out, "{callee}(");
+
+                for (i, arg) in arena.get_list(*arguments).iter().enumerate() {
+                    if i > 0 {
+                        out.write_str(", ");
+                    }
+
+                    arg.print(out, arena, false, calling_conventions);
+                }
+
+                out.write_str(")");
+
+                if call_conv.can_unwind() {
+                    out.write_str("?");
+                }
             }
         }
     }
@@ -457,7 +513,7 @@ impl<'types, 'a> Print<'types, 'a> {
                 Statement::Expr(expr) => {
                     debug_assert!(!is_last, "expected a terminator statement");
 
-                    expr.print(out, arena, false);
+                    expr.print(out, arena, false, self.calling_conventions);
                 }
                 Statement::Return(results) => {
                     if is_last {
@@ -472,7 +528,7 @@ impl<'types, 'a> Print<'types, 'a> {
                         out.write_str("Ok(");
                     }
 
-                    results.print(out, arena, results.len() != 1);
+                    results.print(out, arena, results.len() != 1, self.calling_conventions);
 
                     if calling_convention.can_unwind() {
                         out.write_str(")");
@@ -491,7 +547,7 @@ impl<'types, 'a> Print<'types, 'a> {
                 }
                 Statement::LocalSet { local, value } => {
                     write!(out, "{local} = ");
-                    value.print(out, arena, false);
+                    value.print(out, arena, false, self.calling_conventions);
                 }
                 Statement::Unreachable { function, offset } => {
                     writeln!(

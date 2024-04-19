@@ -53,12 +53,19 @@ impl<'a> Builder<'a> {
         Ok(result_exprs)
     }
 
-    pub(super) fn wasm_operand_stack_pop_list(&mut self, count: usize) -> Result<crate::ast::ExprListId, crate::ast::ArenaError> {
+    pub(super) fn wasm_operand_stack_pop_list(
+        &mut self,
+        count: usize,
+    ) -> Result<crate::ast::ExprListId, crate::ast::ArenaError> {
         self.wasm_operand_stack_pop_to_height(self.wasm_operand_stack.len() - count)
     }
 
     pub(super) fn can_trap(&mut self) {
         self.calling_convention.can_trap = true;
+    }
+
+    pub(super) fn needs_self(&mut self) {
+        self.calling_convention.call_kind = crate::context::CallKind::Method;
     }
 
     pub(super) fn push_wasm_operand(
