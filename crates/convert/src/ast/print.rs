@@ -151,22 +151,29 @@ impl crate::ast::Expr {
     }
 }
 
-pub(crate) struct Print {
+pub(crate) struct Print<'types, 'a> {
     indentation: Indentation,
     // TODO: Info about globals, memories, etc.
     // TODO: Info about function signatures and CallKinds
+    calling_conventions: &'a [crate::context::CallConv<'types>],
 }
 
-impl Print {
-    pub(crate) const fn new(indentation: Indentation) -> Self {
-        Self { indentation }
+impl<'types, 'a> Print<'types, 'a> {
+    pub(crate) const fn new(
+        indentation: Indentation,
+        calling_conventions: &'a [crate::context::CallConv<'types>],
+    ) -> Self {
+        Self {
+            indentation,
+            calling_conventions,
+        }
     }
 
     pub(crate) fn print_statements(
         &self,
         out: &mut crate::buffer::Writer<'_>,
         arena: &crate::ast::Arena,
-        context: &crate::context::Context,
+        calling_convention: &crate::context::CallConv<'types>,
         statements: &[crate::ast::Statement],
     ) {
         use crate::ast::Statement;
@@ -188,16 +195,30 @@ impl Print {
                     if is_last {
                         out.write_str("return");
 
-                        if !results.is_empty() {
+                        if !results.is_empty() || calling_convention.can_unwind() {
                             out.write_str(" ");
                         }
                     }
 
+                    if calling_convention.can_unwind() {
+                        out.write_str("Ok(");
+                    }
+
                     results.print(out, arena, results.len() != 1);
+
+                    if calling_convention.can_unwind() {
+                        out.write_str(")");
+                    }
 
                     if is_last {
                         out.write_str(";");
                     }
+                }
+                Statement::Unreachable { function, offset } => {
+                    writeln!(
+                        out,
+                        "return ::core::result::Err(embedder::Trap::with_code());"
+                    );
                 }
             }
 

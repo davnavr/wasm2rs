@@ -1,5 +1,6 @@
-//! Types describing how WebAssembly constructs are accessed in the translated Rust code.
+//! Types describing how WebAssembly constructs are accessed in a function translated to Rust.
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum CallKind {
     /// No additional argument is added. The generated Rust function is an associated
     /// function.
@@ -7,6 +8,8 @@ pub(crate) enum CallKind {
     /// A `self` argument is added. The generated Rust function is a method.
     ///
     /// A function generated with this [`CallKind`] is always correct.
+    ///
+    /// This is always used by function imports.
     Method,
     // /// An additional argument is added to access embedder specific data.
     // ///
@@ -20,12 +23,14 @@ pub(crate) enum CallKind {
 
 //enum { Pure, ReadsMemory, Impure }
 
-pub(crate) struct Context {
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CallConv<'a> {
     pub(crate) call_kind: CallKind,
     pub(crate) can_trap: bool,
+    pub(crate) wasm_signature: &'a wasmparser::FuncType,
 }
 
-impl Context {
+impl CallConv<'_> {
     /// Returns `true` if the function can trap or produce an exception.
     pub(crate) fn can_unwind(&self) -> bool {
         self.can_trap

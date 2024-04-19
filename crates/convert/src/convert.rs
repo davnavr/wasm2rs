@@ -246,6 +246,39 @@ fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code:
 }
 
 impl Convert<'_> {
+    fn convert_function_definitions<'wasm, 'types>(
+        &self,
+        module: &'types Module<'wasm>,
+        allocations: &crate::Allocations,
+        calling_conventions: &mut [crate::context::CallConv<'types>],
+        code: Vec<code::Code<'wasm>>,
+    ) -> crate::Result<Vec<code::Definition>> {
+        let convert_function_bodies =
+            move |call_conv: &mut crate::context::CallConv<'types>, code: code::Code<'wasm>| {
+                let (new_conv, definition) = code.convert(module, &self, allocations)?;
+                *call_conv = new_conv;
+                Ok(definition)
+            };
+
+        #[cfg(not(feature = "rayon"))]
+        return {
+            code.into_iter()
+                .zip(calling_conventions)
+                .map(|(code, call_conv)| convert_function_bodies(call_conv, code))
+                .collect::<crate::Result<_>>()
+        };
+
+        #[cfg(feature = "rayon")]
+        return {
+            use rayon::prelude::*;
+
+            code.into_par_iter()
+                .zip_eq(calling_conventions)
+                .map(|(code, call_conv)| convert_function_bodies(call_conv, code))
+                .collect::<crate::Result<_>>()
+        };
+    }
+
     /// Converts an in-memory WebAssembly binary module, and [`Write`]s the resulting Rust source
     /// code to the given output.
     ///
@@ -263,7 +296,7 @@ impl Convert<'_> {
     ) -> crate::Result<()> {
         use anyhow::Context;
 
-        let (module, code) = validate_payloads(&wasm)?;
+        let (module, code) = validate_payloads(&wasm).context("validation failed")?;
 
         let new_allocations;
         let allocations = match &self.allocations {
@@ -274,32 +307,25 @@ impl Convert<'_> {
             }
         };
 
-        let convert_function_bodies = |(index, code): (usize, code::Code)| -> crate::Result<_> {
-            code.convert(&module, &self, allocations)
-                .with_context(|| format!("could not format function #{index}"))
-        };
+        let empty_func_type = wasmparser::FuncType::new([], []);
 
-        let function_definitions: Vec<code::Definition>;
+        // Stores information like function signatures, whether they throw, etc.
+        let mut calling_conventions = vec![
+            crate::context::CallConv {
+                call_kind: crate::context::CallKind::Method,
+                can_trap: true, // Cannot assume function imports won't trap
+                wasm_signature: &empty_func_type,
+            };
+            module.types.core_function_count() as usize
+        ];
 
-        #[cfg(feature = "rayon")]
-        {
-            use rayon::prelude::*;
-
-            function_definitions = code
-                .into_par_iter()
-                .enumerate()
-                .map(convert_function_bodies)
-                .collect::<crate::Result<_>>()?;
-        }
-
-        #[cfg(not(feature = "rayon"))]
-        {
-            function_bodies = code
-                .into_iter()
-                .enumerate()
-                .map(convert_function_bodies)
-                .collect::<crate::Result<_>>()?;
-        }
+        let function_import_count = module.types.core_function_count() as usize - code.len();
+        let function_definitions = self.convert_function_definitions(
+            &module,
+            allocations,
+            &mut calling_conventions[function_import_count..],
+            code,
+        )?;
 
         fn print_result_type(
             out: &mut crate::buffer::Writer,
@@ -340,26 +366,29 @@ impl Convert<'_> {
             }
         }
 
-        let printer_options = crate::ast::Print::new(self.indentation);
+        // TODO: Process function imports and update the calling conventions
+
+        let calling_conventions = calling_conventions.as_slice();
+        let printer_options = crate::ast::Print::new(self.indentation, calling_conventions);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
             use crate::context::CallKind;
 
             // TODO: Use some average # of Rust bytes per # of Wasm bytes
             let mut out = crate::buffer::Writer::new(allocations.byte_buffer_pool());
 
-            let id = crate::ast::FuncId(index as u32);
-            let signature = module.types[module.types.core_function_at(id.0)].unwrap_func();
+            let func_idx = function_import_count + index;
+            let call_conv = &calling_conventions[func_idx];
+            let signature = call_conv.wasm_signature;
 
-            write!(out, "fn {id}(");
+            write!(out, "fn {}(", crate::ast::FuncId(func_idx as u32));
 
-            match definition.context.call_kind {
+            match call_conv.call_kind {
                 CallKind::Function => (),
                 CallKind::Method => out.write_str("&self"),
                 // CallKind::WithEmbedder => out.write_str("_embedder: &embedder::State"),
             }
 
-            if !matches!(definition.context.call_kind, CallKind::Function)
-                && !signature.params().is_empty()
+            if !matches!(call_conv.call_kind, CallKind::Function) && !signature.params().is_empty()
             {
                 out.write_str(", ");
             }
@@ -371,14 +400,10 @@ impl Convert<'_> {
             out.write_str(")");
 
             // Omit return type for functions that return nothing and can't unwind
-            if !signature.results().is_empty() || definition.context.can_unwind() {
+            if !signature.results().is_empty() || call_conv.can_unwind() {
                 out.write_str(" -> ");
 
-                print_return_types(
-                    &mut out,
-                    signature.results(),
-                    !definition.context.can_unwind(),
-                )
+                print_return_types(&mut out, signature.results(), !call_conv.can_unwind())
             }
 
             out.write_str(" {\n");
@@ -386,7 +411,7 @@ impl Convert<'_> {
             printer_options.print_statements(
                 &mut out,
                 &definition.arena,
-                &definition.context,
+                call_conv,
                 &definition.body,
             );
 
