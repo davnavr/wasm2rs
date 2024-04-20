@@ -9,19 +9,40 @@ fn _f1(&self, _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
 Ok(Self::_f0(Self::_f0(Self::_f0(_l0))))
 }
 fn _f2(_l0: i32) -> i32 {
-let (_t0, _t1) = '_b2: {
+let (_t0, _t1) = '_b0: {
 (_l0, _l0)
-}; // '_b1
+}; // '_b0
 i32::wrapping_add(_t0, _t1)
 }
 fn _f3() -> ::core::result::Result<i32, embedder::Trap> {
 return ::core::result::Err(embedder::rt::trap::Trap::with_code(embedder::rt::trap::TrapCode::Unreachable, todo!("how to encode _f3 @ 0x1")));
 }
 fn _f4(_l0: i32) -> i32 {
-let _t0 = '_b2: { { if _l0 == 0x2Ai32 {
+let _t0 = '_b0: { if _l0 == 0x2Ai32 {
 0x42424242i32
 } else {
 0xDEADi32
-} }; // '_b1
+} }; // '_b0
+_t0
+}
+fn _f5() {
+()
+}
+fn _f6(_l0: i32) -> i64 {
+let mut _l1 = 0i64;
+'_b0: { if _l0 == 0 {
+    return 1i64;
+} } // '_b0
+_l1 = 1i64;
+'_b0: loop {
+    _l1 = i64::wrapping_mul(_l0 as u32 as i64, _l1);
+    let _t0 = '_b1: { if 1i64 == _l0 as u32 as i64 {
+_l1
+    } else {
+        _l0 = i32::wrapping_sub(_l0, 1i32);
+        continue '_b0;
+    } }; // '_b1
+break _t0;
+}; // '_b0
 _t0
 }

@@ -23,6 +23,12 @@ impl Definition {
 
 type FuncValidator = wasmparser::FuncValidator<wasmparser::ValidatorResources>;
 
+fn get_block_id(validator: &FuncValidator) -> crate::ast::BlockId {
+    // Subtract two, 1 for the newly added block, and 1 for the implicit block in the start of
+    // every function.
+    crate::ast::BlockId(validator.control_stack_height() - 2)
+}
+
 fn convert_block_start(
     builder: &mut builder::Builder,
     block_type: wasmparser::BlockType,
@@ -36,7 +42,7 @@ fn convert_block_start(
         builder.get_block_results(block_type.results().len(), block_type.params().len())?;
 
     builder.emit_statement(crate::ast::Statement::BlockStart {
-        id: crate::ast::BlockId(validator.control_stack_height()),
+        id: get_block_id(validator),
         results,
         kind,
     })
@@ -146,7 +152,7 @@ fn convert_impl<'wasm, 'types>(
             }
             Operator::Loop { blockty } => {
                 // See `convert_block_start`
-                let block_id = crate::ast::BlockId(validator.control_stack_height());
+                let block_id = get_block_id(&validator);
                 let block_type = module.resolve_block_type(blockty);
                 let input_count = block_type.params().len();
                 let result_count = block_type.params().len();
@@ -188,31 +194,47 @@ fn convert_impl<'wasm, 'types>(
                 builder.emit_statement(crate::ast::Statement::Else { previous_results })?;
             }
             Operator::End => {
-                if current_frame.unreachable {
-                    builder.wasm_operand_stack_truncate(current_frame.height)?;
-                }
-
                 if validator.control_stack_height() >= 1 {
+                    let id = crate::ast::BlockId(validator.control_stack_height() - 1);
                     let result_count = module
                         .resolve_block_type(current_frame.block_type)
                         .results()
                         .len();
 
-                    let results = builder.wasm_operand_stack_pop_list(result_count)?;
+                    let kind = match current_frame.kind {
+                        wasmparser::FrameKind::Block => crate::ast::BlockKind::Block,
+                        wasmparser::FrameKind::Loop => crate::ast::BlockKind::Loop { inputs: () },
+                        wasmparser::FrameKind::Else | wasmparser::FrameKind::If => {
+                            crate::ast::BlockKind::If { condition: () }
+                        }
+                        bad => anyhow::bail!("TODO: support for {bad:?}"),
+                    };
 
-                    builder.push_block_results(result_count)?;
-                    builder.emit_statement(crate::ast::Statement::BlockEnd {
-                        id: crate::ast::BlockId(validator.control_stack_height()),
-                        kind: match current_frame.kind {
-                            wasmparser::FrameKind::Block => crate::ast::BlockKind::Block,
-                            wasmparser::FrameKind::Else | wasmparser::FrameKind::If => {
-                                crate::ast::BlockKind::If { condition: () }
-                            }
-                            bad => anyhow::bail!("TODO: support for {bad:?}"),
-                        },
-                        results,
-                    })?;
-                } else if !current_frame.unreachable {
+                    if !current_frame.unreachable {
+                        let results = builder.wasm_operand_stack_pop_list(result_count)?;
+
+                        builder.push_block_results(result_count)?;
+                        builder.emit_statement(crate::ast::Statement::BlockEnd {
+                            id,
+                            kind,
+                            results,
+                        })?;
+                    } else {
+                        builder.emit_statement(crate::ast::Statement::BlockEndUnreachable {
+                            id,
+                            kind,
+                            has_results: result_count > 0,
+                        })?;
+
+                        builder.wasm_operand_stack_truncate(
+                            validator.operand_stack_height() as usize
+                        )?;
+
+                        builder.push_block_results(result_count)?;
+                    }
+                } else if current_frame.unreachable {
+                    builder.wasm_operand_stack_truncate(current_frame.height)?;
+                } else {
                     let result_count = func_type.results().len();
 
                     debug_assert_eq!(
@@ -226,10 +248,37 @@ fn convert_impl<'wasm, 'types>(
 
                     debug_assert_eq!(result_count, results.len() as usize);
 
-                    builder.emit_statement(crate::ast::Statement::Return(results))?;
+                    builder.emit_statement(crate::ast::Statement::r#return(results))?;
                 }
             }
-            // Operator::Br { relative_depth } => {}
+            Operator::Br { relative_depth } => {
+                let frame = validator
+                    .get_control_frame(relative_depth as usize)
+                    .unwrap();
+
+                let block_type = module.resolve_block_type(frame.block_type);
+                let target;
+                let popped_count;
+                match (validator.control_stack_height() - relative_depth).checked_sub(2) {
+                    None => {
+                        target = crate::ast::BranchTarget::Return;
+                        popped_count = func_type.results().len();
+                    }
+                    Some(id) => {
+                        let id = crate::ast::BlockId(id);
+                        if frame.kind == wasmparser::FrameKind::Loop {
+                            target = crate::ast::BranchTarget::Loop(id);
+                            popped_count = block_type.params().len();
+                        } else {
+                            target = crate::ast::BranchTarget::Block(id);
+                            popped_count = block_type.results().len();
+                        }
+                    }
+                };
+
+                let values = builder.wasm_operand_stack_pop_list(popped_count)?;
+                builder.emit_statement(crate::ast::Statement::Branch { target, values })?;
+            }
             Operator::Return => {
                 // Unlike the last `end` instruction, `return` allows values on the stack that
                 // weren't popped.
@@ -241,7 +290,7 @@ fn convert_impl<'wasm, 'types>(
                 let results = builder.wasm_operand_stack_pop_list(result_count)?;
 
                 // Any values that weren't popped are spilled into temporaries.
-                builder.emit_statement(crate::ast::Statement::Return(results))?;
+                builder.emit_statement(crate::ast::Statement::r#return(results))?;
             }
             Operator::Call { function_index } => {
                 let signature =

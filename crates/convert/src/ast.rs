@@ -234,6 +234,13 @@ pub(crate) enum BlockKind<E = ExprId, L = ExprListId> {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) enum BranchTarget {
+    Return,
+    Block(BlockId),
+    Loop(BlockId),
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct BlockResults {
     // TODO: make BlockResults 4 bytes
     pub(crate) start: TempId,
@@ -245,8 +252,6 @@ pub(crate) struct BlockResults {
 pub(crate) enum Statement {
     /// An expression that is evaluated, with any results discarded.
     Expr(ExprId),
-    /// Expressions that are evaluated, and used as the return values for the function.
-    Return(ExprListId),
     /// Defines a local variable. These statements should be placed at the start of the function.
     ///
     /// These correspond to the local variables of a WebAssembly code section entry.
@@ -266,6 +271,11 @@ pub(crate) enum Statement {
         /// instruction.
         offset: u32,
     },
+    /// Represents a `break` out of a block, a `return`, or a `continue` in a `loop`.
+    Branch {
+        target: BranchTarget,
+        values: ExprListId,
+    },
     BlockStart {
         id: BlockId,
         results: Option<BlockResults>,
@@ -280,6 +290,21 @@ pub(crate) enum Statement {
         results: ExprListId,
         kind: BlockKind<(), ()>,
     },
+    BlockEndUnreachable {
+        id: BlockId,
+        has_results: bool,
+        kind: BlockKind<(), ()>,
+    },
+}
+
+impl Statement {
+    /// Expressions that are evaluated, and used as the return values for the function.
+    pub(crate) const fn r#return(results: ExprListId) -> Self {
+        Self::Branch {
+            target: BranchTarget::Return,
+            values: results,
+        }
+    }
 }
 
 macro_rules! from_conversions {

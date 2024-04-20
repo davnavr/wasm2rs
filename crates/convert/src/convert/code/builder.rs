@@ -91,6 +91,13 @@ impl<'a> Builder<'a> {
         &mut self,
         count: usize,
     ) -> crate::Result<crate::ast::ExprListId> {
+        debug_assert!(
+            self.wasm_operand_stack.len() >= count,
+            "attempted to pop {count} values, but operand stack contained {} ({:?})",
+            self.wasm_operand_stack.len(),
+            self.wasm_operand_stack
+        );
+
         self.wasm_operand_stack_pop_to_height(self.wasm_operand_stack.len() - count)
     }
 
@@ -124,8 +131,9 @@ impl<'a> Builder<'a> {
     ) -> crate::Result<Option<crate::ast::BlockResults>> {
         debug_assert!(
             input_count <= self.wasm_operand_stack.len(),
-            "expected block to pop {input_count} inputs, but operand stack contained {} values",
-            self.wasm_operand_stack.len()
+            "expected block to pop {input_count} inputs, but operand stack contained {} values ({:?})",
+            self.wasm_operand_stack.len(),
+            self.wasm_operand_stack
         );
 
         Ok(

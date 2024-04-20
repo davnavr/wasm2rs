@@ -565,7 +565,12 @@ impl<'types, 'a> Print<'types, 'a> {
         for (n, stmt) in statements.iter().copied().enumerate() {
             let is_last = n == statements.len() - 1;
 
-            if !matches!(stmt, Statement::BlockEnd { .. } | Statement::Else { .. }) {
+            if !matches!(
+                stmt,
+                Statement::BlockEnd { .. }
+                    | Statement::Else { .. }
+                    | Statement::BlockEndUnreachable { .. }
+            ) {
                 self.write_indentation(out, indent_level);
             }
 
@@ -576,7 +581,10 @@ impl<'types, 'a> Print<'types, 'a> {
                     expr.print(out, arena, false, self.calling_conventions);
                     out.write_str(";");
                 }
-                Statement::Return(results) => {
+                Statement::Branch {
+                    target: crate::ast::BranchTarget::Return,
+                    values: results,
+                } => {
                     if !is_last {
                         out.write_str("return");
 
@@ -598,6 +606,40 @@ impl<'types, 'a> Print<'types, 'a> {
                     if !is_last {
                         out.write_str(";");
                     }
+                }
+                Statement::Branch {
+                    target: crate::ast::BranchTarget::Block(block),
+                    values,
+                } => {
+                    write!(out, "break {block}");
+
+                    if !values.is_empty() {
+                        out.write_str(" ");
+
+                        values.print(out, arena, values.len() > 1, self.calling_conventions);
+                    }
+
+                    out.write_str(";");
+                }
+                Statement::Branch {
+                    target: crate::ast::BranchTarget::Loop(target),
+                    values,
+                } => {
+                    for (i, expr) in arena.get_list(values).iter().enumerate() {
+                        write!(
+                            out,
+                            "{} = ",
+                            crate::ast::LoopInput {
+                                r#loop: target,
+                                number: i as u32
+                            }
+                        );
+
+                        expr.print(out, arena, false, self.calling_conventions);
+                        self.write_indentation(out, indent_level);
+                    }
+
+                    write!(out, "continue {target};");
                 }
                 Statement::LocalDefinition(local, ty) => {
                     use crate::ast::ValType;
@@ -673,7 +715,7 @@ impl<'types, 'a> Print<'types, 'a> {
                     out.write_str("{");
 
                     if let crate::ast::BlockKind::If { condition } = kind {
-                        out.write_str(" { if ");
+                        out.write_str(" if ");
                         condition.print_bool(out, arena, self.calling_conventions);
                         out.write_str(" {");
                     }
@@ -729,7 +771,34 @@ impl<'types, 'a> Print<'types, 'a> {
                         out.write_str("} ");
                     }
 
-                    write!(out, "}}; // {id}");
+                    out.write_str("}");
+
+                    if !results.is_empty() {
+                        out.write_str(";");
+                    }
+
+                    write!(out, " // {id}");
+                }
+                Statement::BlockEndUnreachable {
+                    id,
+                    kind,
+                    has_results,
+                } => {
+                    indent_level -= 1;
+
+                    self.write_indentation(out, indent_level);
+
+                    if let crate::ast::BlockKind::If { condition: () } = kind {
+                        out.write_str("} ");
+                    }
+
+                    out.write_str("}");
+
+                    if has_results {
+                        out.write_str(";");
+                    }
+
+                    write!(out, " // {id}");
                 }
                 Statement::Unreachable { function, offset } => {
                     write!(
