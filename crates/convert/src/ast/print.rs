@@ -669,6 +669,7 @@ impl<'types, 'a> Print<'types, 'a> {
                         );
 
                         expr.print(out, arena, false, self.calling_conventions);
+                        out.write_str(";\n");
                         self.write_indentation(out, indent_level);
                     }
 

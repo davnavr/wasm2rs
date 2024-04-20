@@ -156,7 +156,7 @@ fn convert_impl<'wasm, 'types>(
                 let block_id = get_block_id(&validator);
                 let block_type = module.resolve_block_type(blockty);
                 let input_count = block_type.params().len();
-                let result_count = block_type.params().len();
+                let result_count = block_type.results().len();
 
                 let inputs = builder.wasm_operand_stack_move_loop_inputs(block_id, input_count)?;
                 let results = builder.get_block_results(result_count, input_count)?;
@@ -168,7 +168,7 @@ fn convert_impl<'wasm, 'types>(
                 })?;
 
                 // Push the loops inputs back onto the stack
-                for number in 0u32..(result_count as u32) {
+                for number in 0u32..(input_count as u32) {
                     builder.push_wasm_operand(crate::ast::Expr::LoopInput(
                         crate::ast::LoopInput {
                             r#loop: block_id,

@@ -639,7 +639,7 @@ pub(in crate::translation) fn write_definition(
         const MATH: &str = "embedder::rt::math";
 
         match op {
-            Operator::Unreachable => {
+            /* Operator::Unreachable => {
                 let in_block = validator.control_stack_height() > 1;
                 if in_block {
                     out.write_str("return ");
@@ -763,7 +763,7 @@ pub(in crate::translation) fn write_definition(
             }
             Operator::Br { relative_depth } => {
                 write_branch(out, validator, relative_depth, 0, types)?;
-            }
+            } */
             Operator::BrIf { relative_depth } => {
                 let cond = PoppedValue::pop(validator, 0);
                 let _ = write!(out, "if {cond} != 0i32 {{\n  ");

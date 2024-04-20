@@ -34,7 +34,7 @@ let mut _l1 = 0i64;
     return 1i64;
 } } // '_b0
 _l1 = 1i64;
-'_b0: loop {
+let _t0 = '_b0: loop {
     _l1 = i64::wrapping_mul(_l0 as u32 as i64, _l1);
     let _t0 = '_b1: { if 1i64 == _l0 as u32 as i64 {
         _l1
@@ -52,11 +52,12 @@ let _t1 = 0x26CCi32;
 let _t2 = 0xCDFi64;
 '_b0: {
     let mut _b1_0 = _l0;
-    let _t2 = '_b1: loop {
+    '_b1: loop {
         '_b2: { if embedder::rt::math::i32_rem_u(_b1_0, 2i32)? == 0 {
             return Ok(());
         } } // '_b2
-        _b1_0 = 1i32        continue '_b1;
+        _b1_0 = 1i32;
+        continue '_b1;
     } // '_b1
 } // '_b0
 return ::core::result::Err(embedder::rt::trap::Trap::with_code(embedder::rt::trap::TrapCode::Unreachable, todo!("how to encode _f7 @ 0x21")));
