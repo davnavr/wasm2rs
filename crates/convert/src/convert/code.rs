@@ -144,6 +144,22 @@ fn convert_impl<'wasm, 'types>(
                     &validator,
                 )?;
             }
+            Operator::Loop { blockty } => {
+                // See `convert_block_start`
+                let block_id = crate::ast::BlockId(validator.control_stack_height());
+                let block_type = module.resolve_block_type(blockty);
+                let input_count = block_type.params().len();
+                let result_count = block_type.params().len();
+
+                let inputs = builder.wasm_operand_stack_move_loop_inputs(block_id, input_count)?;
+                let results = builder.get_block_results(result_count, input_count)?;
+
+                builder.emit_statement(crate::ast::Statement::BlockStart {
+                    id: block_id,
+                    results,
+                    kind: crate::ast::BlockKind::Loop { inputs },
+                })?;
+            }
             Operator::If { blockty } => {
                 let condition = builder.pop_wasm_operand();
                 convert_block_start(
@@ -169,10 +185,7 @@ fn convert_impl<'wasm, 'types>(
                     )))?;
                 }
 
-                builder.emit_statement(crate::ast::Statement::Else {
-                    id: crate::ast::BlockId(validator.control_stack_height()),
-                    previous_results,
-                })?;
+                builder.emit_statement(crate::ast::Statement::Else { previous_results })?;
             }
             Operator::End => {
                 if current_frame.unreachable {

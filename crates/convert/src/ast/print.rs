@@ -443,6 +443,7 @@ impl crate::ast::Expr {
             }
             Self::GetLocal(local) => write!(out, "{local}"),
             Self::Temporary(temp) => write!(out, "{temp}"),
+            Self::LoopInput(input) => write!(out, "{input}"),
             Self::Call { callee, arguments } => {
                 use crate::context::CallKind;
 
@@ -611,8 +612,8 @@ impl<'types, 'a> Print<'types, 'a> {
 
                     out.write_str(";");
                 }
-                Statement::Temporary(temp, value) => {
-                    write!(out, "let {temp} = ");
+                Statement::Temporary { temporary, value } => {
+                    write!(out, "let {temporary} = ");
                     value.print(out, arena, false, self.calling_conventions);
                     out.write_str(";");
                 }
@@ -623,6 +624,23 @@ impl<'types, 'a> Print<'types, 'a> {
                 }
                 Statement::BlockStart { id, results, kind } => {
                     debug_assert!(!is_last);
+
+                    if let crate::ast::BlockKind::Loop { inputs } = kind {
+                        for (i, expr) in arena.get_list(inputs).iter().enumerate() {
+                            write!(
+                                out,
+                                "let mut {} = ",
+                                crate::ast::LoopInput {
+                                    r#loop: id,
+                                    number: i as u32
+                                }
+                            );
+
+                            expr.print(out, arena, false, self.calling_conventions);
+                            writeln!(out, ";");
+                            self.write_indentation(out, indent_level);
+                        }
+                    }
 
                     if let Some(results) = results {
                         out.write_str("let ");
@@ -648,7 +666,9 @@ impl<'types, 'a> Print<'types, 'a> {
 
                     write!(out, "{id}: ");
 
-                    //if matches!(kind, BlockKind::Loop) { out.write_str("loop "); }
+                    if matches!(kind, crate::ast::BlockKind::Loop { .. }) {
+                        out.write_str("loop ");
+                    }
 
                     out.write_str("{");
 
@@ -660,10 +680,7 @@ impl<'types, 'a> Print<'types, 'a> {
 
                     indent_level += 1;
                 }
-                Statement::Else {
-                    id: _,
-                    previous_results,
-                } => {
+                Statement::Else { previous_results } => {
                     debug_assert!(!is_last);
 
                     if !previous_results.is_empty() {
@@ -686,10 +703,20 @@ impl<'types, 'a> Print<'types, 'a> {
                 Statement::BlockEnd { id, kind, results } => {
                     debug_assert!(!is_last);
 
-                    //if matches!(kind, BlockKind::Loop) { out.write_str("break;\n"); }
+                    if matches!(kind, crate::ast::BlockKind::Loop { .. }) {
+                        out.write_str("break");
+
+                        if !results.is_empty() {
+                            out.write_str(" ");
+                        };
+                    }
 
                     if !results.is_empty() {
                         results.print(out, arena, results.len() > 1, self.calling_conventions);
+
+                        if matches!(kind, crate::ast::BlockKind::Loop { .. }) {
+                            out.write_str(";");
+                        }
 
                         out.write_str("\n");
                     }

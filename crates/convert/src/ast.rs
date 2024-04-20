@@ -185,6 +185,18 @@ pub(crate) enum BinOp {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct LoopInput {
+    pub(crate) r#loop: BlockId,
+    pub(crate) number: u32,
+}
+
+impl std::fmt::Display for LoopInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_b{}_{}", self.r#loop.0, self.number)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Expr {
     Literal(Literal),
     /// Represents instructions of the form [*t.unop*] (`unop(c_1)`).
@@ -206,6 +218,8 @@ pub(crate) enum Expr {
     GetLocal(LocalId),
     /// Gets the value of a temporary local variable.
     Temporary(TempId),
+    /// Gets the value stored in a temporary loop input variable.
+    LoopInput(LoopInput),
     Call {
         callee: FuncId,
         arguments: ExprListId,
@@ -213,10 +227,10 @@ pub(crate) enum Expr {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum BlockKind<E = ExprId> {
+pub(crate) enum BlockKind<E = ExprId, L = ExprListId> {
     Block,
+    Loop { inputs: L },
     If { condition: E },
-    //Loop,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -238,7 +252,7 @@ pub(crate) enum Statement {
     /// These correspond to the local variables of a WebAssembly code section entry.
     LocalDefinition(LocalId, ValType),
     /// Defines a temporary local variable used to store intermediate results.
-    Temporary(TempId, ExprId),
+    Temporary { temporary: TempId, value: ExprId },
     /// Assigns a value to a local variable. Corresponds to the [`local.set`] instruction.
     ///
     /// [`local.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
@@ -258,13 +272,13 @@ pub(crate) enum Statement {
         kind: BlockKind,
     },
     Else {
-        id: BlockId,
+        // id: BlockId,
         previous_results: ExprListId,
     },
     BlockEnd {
         id: BlockId,
         results: ExprListId,
-        kind: BlockKind<()>,
+        kind: BlockKind<(), ()>,
     },
 }
 

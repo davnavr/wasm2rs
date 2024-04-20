@@ -38,6 +38,29 @@ impl<'a> Builder<'a> {
         &self.wasm_operand_stack
     }
 
+    pub(super) fn wasm_operand_stack_move_loop_inputs(
+        &mut self,
+        r#loop: crate::ast::BlockId,
+        count: usize,
+    ) -> crate::Result<crate::ast::ExprListId> {
+        let inputs = self.wasm_operand_stack_pop_list(count)?;
+
+        let operands_stack_height = self.wasm_operand_stack.len();
+        for (i, op) in self.wasm_operand_stack[operands_stack_height - count..]
+            .iter_mut()
+            .enumerate()
+        {
+            *op = self
+                .ast_arena
+                .allocate(crate::ast::Expr::LoopInput(crate::ast::LoopInput {
+                    r#loop,
+                    number: i as u32,
+                }))?;
+        }
+
+        Ok(inputs)
+    }
+
     pub(super) fn wasm_operand_stack_truncate(&mut self, height: usize) -> crate::Result<()> {
         if !self.wasm_operand_stack.is_empty() {
             self.flush_operands_to_temporaries()?;
@@ -95,7 +118,7 @@ impl<'a> Builder<'a> {
     }
 
     pub(super) fn get_block_results(
-        &mut self,
+        &self,
         result_count: usize,
         input_count: usize,
     ) -> crate::Result<Option<crate::ast::BlockResults>> {
@@ -104,10 +127,6 @@ impl<'a> Builder<'a> {
             "expected block to pop {input_count} inputs, but operand stack contained {} values",
             self.wasm_operand_stack.len()
         );
-
-        // Ensure all block inputs are evaluted before entering a block.
-        // This prevents expressions being "re-evaluated" in loops.
-        self.flush_operands_to_temporaries()?;
 
         Ok(
             std::num::NonZeroU32::new(result_count as u32).map(|count| crate::ast::BlockResults {
@@ -138,10 +157,14 @@ impl<'a> Builder<'a> {
             .iter_mut()
             .enumerate()
         {
-            let id = crate::ast::TempId((i + self.spilled_wasm_operands) as u32);
-            self.buffer
-                .push(crate::ast::Statement::Temporary(id, *value));
-            *value = self.ast_arena.allocate(crate::ast::Expr::Temporary(id))?;
+            if !matches!(self.ast_arena.get(*value), crate::ast::Expr::Temporary(_)) {
+                let id = crate::ast::TempId((i + self.spilled_wasm_operands) as u32);
+                self.buffer.push(crate::ast::Statement::Temporary {
+                    temporary: id,
+                    value: *value,
+                });
+                *value = self.ast_arena.allocate(crate::ast::Expr::Temporary(id))?;
+            }
         }
 
         self.spilled_wasm_operands = self.wasm_operand_stack.len();
