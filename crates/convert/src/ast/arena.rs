@@ -38,11 +38,13 @@ pub(crate) struct ExprId {
     ///         - Bits 30 to 20 correspond to the *exponent*.
     ///         - Bits 4 to 20 correspond to the high 17 bits of the `fraction`.
     ///   - `100` encodes a variable (a parameter or local in the original WebAssembly, or a new
-    ///     temporary). The index is stored in bits 3..31.
-    ///   - `101` encodes a translated data segment. The index is stored in bits 3..31.
-    ///   - `110` encodes a translated element segment. The index is stored in bits 3..31.
-    ///   - `111` encodes a function reference. The function index is stored in bits 3..31, except
-    ///     when bits 3..31 are all set, indicating a `null` function reference.
+    ///     temporary).
+    ///     - Bit 3 is set if the variable corresponds to a WebAssembly parameter or local.
+    ///     - Bits 4 to 31 store the index.
+    ///   - `101` encodes a translated data segment. The index is stored in bits 3 to 31.
+    ///   - `110` encodes a translated element segment. The index is stored in bits 3 to 31.
+    ///   - `111` encodes a function reference. The function index is stored in bits 3 to 31,
+    ///     except when bits 3 to 31 are all set, indicating a `null` function reference.
     ///
     /// [`Literal::I32`]: crate::ast::Literal::I32
     /// [`Literal::I64`]: crate::ast::Literal::I64
@@ -58,17 +60,19 @@ impl ExprId {
 
     const ENCODE_INDEX: u32 = 0b000;
     const ENCODE_I32: u32 = 0b001;
+    const ENCODE_VARIABLE: u32 = 0b100;
 
     /// Gets all of the non-flag bits.
     const fn contents(self) -> u32 {
         (self.id & Self::CONTENT_MASK) >> Self::FLAG_LEN
     }
 
-    const MAX_INDEX: u32 = Self::CONTENT_MASK >> Self::FLAG_LEN;
+    const ENCODE_INDEX_MAX: u32 = Self::CONTENT_MASK >> Self::FLAG_LEN;
 
+    /// An [`ExprId`] referring to an existing [`Expr`](crate::ast::Expr) in the [`Arena`].
     const fn from_index(index: usize) -> Result<Self, ArenaError> {
         let index = index as u32;
-        if index <= Self::MAX_INDEX {
+        if index <= Self::ENCODE_INDEX_MAX {
             Ok(Self {
                 id: index << Self::FLAG_LEN,
             })
@@ -97,12 +101,26 @@ impl ExprId {
             None
         }
     }
+
+    const ENCODE_VARIABLE_MAX_INDEX: u32 = Self::CONTENT_MASK >> (Self::FLAG_LEN + 1);
+
+    const fn from_temporary(temporary: crate::ast::TempId) -> Option<Self> {
+        if temporary.0 <= Self::ENCODE_VARIABLE_MAX_INDEX {
+            Some(Self {
+                id: (temporary.0 << (Self::FLAG_LEN + 1)) | Self::ENCODE_VARIABLE,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 enum DecodeExprId {
     Index(usize),
     I32(i32),
+    Temporary(crate::ast::TempId),
+    Local(crate::ast::LocalId),
 }
 
 impl From<ExprId> for DecodeExprId {
@@ -120,6 +138,14 @@ impl From<ExprId> for DecodeExprId {
                 }
 
                 Self::I32(value as i32)
+            }
+            ExprId::ENCODE_VARIABLE => {
+                let index = id.contents() >> 1;
+                if id.contents() & 1 == 0 {
+                    Self::Temporary(crate::ast::TempId(index))
+                } else {
+                    Self::Local(crate::ast::LocalId(index))
+                }
             }
             unknown => unreachable!("encountered unknown ID type ({unknown:#03b})"),
         }
@@ -228,18 +254,24 @@ impl Arena {
     }
 
     fn allocate_inner(&mut self, expr: crate::ast::Expr) -> Result<ExprId, ArenaError> {
-        // Literals may have a compact encoding available.
-        if let crate::ast::Expr::Literal(literal) = &expr {
-            use crate::ast::Literal;
+        use crate::ast::{Expr, Literal};
 
-            match literal {
+        // Check if a compact encoding is available.
+        match &expr {
+            Expr::Literal(literal) => match literal {
                 Literal::I32(i) => {
                     if let Some(encoded) = ExprId::from_i32(*i as u32) {
                         return Ok(encoded);
                     }
                 }
                 _ => (), // TODO: Implement encoding of other types of literals.
+            },
+            Expr::Temporary(temporary) => {
+                if let Some(encoded) = ExprId::from_temporary(*temporary) {
+                    return Ok(encoded);
+                }
             }
+            _ => (),
         }
 
         let id = ExprId::from_index(self.arena.len())?;
@@ -260,6 +292,8 @@ impl Arena {
         match DecodeExprId::from(id) {
             DecodeExprId::Index(index) => self.arena[index],
             DecodeExprId::I32(i32) => Literal::I32(i32).into(),
+            DecodeExprId::Local(local) => crate::ast::Expr::GetLocal(local),
+            DecodeExprId::Temporary(temporary) => crate::ast::Expr::Temporary(temporary),
         }
     }
 
