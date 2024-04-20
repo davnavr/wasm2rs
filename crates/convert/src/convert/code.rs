@@ -63,17 +63,14 @@ fn convert_impl<'wasm, 'types>(
 
         // `unwrap()` not used in case `read_with_offset` erroneously returns too many
         // operators.
-        let current_frame = validator
+        let current_frame = *validator
             .get_control_frame(0)
             .context("control frame stack was unexpectedly empty")?;
-
-        let operand_stack_bottom = current_frame.height;
-        let is_unreachable = current_frame.unreachable;
 
         // Validates all instructions, even "unreachable" ones
         validator.op(op_offset, &op)?;
 
-        if is_unreachable && !matches!(op, Operator::End | Operator::Else) {
+        if current_frame.unreachable && !matches!(op, Operator::End | Operator::Else) {
             // Don't generate Rust code for unreachable instructions.
             continue;
         }
@@ -116,22 +113,52 @@ fn convert_impl<'wasm, 'types>(
                 })?;
             }
             Operator::Nop => (),
+            Operator::Block { blockty } => {
+                // Could avoid generating blocks if `current_frame.unreachable`
+
+                let block_type = module.resolve_block_type(blockty);
+                let results = builder
+                    .get_block_results(block_type.results().len(), block_type.params().len())?;
+
+                builder.emit_statement(crate::ast::Statement::BlockStart {
+                    id: crate::ast::BlockId(validator.control_stack_height()),
+                    results,
+                    kind: crate::ast::BlockKind::Block,
+                })?;
+            }
             Operator::End => {
+                if current_frame.unreachable {
+                    builder.wasm_operand_stack_truncate(current_frame.height)?;
+                }
+
                 if validator.control_stack_height() >= 1 {
-                    anyhow::bail!("TODO: block support not yet implemented");
-                } else if is_unreachable {
-                    builder.wasm_operand_stack_truncate(operand_stack_bottom)?;
-                } else {
+                    let result_count = module
+                        .resolve_block_type(current_frame.block_type)
+                        .results()
+                        .len();
+
+                    let results = builder.wasm_operand_stack_pop_list(result_count)?;
+
+                    builder.push_block_results(result_count)?;
+                    builder.emit_statement(crate::ast::Statement::BlockEnd {
+                        id: crate::ast::BlockId(validator.control_stack_height()),
+                        kind: match current_frame.kind {
+                            wasmparser::FrameKind::Block => crate::ast::BlockKind::Block,
+                            bad => anyhow::bail!("TODO: support for {bad:?}"),
+                        },
+                        results,
+                    })?;
+                } else if !current_frame.unreachable {
                     let result_count = func_type.results().len();
 
                     debug_assert_eq!(
-                        operand_stack_bottom + result_count,
-                        builder.wasm_operand_stack().len() - operand_stack_bottom,
+                        current_frame.height + result_count,
+                        builder.wasm_operand_stack().len() - current_frame.height,
                         "value stack height mismatch ({:?})",
                         builder.wasm_operand_stack()
                     );
 
-                    let results = builder.wasm_operand_stack_pop_to_height(operand_stack_bottom)?;
+                    let results = builder.wasm_operand_stack_pop_to_height(current_frame.height)?;
 
                     debug_assert_eq!(result_count, results.len() as usize);
 

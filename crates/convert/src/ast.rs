@@ -213,6 +213,19 @@ pub(crate) enum Expr {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) enum BlockKind {
+    Block,
+    //Loop,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BlockResults {
+    // TODO: make BlockResults 4 bytes
+    pub(crate) start: TempId,
+    pub(crate) count: std::num::NonZeroU32,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Statement {
     /// An expression that is evaluated, with any results discarded.
     Expr(ExprId),
@@ -237,7 +250,16 @@ pub(crate) enum Statement {
         /// instruction.
         offset: u32,
     },
-    //Block { id: BlockId, }
+    BlockStart {
+        id: BlockId,
+        results: Option<BlockResults>,
+        kind: BlockKind,
+    },
+    BlockEnd {
+        id: BlockId,
+        results: ExprListId,
+        kind: BlockKind,
+    },
 }
 
 macro_rules! from_conversions {

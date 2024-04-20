@@ -3,5 +3,5 @@ source: crates/convert/tests/main.rs
 expression: "String::from_utf8_lossy(&rust)"
 ---
 fn _f0(_l0: i32) -> i32 {
-return i32::wrapping_add(_l0, 5i32);
+i32::wrapping_add(_l0, 5i32)
 }

@@ -94,7 +94,46 @@ impl<'a> Builder<'a> {
         popped
     }
 
+    pub(super) fn get_block_results(
+        &mut self,
+        result_count: usize,
+        input_count: usize,
+    ) -> crate::Result<Option<crate::ast::BlockResults>> {
+        debug_assert!(
+            input_count <= self.wasm_operand_stack.len(),
+            "expected block to pop {input_count} inputs, but operand stack contained {} values",
+            self.wasm_operand_stack.len()
+        );
+
+        // Ensure all block inputs are evaluted before entering a block.
+        // This prevents expressions being "re-evaluated" in loops.
+        self.flush_operands_to_temporaries()?;
+
+        Ok(
+            std::num::NonZeroU32::new(result_count as u32).map(|count| crate::ast::BlockResults {
+                start: crate::ast::TempId((self.spilled_wasm_operands - input_count) as u32),
+                count,
+            }),
+        )
+    }
+
+    pub(super) fn push_block_results(&mut self, count: usize) -> crate::Result<()> {
+        let current_height = self.wasm_operand_stack.len();
+        debug_assert_eq!(current_height, self.spilled_wasm_operands);
+
+        self.wasm_operand_stack.reserve(count);
+        for i in 0..count {
+            self.push_wasm_operand(crate::ast::Expr::Temporary(crate::ast::TempId(i as u32)))?;
+        }
+
+        self.spilled_wasm_operands += count;
+        Ok(())
+    }
+
     pub(super) fn flush_operands_to_temporaries(&mut self) -> crate::Result<()> {
+        // Could have argument indicate # of operands to preserve (e.g. block arguments), but this
+        // works fine as is.
+
         for (i, value) in self.wasm_operand_stack[self.spilled_wasm_operands..]
             .iter_mut()
             .enumerate()

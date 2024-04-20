@@ -493,6 +493,12 @@ impl<'types, 'a> Print<'types, 'a> {
         }
     }
 
+    fn write_indentation(&self, out: &mut crate::buffer::Writer<'_>, indent_level: usize) {
+        for _ in 0..indent_level {
+            out.write_str(self.indentation.to_str());
+        }
+    }
+
     pub(crate) fn print_statements(
         &self,
         out: &mut crate::buffer::Writer<'_>,
@@ -506,8 +512,8 @@ impl<'types, 'a> Print<'types, 'a> {
         for (n, stmt) in statements.iter().copied().enumerate() {
             let is_last = n == statements.len() - 1;
 
-            for _ in 0..indent_level {
-                out.write_str(self.indentation.to_str());
+            if !matches!(stmt, Statement::BlockEnd { .. }) {
+                self.write_indentation(out, indent_level);
             }
 
             match stmt {
@@ -515,9 +521,10 @@ impl<'types, 'a> Print<'types, 'a> {
                     debug_assert!(!is_last, "expected a terminator statement");
 
                     expr.print(out, arena, false, self.calling_conventions);
+                    out.write_str(";");
                 }
                 Statement::Return(results) => {
-                    if is_last {
+                    if !is_last {
                         out.write_str("return");
 
                         if !results.is_empty() || calling_convention.can_unwind() {
@@ -534,6 +541,10 @@ impl<'types, 'a> Print<'types, 'a> {
                     if calling_convention.can_unwind() {
                         out.write_str(")");
                     }
+
+                    if !is_last {
+                        out.write_str(";");
+                    }
                 }
                 Statement::LocalDefinition(local, ty) => {
                     use crate::ast::ValType;
@@ -545,25 +556,74 @@ impl<'types, 'a> Print<'types, 'a> {
                         ValType::F32 => out.write_str("0f32"),
                         ValType::F64 => out.write_str("0f64"),
                     }
+
+                    out.write_str(";");
                 }
                 Statement::Temporary(temp, value) => {
                     write!(out, "let {temp} = ");
                     value.print(out, arena, false, self.calling_conventions);
+                    out.write_str(";");
                 }
                 Statement::LocalSet { local, value } => {
                     write!(out, "{local} = ");
                     value.print(out, arena, false, self.calling_conventions);
+                    out.write_str(";");
+                }
+                Statement::BlockStart { id, results, kind } => {
+                    debug_assert!(!is_last);
+
+                    if let Some(results) = results {
+                        out.write_str("let ");
+
+                        if results.count.get() > 1 {
+                            out.write_str("(");
+                        }
+
+                        for i in 0..results.count.get() {
+                            if i > 0 {
+                                out.write_str(", ");
+                            }
+
+                            write!(out, "{}", crate::ast::TempId(results.start.0 + i));
+                        }
+
+                        if results.count.get() > 1 {
+                            out.write_str(")");
+                        }
+
+                        out.write_str(" = ");
+                    }
+
+                    write!(out, "{id}: ");
+
+                    //if matches!(kind, BlockKind::Loop) { out.write_str("loop "); }
+
+                    out.write_str("{");
+                    indent_level += 1;
+                }
+                Statement::BlockEnd { id, kind, results } => {
+                    debug_assert!(!is_last);
+
+                    //if matches!(kind, BlockKind::Loop) { out.write_str("break;\n"); }
+
+                    if !results.is_empty() {
+                        results.print(out, arena, results.len() > 1, self.calling_conventions);
+
+                        out.write_str("\n");
+                    }
+
+                    indent_level -= 1;
+
+                    self.write_indentation(out, indent_level);
+
+                    write!(out, "}}; // {id}");
                 }
                 Statement::Unreachable { function, offset } => {
                     write!(
                         out,
-                        "return ::core::result::Err(embedder::Trap::with_code())"
+                        "return ::core::result::Err(embedder::Trap::with_code());"
                     );
                 }
-            }
-
-            if is_last {
-                out.write_str(";");
             }
 
             out.write_str("\n");

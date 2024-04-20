@@ -3,8 +3,14 @@ source: crates/convert/tests/main.rs
 expression: "String::from_utf8_lossy(&rust)"
 ---
 fn _f0(_l0: i32) -> i32 {
-return i32::wrapping_add(_l0, 5i32);
+i32::wrapping_add(_l0, 5i32)
 }
 fn _f1(&self, _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
-return Ok(Self::_f0(Self::_f0(Self::_f0(_l0))));
+Ok(Self::_f0(Self::_f0(Self::_f0(_l0))))
+}
+fn _f2(_l0: i32) -> i32 {
+let (_t0, _t1) = '_b2: {
+(_l0, _l0)
+}; // '_b1
+i32::wrapping_add(_t0, _t1)
 }
