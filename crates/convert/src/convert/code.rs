@@ -169,10 +169,12 @@ fn convert_impl<'wasm, 'types>(
 
                 // Push the loops inputs back onto the stack
                 for number in 0u32..(result_count as u32) {
-                    builder.push_wasm_operand(crate::ast::Expr::LoopInput(crate::ast::LoopInput {
-                        r#loop: block_id,
-                        number
-                    }))?;
+                    builder.push_wasm_operand(crate::ast::Expr::LoopInput(
+                        crate::ast::LoopInput {
+                            r#loop: block_id,
+                            number,
+                        },
+                    ))?;
                 }
             }
             Operator::If { blockty } => {
@@ -306,21 +308,29 @@ fn convert_impl<'wasm, 'types>(
                 let signature =
                     module.types[module.types.core_function_at(function_index)].unwrap_func();
 
+                let result_count = signature.results().len();
                 let arguments = builder.wasm_operand_stack_pop_list(signature.params().len())?;
-
-                debug_assert!(
-                    signature.results().len() <= 1,
-                    "multi results not yet supported, have to put results into temporaries"
-                );
+                let callee = crate::ast::FuncId(function_index);
 
                 // TODO: Fix, call_conv of current function has to support call_convs of called functions, so fix it up later
                 builder.can_trap();
                 builder.needs_self();
 
-                builder.push_wasm_operand(crate::ast::Expr::Call {
-                    callee: crate::ast::FuncId(function_index),
-                    arguments,
-                })?;
+                if result_count <= 1 {
+                    builder.push_wasm_operand(crate::ast::Expr::Call { callee, arguments })?;
+                } else {
+                    // Multiple results are translated into Rust tuples, which need to be destructured.
+                    let results = crate::ast::TempId(builder.wasm_operand_stack().len() as u32);
+
+                    builder.emit_statement(crate::ast::Statement::Call {
+                        callee,
+                        arguments,
+                        results,
+                        result_count: std::num::NonZeroU32::new(result_count as u32).unwrap(),
+                    })?;
+
+                    builder.push_block_results(result_count)?;
+                }
             }
             Operator::LocalGet { local_index } => {
                 builder.push_wasm_operand(crate::ast::Expr::GetLocal(crate::ast::LocalId(

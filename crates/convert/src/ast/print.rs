@@ -135,6 +135,47 @@ impl crate::ast::ExprListId {
     }
 }
 
+fn print_call(
+    out: &mut crate::buffer::Writer,
+    callee: crate::ast::FuncId,
+    arguments: crate::ast::ExprListId,
+    arena: &crate::ast::Arena,
+    calling_conventions: &[crate::context::CallConv],
+) {
+    use crate::context::CallKind;
+
+    let call_conv = &calling_conventions[callee.0 as usize];
+
+    debug_assert_eq!(
+        arguments.len(),
+        call_conv.wasm_signature.params().len() as u32,
+        "cannot call {callee} with {} arguments, expected {:?}",
+        arguments.len(),
+        call_conv.wasm_signature.params()
+    );
+
+    match call_conv.call_kind {
+        CallKind::Function => out.write_str("Self::"),
+        CallKind::Method => out.write_str("self."),
+    }
+
+    write!(out, "{callee}(");
+
+    for (i, arg) in arena.get_list(arguments).iter().enumerate() {
+        if i > 0 {
+            out.write_str(", ");
+        }
+
+        arg.print(out, arena, false, calling_conventions);
+    }
+
+    out.write_str(")");
+
+    if call_conv.can_unwind() {
+        out.write_str("?");
+    }
+}
+
 impl crate::ast::Expr {
     fn print(
         &self,
@@ -445,43 +486,7 @@ impl crate::ast::Expr {
             Self::Temporary(temp) => write!(out, "{temp}"),
             Self::LoopInput(input) => write!(out, "{input}"),
             Self::Call { callee, arguments } => {
-                use crate::context::CallKind;
-
-                let call_conv = &calling_conventions[callee.0 as usize];
-
-                debug_assert!(
-                    call_conv.wasm_signature.results().len() <= 1,
-                    "functions with multiple results must be invoked in a separate statement"
-                );
-
-                debug_assert_eq!(
-                    arguments.len(),
-                    call_conv.wasm_signature.params().len() as u32,
-                    "cannot call {callee} with {} arguments, expected {:?}",
-                    arguments.len(),
-                    call_conv.wasm_signature.params()
-                );
-
-                match call_conv.call_kind {
-                    CallKind::Function => out.write_str("Self::"),
-                    CallKind::Method => out.write_str("self."),
-                }
-
-                write!(out, "{callee}(");
-
-                for (i, arg) in arena.get_list(*arguments).iter().enumerate() {
-                    if i > 0 {
-                        out.write_str(", ");
-                    }
-
-                    arg.print(out, arena, false, calling_conventions);
-                }
-
-                out.write_str(")");
-
-                if call_conv.can_unwind() {
-                    out.write_str("?");
-                }
+                print_call(out, *callee, *arguments, arena, calling_conventions)
             }
         }
     }
@@ -579,6 +584,34 @@ impl<'types, 'a> Print<'types, 'a> {
                     debug_assert!(!is_last, "expected a terminator statement");
 
                     expr.print(out, arena, false, self.calling_conventions);
+                    out.write_str(";");
+                }
+                Statement::Call {
+                    callee,
+                    arguments,
+                    results,
+                    result_count,
+                } => {
+                    out.write_str("let ");
+
+                    if result_count.get() > 1 {
+                        out.write_str("(");
+                    }
+
+                    for i in 0..result_count.get() {
+                        if i > 0 {
+                            out.write_str(", ");
+                        }
+
+                        write!(out, "{}", crate::ast::TempId(results.0 + i));
+                    }
+
+                    if result_count.get() > 1 {
+                        out.write_str(")");
+                    }
+
+                    out.write_str(" = ");
+                    print_call(out, callee, arguments, arena, self.calling_conventions);
                     out.write_str(";");
                 }
                 Statement::Branch {

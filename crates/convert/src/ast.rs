@@ -262,6 +262,12 @@ pub(crate) enum Statement {
     ///
     /// [`local.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
     LocalSet { local: LocalId, value: ExprId },
+    Call {
+        callee: FuncId,
+        arguments: ExprListId,
+        results: TempId,
+        result_count: std::num::NonZeroU32,
+    },
     /// Corresponds to the [`unreachable`] instruction, which always produces a trap.
     ///
     /// [`unreachable`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions

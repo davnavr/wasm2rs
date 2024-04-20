@@ -77,9 +77,8 @@ impl<'a> Builder<'a> {
     ) -> crate::Result<crate::ast::ExprListId> {
         let results = self.wasm_operand_stack.drain(height..);
 
-        // TODO: Fix, operands are EVALUATED in reverse order in generated code!
-        // Last result is popped first, so operands have to be in reverse order.
-        let result_exprs = self.ast_arena.allocate_many(results.rev())?;
+        // Last result is popped first
+        let result_exprs = self.ast_arena.allocate_many(results)?;
 
         debug_assert_eq!(self.wasm_operand_stack.len(), height);
 
@@ -150,7 +149,9 @@ impl<'a> Builder<'a> {
 
         self.wasm_operand_stack.reserve(count);
         for i in 0..count {
-            self.push_wasm_operand(crate::ast::Expr::Temporary(crate::ast::TempId(i as u32)))?;
+            self.push_wasm_operand(crate::ast::Expr::Temporary(crate::ast::TempId(
+                (current_height + i) as u32,
+            )))?;
         }
 
         self.spilled_wasm_operands += count;

@@ -61,3 +61,16 @@ let _t2 = 0xCDFi64;
 } // '_b0
 return ::core::result::Err(embedder::rt::trap::Trap::with_code(embedder::rt::trap::TrapCode::Unreachable, todo!("how to encode _f7 @ 0x21")));
 }
+fn _f8() -> (i32, i64, f32) {
+(0i32, 0i64, f32::from_bits(0x00000000))
+}
+fn _f9(&self) -> ::core::result::Result<(), embedder::Trap> {
+let mut _l0 = 0i32;
+let mut _l1 = 0i64;
+let mut _l2 = 0f32;
+let (_t0, _t1, _t2) = Self::_f8();
+_l2 = _t2;
+_l1 = _t1;
+_l0 = _t0;
+Ok(())
+}
