@@ -726,6 +726,7 @@ impl<'types, 'a> Print<'types, 'a> {
                     debug_assert!(!is_last);
 
                     if !previous_results.is_empty() {
+                        self.write_indentation(out, indent_level);
                         previous_results.print(
                             out,
                             arena,
@@ -745,8 +746,12 @@ impl<'types, 'a> Print<'types, 'a> {
                 Statement::BlockEnd { id, kind, results } => {
                     debug_assert!(!is_last);
 
+                    if !results.is_empty() {
+                        self.write_indentation(out, indent_level);
+                    }
+
                     if matches!(kind, crate::ast::BlockKind::Loop { .. }) {
-                        out.write_str("break");
+                        write!(out, "break {id}");
 
                         if !results.is_empty() {
                             out.write_str(" ");
