@@ -134,6 +134,7 @@ fn convert_impl<'wasm, 'types>(
         match op {
             Operator::Unreachable => {
                 builder.can_trap();
+                builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
                 builder.emit_statement(crate::ast::Statement::Unreachable {
                     function: func_id,
                     offset: u32::try_from(op_offset - body.range().start).unwrap_or(u32::MAX),
@@ -165,6 +166,14 @@ fn convert_impl<'wasm, 'types>(
                     results,
                     kind: crate::ast::BlockKind::Loop { inputs },
                 })?;
+
+                // Push the loops inputs back onto the stack
+                for number in 0u32..(result_count as u32) {
+                    builder.push_wasm_operand(crate::ast::Expr::LoopInput(crate::ast::LoopInput {
+                        r#loop: block_id,
+                        number
+                    }))?;
+                }
             }
             Operator::If { blockty } => {
                 let condition = builder.pop_wasm_operand();
@@ -277,6 +286,7 @@ fn convert_impl<'wasm, 'types>(
                 };
 
                 let values = builder.wasm_operand_stack_pop_list(popped_count)?;
+                builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
                 builder.emit_statement(crate::ast::Statement::Branch { target, values })?;
             }
             Operator::Return => {
@@ -427,7 +437,8 @@ fn convert_impl<'wasm, 'types>(
             debug_assert_eq!(
                 validator.operand_stack_height() as usize,
                 builder.wasm_operand_stack().len(),
-                "expected operand stack {:?} after {op:?} (top of validator's stack was {:?})",
+                "expected operand stack {:?} after {op:?} \
+                (top of validator's stack was {:?}), at {op_offset:#X}",
                 builder.wasm_operand_stack(),
                 validator.get_operand_type(0),
             );
