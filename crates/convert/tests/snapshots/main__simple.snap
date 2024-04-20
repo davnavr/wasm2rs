@@ -75,3 +75,10 @@ _l1 = _t1;
 _l0 = _t0;
 Ok(())
 }
+fn _f10(_l0: i32) -> ::core::result::Result<(), embedder::Trap> {
+'_b0: {
+    if _l0 == 3i32 { break '_b0;}
+    return Ok(());
+} // '_b0
+return ::core::result::Err(embedder::rt::trap::Trap::with_code(embedder::rt::trap::TrapCode::Unreachable, todo!("how to encode _f10 @ 0xC")));
+}

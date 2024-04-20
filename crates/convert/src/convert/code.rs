@@ -48,6 +48,40 @@ fn convert_block_start(
     })
 }
 
+fn calculate_branch_target(
+    relative_depth: u32,
+    function_type: &wasmparser::FuncType,
+    validator: &FuncValidator,
+    builder: &mut builder::Builder,
+    module: &crate::convert::Module,
+) -> crate::Result<(crate::ast::BranchTarget, crate::ast::ExprListId)> {
+    let frame = validator
+        .get_control_frame(relative_depth as usize)
+        .unwrap();
+
+    let block_type = module.resolve_block_type(frame.block_type);
+    let target;
+    let popped_count;
+    match (validator.control_stack_height() - relative_depth).checked_sub(2) {
+        None => {
+            target = crate::ast::BranchTarget::Return;
+            popped_count = function_type.results().len();
+        }
+        Some(id) => {
+            let id = crate::ast::BlockId(id);
+            if frame.kind == wasmparser::FrameKind::Loop {
+                target = crate::ast::BranchTarget::Loop(id);
+                popped_count = block_type.params().len();
+            } else {
+                target = crate::ast::BranchTarget::Block(id);
+                popped_count = block_type.results().len();
+            }
+        }
+    };
+
+    Ok((target, builder.wasm_operand_stack_pop_list(popped_count)?))
+}
+
 fn convert_impl<'wasm, 'types>(
     mut validator: FuncValidator,
     body: wasmparser::FunctionBody<'wasm>,
@@ -263,33 +297,37 @@ fn convert_impl<'wasm, 'types>(
                 }
             }
             Operator::Br { relative_depth } => {
-                let frame = validator
-                    .get_control_frame(relative_depth as usize)
-                    .unwrap();
+                let (target, values) = calculate_branch_target(
+                    relative_depth,
+                    func_type,
+                    &validator,
+                    &mut builder,
+                    module,
+                )?;
 
-                let block_type = module.resolve_block_type(frame.block_type);
-                let target;
-                let popped_count;
-                match (validator.control_stack_height() - relative_depth).checked_sub(2) {
-                    None => {
-                        target = crate::ast::BranchTarget::Return;
-                        popped_count = func_type.results().len();
-                    }
-                    Some(id) => {
-                        let id = crate::ast::BlockId(id);
-                        if frame.kind == wasmparser::FrameKind::Loop {
-                            target = crate::ast::BranchTarget::Loop(id);
-                            popped_count = block_type.params().len();
-                        } else {
-                            target = crate::ast::BranchTarget::Block(id);
-                            popped_count = block_type.results().len();
-                        }
-                    }
-                };
-
-                let values = builder.wasm_operand_stack_pop_list(popped_count)?;
                 builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
-                builder.emit_statement(crate::ast::Statement::Branch { target, values })?;
+                builder.emit_statement(crate::ast::Statement::Branch {
+                    target,
+                    values,
+                    condition: None,
+                })?;
+            }
+            Operator::BrIf { relative_depth } => {
+                let condition = builder.pop_wasm_operand();
+                let (target, values) = calculate_branch_target(
+                    relative_depth,
+                    func_type,
+                    &validator,
+                    &mut builder,
+                    module,
+                )?;
+
+                builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
+                builder.emit_statement(crate::ast::Statement::Branch {
+                    target,
+                    values,
+                    condition: Some(condition),
+                })?;
             }
             Operator::Return => {
                 // Unlike the last `end` instruction, `return` allows values on the stack that

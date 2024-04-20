@@ -277,10 +277,12 @@ pub(crate) enum Statement {
         /// instruction.
         offset: u32,
     },
-    /// Represents a `break` out of a block, a `return`, or a `continue` in a `loop`.
+    /// Represents a `break` out of a block, a `return`, a `continue` in a `loop`, or a conditional
+    /// variant of the previous. Corresponds to the `br` and `br_if` instructions.
     Branch {
         target: BranchTarget,
         values: ExprListId,
+        condition: Option<ExprId>,
     },
     BlockStart {
         id: BlockId,
@@ -309,6 +311,7 @@ impl Statement {
         Self::Branch {
             target: BranchTarget::Return,
             values: results,
+            condition: None,
         }
     }
 }

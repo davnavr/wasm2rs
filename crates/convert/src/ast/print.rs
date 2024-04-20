@@ -617,7 +617,14 @@ impl<'types, 'a> Print<'types, 'a> {
                 Statement::Branch {
                     target: crate::ast::BranchTarget::Return,
                     values: results,
+                    condition,
                 } => {
+                    if let Some(condition) = condition {
+                        out.write_str("if ");
+                        condition.print_bool(out, arena, self.calling_conventions);
+                        out.write_str(" { ");
+                    }
+
                     if !is_last {
                         out.write_str("return");
 
@@ -636,14 +643,23 @@ impl<'types, 'a> Print<'types, 'a> {
                         out.write_str(")");
                     }
 
-                    if !is_last {
+                    if condition.is_some() {
+                        out.write_str("; }");
+                    } else if !is_last {
                         out.write_str(";");
                     }
                 }
                 Statement::Branch {
                     target: crate::ast::BranchTarget::Block(block),
                     values,
+                    condition,
                 } => {
+                    if let Some(condition) = condition {
+                        out.write_str("if ");
+                        condition.print_bool(out, arena, self.calling_conventions);
+                        out.write_str(" { ");
+                    }
+
                     write!(out, "break {block}");
 
                     if !values.is_empty() {
@@ -653,11 +669,22 @@ impl<'types, 'a> Print<'types, 'a> {
                     }
 
                     out.write_str(";");
+
+                    if condition.is_some() {
+                        out.write_str("}");
+                    }
                 }
                 Statement::Branch {
                     target: crate::ast::BranchTarget::Loop(target),
                     values,
+                    condition,
                 } => {
+                    if let Some(condition) = condition {
+                        out.write_str("if ");
+                        condition.print_bool(out, arena, self.calling_conventions);
+                        out.write_str(" { ");
+                    }
+
                     for (i, expr) in arena.get_list(values).iter().enumerate() {
                         write!(
                             out,
@@ -674,6 +701,10 @@ impl<'types, 'a> Print<'types, 'a> {
                     }
 
                     write!(out, "continue {target};");
+
+                    if condition.is_some() {
+                        out.write_str("}");
+                    }
                 }
                 Statement::LocalDefinition(local, ty) => {
                     use crate::ast::ValType;
