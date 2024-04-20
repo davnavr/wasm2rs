@@ -229,6 +229,7 @@ fn convert_impl<'wasm, 'types>(
                     builder.emit_statement(crate::ast::Statement::Return(results))?;
                 }
             }
+            // Operator::Br { relative_depth } => {}
             Operator::Return => {
                 // Unlike the last `end` instruction, `return` allows values on the stack that
                 // weren't popped.
@@ -276,6 +277,15 @@ fn convert_impl<'wasm, 'types>(
             }
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
+            }
+            Operator::I64Const { value } => {
+                builder.push_wasm_operand(crate::ast::Literal::I64(value))?;
+            }
+            Operator::F32Const { value } => {
+                builder.push_wasm_operand(crate::ast::Literal::F32(value.bits()))?;
+            }
+            Operator::F64Const { value } => {
+                builder.push_wasm_operand(crate::ast::Literal::F64(value.bits()))?;
             }
             Operator::I32Eqz | Operator::I64Eqz => un_op!(IxxEqz),
             Operator::I32Eq | Operator::I64Eq | Operator::F32Eq | Operator::F64Eq => bin_op!(Eq),
