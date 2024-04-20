@@ -98,6 +98,15 @@ impl crate::ast::ExprId {
             .get(self)
             .print(out, arena, nested, calling_conventions)
     }
+
+    fn print_bool(
+        self,
+        out: &mut crate::buffer::Writer<'_>,
+        arena: &crate::ast::Arena,
+        calling_conventions: &[crate::context::CallConv],
+    ) {
+        arena.get(self).print_bool(out, arena, calling_conventions)
+    }
 }
 
 impl crate::ast::ExprListId {
@@ -475,6 +484,47 @@ impl crate::ast::Expr {
             }
         }
     }
+
+    fn print_bool(
+        &self,
+        out: &mut crate::buffer::Writer<'_>,
+        arena: &crate::ast::Arena,
+        calling_conventions: &[crate::context::CallConv],
+    ) {
+        use crate::ast::BinOp;
+
+        macro_rules! comparison {
+            ($c_1:ident $operator:literal $c_2:ident) => {{
+                $c_1.print(out, arena, false, calling_conventions);
+                out.write_str(concat!(" ", $operator, " "));
+                $c_2.print(out, arena, false, calling_conventions);
+            }};
+        }
+
+        match self {
+            Self::UnaryOperator {
+                kind: crate::ast::UnOp::IxxEqz,
+                c_1,
+            } => {
+                c_1.print(out, arena, false, calling_conventions);
+                out.write_str(" == 0")
+            }
+            Self::BinaryOperator {
+                kind: BinOp::Eq,
+                c_1,
+                c_2,
+            } => comparison!(c_1 "==" c_2),
+            Self::BinaryOperator {
+                kind: BinOp::Ne,
+                c_1,
+                c_2,
+            } => comparison!(c_1 "!=" c_2),
+            _ => {
+                self.print(out, arena, true, calling_conventions);
+                out.write_str(" != 0")
+            }
+        }
+    }
 }
 
 pub(crate) struct Print<'types, 'a> {
@@ -604,7 +654,7 @@ impl<'types, 'a> Print<'types, 'a> {
 
                     if let crate::ast::BlockKind::If { condition } = kind {
                         out.write_str(" { if ");
-                        condition.print(out, arena, false, self.calling_conventions);
+                        condition.print_bool(out, arena, self.calling_conventions);
                         out.write_str(" {");
                     }
 
