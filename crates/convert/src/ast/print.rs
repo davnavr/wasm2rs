@@ -431,6 +431,7 @@ impl crate::ast::Expr {
                 }
             }
             Self::GetLocal(local) => write!(out, "{local}"),
+            Self::Temporary(temp) => write!(out, "{temp}"),
             Self::Call { callee, arguments } => {
                 use crate::context::CallKind;
 
@@ -545,12 +546,16 @@ impl<'types, 'a> Print<'types, 'a> {
                         ValType::F64 => out.write_str("0f64"),
                     }
                 }
+                Statement::Temporary(temp, value) => {
+                    write!(out, "let {temp} = ");
+                    value.print(out, arena, false, self.calling_conventions);
+                }
                 Statement::LocalSet { local, value } => {
                     write!(out, "{local} = ");
                     value.print(out, arena, false, self.calling_conventions);
                 }
                 Statement::Unreachable { function, offset } => {
-                    writeln!(
+                    write!(
                         out,
                         "return ::core::result::Err(embedder::Trap::with_code())"
                     );

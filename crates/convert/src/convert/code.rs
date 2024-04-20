@@ -46,7 +46,7 @@ fn convert_impl<'wasm, 'types>(
             let (count, ty) = locals.read().context("could not read local variables")?;
             validator.define_locals(locals.original_position(), count, ty)?;
             for _ in 0..count {
-                builder.emit_statement(crate::ast::Statement::LocalDefinition(id, ty.into()));
+                builder.emit_statement(crate::ast::Statement::LocalDefinition(id, ty.into()))?;
                 id.0 += 1;
             }
         }
@@ -113,14 +113,14 @@ fn convert_impl<'wasm, 'types>(
                 builder.emit_statement(crate::ast::Statement::Unreachable {
                     function: func_id,
                     offset: u32::try_from(op_offset - body.range().start).unwrap_or(u32::MAX),
-                });
+                })?;
             }
             Operator::Nop => (),
             Operator::End => {
                 if validator.control_stack_height() >= 1 {
                     anyhow::bail!("TODO: block support not yet implemented");
                 } else if is_unreachable {
-                    builder.wasm_operand_stack_truncate(operand_stack_bottom);
+                    builder.wasm_operand_stack_truncate(operand_stack_bottom)?;
                 } else {
                     let result_count = func_type.results().len();
 
@@ -135,7 +135,7 @@ fn convert_impl<'wasm, 'types>(
 
                     debug_assert_eq!(result_count, results.len() as usize);
 
-                    builder.emit_statement(crate::ast::Statement::Return(results));
+                    builder.emit_statement(crate::ast::Statement::Return(results))?;
                 }
             }
             Operator::Return => {
@@ -149,7 +149,7 @@ fn convert_impl<'wasm, 'types>(
                 let results = builder.wasm_operand_stack_pop_list(result_count)?;
 
                 // Any values that weren't popped are spilled into temporaries.
-                builder.emit_statement(crate::ast::Statement::Return(results));
+                builder.emit_statement(crate::ast::Statement::Return(results))?;
             }
             Operator::Call { function_index } => {
                 let signature =
@@ -181,7 +181,7 @@ fn convert_impl<'wasm, 'types>(
                 builder.emit_statement(crate::ast::Statement::LocalSet {
                     local: crate::ast::LocalId(local_index),
                     value,
-                });
+                })?;
             }
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;

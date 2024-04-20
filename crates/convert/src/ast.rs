@@ -30,6 +30,25 @@ impl std::fmt::Display for LocalId {
     }
 }
 
+/// Refers to a temporary local variable used to store the result of evaluating an expression.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct TempId(pub(crate) u32);
+
+impl std::fmt::Display for TempId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_t{}", self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct BlockId(pub(crate) u32);
+
+impl std::fmt::Display for BlockId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'_b{}", self.0)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum ValType {
     I32,
@@ -183,7 +202,10 @@ pub(crate) enum Expr {
         c_1: ExprId,
         c_2: ExprId,
     },
+    /// Gets the value of a local variable. Corresponds to the `local.get` instruction.
     GetLocal(LocalId),
+    /// Gets the value of a temporary local variable.
+    Temporary(TempId),
     Call {
         callee: FuncId,
         arguments: ExprListId,
@@ -200,6 +222,8 @@ pub(crate) enum Statement {
     ///
     /// These correspond to the local variables of a WebAssembly code section entry.
     LocalDefinition(LocalId, ValType),
+    /// Defines a temporary local variable used to store intermediate results.
+    Temporary(TempId, ExprId),
     /// Assigns a value to a local variable. Corresponds to the [`local.set`] instruction.
     ///
     /// [`local.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
@@ -213,6 +237,7 @@ pub(crate) enum Statement {
         /// instruction.
         offset: u32,
     },
+    //Block { id: BlockId, }
 }
 
 macro_rules! from_conversions {
