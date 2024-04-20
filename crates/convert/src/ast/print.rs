@@ -56,6 +56,8 @@ impl Default for Indentation {
 /// Rust paths to embedder or runtime support code, typically implemented in `wasm2rs-rt`.
 mod paths {
     pub(super) const RT_MATH: &str = "embedder::rt::math";
+    pub(super) const RT_TRAP: &str = "embedder::rt::trap";
+    pub(super) const RT_TRAP_CODE: &str = "embedder::rt::trap::TrapCode";
 }
 
 impl crate::ast::ValType {
@@ -621,7 +623,12 @@ impl<'types, 'a> Print<'types, 'a> {
                 Statement::Unreachable { function, offset } => {
                     write!(
                         out,
-                        "return ::core::result::Err(embedder::Trap::with_code());"
+                        "return ::core::result::Err({}::Trap::with_code(\
+                            {}::Unreachable, \
+                            todo!(\"how to encode {function} @ {offset:#X}\"\
+                        )));",
+                        paths::RT_TRAP,
+                        paths::RT_TRAP_CODE,
                     );
                 }
             }

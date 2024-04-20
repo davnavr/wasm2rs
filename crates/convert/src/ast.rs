@@ -5,7 +5,7 @@ mod print;
 
 pub use print::Indentation;
 
-pub(crate) use arena::{Arena, ArenaError, ExprId, ExprListId};
+pub(crate) use arena::{Arena, ExprId, ExprListId};
 pub(crate) use print::Print;
 
 /// Represents a WebAssembly [function index].
