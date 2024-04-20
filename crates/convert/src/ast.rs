@@ -213,8 +213,9 @@ pub(crate) enum Expr {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum BlockKind {
+pub(crate) enum BlockKind<E = ExprId> {
     Block,
+    If { condition: E },
     //Loop,
 }
 
@@ -225,6 +226,7 @@ pub(crate) struct BlockResults {
     pub(crate) count: std::num::NonZeroU32,
 }
 
+// TODO: Consider having the list of statements be of variable width.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Statement {
     /// An expression that is evaluated, with any results discarded.
@@ -255,10 +257,14 @@ pub(crate) enum Statement {
         results: Option<BlockResults>,
         kind: BlockKind,
     },
+    Else {
+        id: BlockId,
+        previous_results: ExprListId,
+    },
     BlockEnd {
         id: BlockId,
         results: ExprListId,
-        kind: BlockKind,
+        kind: BlockKind<()>,
     },
 }
 

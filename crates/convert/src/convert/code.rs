@@ -21,8 +21,29 @@ impl Definition {
     }
 }
 
+type FuncValidator = wasmparser::FuncValidator<wasmparser::ValidatorResources>;
+
+fn convert_block_start(
+    builder: &mut builder::Builder,
+    block_type: wasmparser::BlockType,
+    kind: crate::ast::BlockKind,
+    module: &crate::convert::Module,
+    validator: &FuncValidator,
+) -> crate::Result<()> {
+    let block_type = module.resolve_block_type(block_type);
+
+    let results =
+        builder.get_block_results(block_type.results().len(), block_type.params().len())?;
+
+    builder.emit_statement(crate::ast::Statement::BlockStart {
+        id: crate::ast::BlockId(validator.control_stack_height()),
+        results,
+        kind,
+    })
+}
+
 fn convert_impl<'wasm, 'types>(
-    mut validator: wasmparser::FuncValidator<wasmparser::ValidatorResources>,
+    mut validator: FuncValidator,
     body: wasmparser::FunctionBody<'wasm>,
     module: &'types crate::convert::Module<'wasm>,
     options: &crate::Convert<'_>,
@@ -115,15 +136,42 @@ fn convert_impl<'wasm, 'types>(
             Operator::Nop => (),
             Operator::Block { blockty } => {
                 // Could avoid generating blocks if `current_frame.unreachable`
+                convert_block_start(
+                    &mut builder,
+                    blockty,
+                    crate::ast::BlockKind::Block,
+                    module,
+                    &validator,
+                )?;
+            }
+            Operator::If { blockty } => {
+                let condition = builder.pop_wasm_operand();
+                convert_block_start(
+                    &mut builder,
+                    blockty,
+                    crate::ast::BlockKind::If { condition },
+                    module,
+                    &validator,
+                )?;
+            }
+            Operator::Else => {
+                let block_type = module.resolve_block_type(current_frame.block_type);
 
-                let block_type = module.resolve_block_type(blockty);
-                let results = builder
-                    .get_block_results(block_type.results().len(), block_type.params().len())?;
+                let previous_results =
+                    builder.wasm_operand_stack_pop_list(block_type.results().len())?;
 
-                builder.emit_statement(crate::ast::Statement::BlockStart {
+                debug_assert_eq!(current_frame.height, builder.wasm_operand_stack().len());
+
+                // Re-apply the input operands
+                for i in 0..block_type.params().len() {
+                    builder.push_wasm_operand(crate::ast::Expr::Temporary(crate::ast::TempId(
+                        (current_frame.height + i) as u32,
+                    )))?;
+                }
+
+                builder.emit_statement(crate::ast::Statement::Else {
                     id: crate::ast::BlockId(validator.control_stack_height()),
-                    results,
-                    kind: crate::ast::BlockKind::Block,
+                    previous_results,
                 })?;
             }
             Operator::End => {
@@ -144,6 +192,9 @@ fn convert_impl<'wasm, 'types>(
                         id: crate::ast::BlockId(validator.control_stack_height()),
                         kind: match current_frame.kind {
                             wasmparser::FrameKind::Block => crate::ast::BlockKind::Block,
+                            wasmparser::FrameKind::Else | wasmparser::FrameKind::If => {
+                                crate::ast::BlockKind::If { condition: () }
+                            }
                             bad => anyhow::bail!("TODO: support for {bad:?}"),
                         },
                         results,

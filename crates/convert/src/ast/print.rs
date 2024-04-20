@@ -514,7 +514,7 @@ impl<'types, 'a> Print<'types, 'a> {
         for (n, stmt) in statements.iter().copied().enumerate() {
             let is_last = n == statements.len() - 1;
 
-            if !matches!(stmt, Statement::BlockEnd { .. }) {
+            if !matches!(stmt, Statement::BlockEnd { .. } | Statement::Else { .. }) {
                 self.write_indentation(out, indent_level);
             }
 
@@ -601,6 +601,36 @@ impl<'types, 'a> Print<'types, 'a> {
                     //if matches!(kind, BlockKind::Loop) { out.write_str("loop "); }
 
                     out.write_str("{");
+
+                    if let crate::ast::BlockKind::If { condition } = kind {
+                        out.write_str(" { if ");
+                        condition.print(out, arena, false, self.calling_conventions);
+                        out.write_str(" {");
+                    }
+
+                    indent_level += 1;
+                }
+                Statement::Else {
+                    id: _,
+                    previous_results,
+                } => {
+                    debug_assert!(!is_last);
+
+                    if !previous_results.is_empty() {
+                        previous_results.print(
+                            out,
+                            arena,
+                            previous_results.len() > 1,
+                            self.calling_conventions,
+                        );
+                        out.write_str("\n");
+                    }
+
+                    indent_level -= 1;
+
+                    self.write_indentation(out, indent_level);
+                    out.write_str("} else {");
+
                     indent_level += 1;
                 }
                 Statement::BlockEnd { id, kind, results } => {
@@ -617,6 +647,10 @@ impl<'types, 'a> Print<'types, 'a> {
                     indent_level -= 1;
 
                     self.write_indentation(out, indent_level);
+
+                    if let crate::ast::BlockKind::If { condition: () } = kind {
+                        out.write_str("} ");
+                    }
 
                     write!(out, "}}; // {id}");
                 }
