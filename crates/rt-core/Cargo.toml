@@ -1,0 +1,10 @@
+[package]
+name = "wasm2rs-rt-core"
+description = "Base runtime support crate in wasm2rs"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+std = []

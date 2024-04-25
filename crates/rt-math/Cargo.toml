@@ -1,0 +1,13 @@
+[package]
+name = "wasm2rs-rt-math"
+description = "Runtime support for basic math operations in wasm2rs"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+std = ["num-traits/std"]
+
+[dependencies]
+num-traits = { version = "0.2.18", default-features = false }

@@ -21,7 +21,7 @@ anyhow = "1.0.82"
 crossbeam-queue = "0.3.11"
 insta = "1.38.0"
 rayon = "1.10.0"
-# wasm2rs-rt = { path = "crates/rt" }
+wasm2rs-rt-core = { path = "crates/rt-core" }
 wat = "1.204.0"
 
 [profile.dev.package]

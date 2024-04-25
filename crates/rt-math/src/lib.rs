@@ -1,30 +1,86 @@
-//! Runtime support functions for simple math operations.
+//! Runtime support functions for simple math operations in `wasm2rs`.
 
-#[cold]
-#[inline(never)]
-fn integer_division_by_zero<E>(trap: &E) -> E::Repr
-where
-    E: crate::trap::Trap + ?Sized,
-{
-    trap.trap(crate::trap::TrapCode::IntegerDivisionByZero, None)
+#![no_std]
+#![cfg_attr(doc_cfg, feature(doc_auto_cfg))]
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+#![deny(unreachable_pub)]
+#![deny(unsafe_code)]
+#![deny(clippy::std_instead_of_core)]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+use core::fmt::Display;
+
+/// Error type used if an integer denominator is zero.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct DivisionByZeroError;
+
+/// Error type used if an attempt to convert an integer to a smaller bitwidth fails, or if an
+/// integer division operation overflows.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct IntegerOverflowError;
+
+/// Error type used if an attempt to convert a floating point value to an integer would result in a
+/// value that is out of range.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct ConversionToIntegerError;
+
+// Most of these error messages are taken from the WASM spec tests.
+impl Display for DivisionByZeroError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("integer division by zero")
+    }
 }
 
-#[cold]
-#[inline(never)]
-fn integer_overflow<E>(trap: &E) -> E::Repr
-where
-    E: crate::trap::Trap + ?Sized,
-{
-    trap.trap(crate::trap::TrapCode::IntegerOverflow, None)
+impl Display for IntegerOverflowError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("integer overflow")
+    }
 }
 
-#[cold]
-#[inline(never)]
-fn conversion_to_integer<E>(trap: &E) -> E::Repr
-where
-    E: crate::trap::Trap + ?Sized,
-{
-    trap.trap(crate::trap::TrapCode::ConversionToInteger, None)
+impl Display for ConversionToIntegerError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("invalid conversion to integer")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DivisionByZeroError {}
+
+#[cfg(feature = "std")]
+impl std::error::Error for IntegerOverflowError {}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ConversionToIntegerError {}
+
+/// Error type used when an integer division operation fails.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum IntegerDivisionError {
+    /// See [`DivisionByZeroError`].
+    DivisionByZero,
+    /// See [`IntegerOverflowError`].
+    Overflow,
+}
+
+impl Display for IntegerDivisionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::DivisionByZero => Display::fmt(&DivisionByZeroError, f),
+            Self::Overflow => Display::fmt(&IntegerOverflowError, f),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for IntegerDivisionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::DivisionByZero => &DivisionByZeroError,
+            Self::Overflow => &IntegerOverflowError,
+        })
+    }
 }
 
 macro_rules! int_div {
@@ -42,15 +98,12 @@ macro_rules! int_div {
             "[`", $div_name, "`]: ",
             "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
         )]
-        #[inline(always)]
-        pub fn $div<E>(num: $signed, denom: $signed, trap: &E) -> Result<$signed, E::Repr>
-        where
-            E: crate::trap::Trap + ?Sized,
-        {
+        #[inline]
+        pub fn $div(num: $signed, denom: $signed) -> Result<$signed, IntegerDivisionError> {
             match (num $(as $unsigned)?).checked_div(denom $(as $unsigned)?) {
                 Some(quot) => Ok(quot as $signed),
-                _ if denom == 0 => Err(integer_division_by_zero(trap)),
-                _ => Err(integer_overflow(trap)),
+                _ if denom == 0 => Err(IntegerDivisionError::DivisionByZero),
+                _ => Err(IntegerDivisionError::Overflow),
             }
         }
     )*};
@@ -75,17 +128,15 @@ macro_rules! int_rem {
                 "value, and the resulting [`", stringify!($unsigned), "`] remainder is ",
                 "reinterpreted as an [`", stringify!($signed), "`] value.\n\n",
             )?
-            "[division by zero]: crate::trap::TrapCode::IntegerDivisionByZero\n",
+            "[division by zero]: DivisionByZeroError\n",
             "[`", $rem_name, "`]: ",
             "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
         )]
-        #[inline(always)]
-        pub fn $rem<E>(num: $signed, denom: $signed, trap: &E) -> Result<$signed, E::Repr>
-        where
-            E: crate::trap::Trap + ?Sized,
+        #[inline]
+        pub fn $rem(num: $signed, denom: $signed) -> Result<$signed, DivisionByZeroError>
         {
             if denom == 0 {
-                Err(integer_division_by_zero(trap))
+                Err(DivisionByZeroError)
             } else {
                 Ok((num $(as $unsigned)?).wrapping_rem(denom $(as $unsigned)?) as $signed)
             }
@@ -124,22 +175,18 @@ macro_rules! iXX_trunc_fXX {
                 "The result is then reinterpreted as an [`", stringify!($reinterpret), "`] value.",
                 "\n\n",
             )?
-            "[trapping]: crate::trap::TrapCode::ConversionToInteger\n",
+            "[trapping]: ConversionToIntegerError\n",
             "[`", $trunc_name,
             "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
         )]
-        #[inline(always)]
-        pub fn $trunc<E>(value: $float, trap: &E) -> Result<prefer_right!($int $(| $reinterpret)?), E::Repr>
-        where
-            E: crate::trap::Trap + ?Sized,
+        #[inline]
+        pub fn $trunc(
+            value: $float
+        ) -> Result<prefer_right!($int $(| $reinterpret)?), ConversionToIntegerError>
         {
             match <$int as num_traits::cast::NumCast>::from(value) {
                 Some(n) => Ok(n $(as $reinterpret)?),
-                None => Err(if value.is_nan() {
-                    conversion_to_integer(trap)
-                } else {
-                    integer_overflow(trap)
-                }),
+                None => Err(ConversionToIntegerError),
             }
         }
     )*};
