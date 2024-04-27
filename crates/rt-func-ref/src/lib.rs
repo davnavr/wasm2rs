@@ -210,6 +210,42 @@ impl<E: 'static> FuncRef<'_, E> {
     }
 }
 
+#[cfg(not(feature = "alloc"))]
+#[inline(never)]
+#[cold]
+fn closure_requires_heap_allocation(layout: core::alloc::Layout) -> ! {
+    enum Reason {
+        Size(usize),
+        Align(usize),
+    }
+
+    impl core::fmt::Display for Reason {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                Self::Size(size) => write!(
+                    f,
+                    "size of {size} bytes exceeds {}",
+                    core::mem::size_of::<RawFuncRefData>()
+                ),
+                Self::Align(size) => write!(
+                    f,
+                    "required alignment {size} exceeds {}",
+                    core::mem::align_of::<RawFuncRefData>()
+                ),
+            }
+        }
+    }
+
+    panic!(
+        "closure requires a heap allocation: {}",
+        if layout.size() > core::mem::size_of::<RawFuncRefData>() {
+            Reason::Size(layout.size())
+        } else {
+            Reason::Align(layout.align())
+        }
+    )
+}
+
 macro_rules! helpers {
     {$(
         fn $description:literal $call:ident ($($argument:ident: $param:ident),*)
@@ -250,9 +286,8 @@ macro_rules! helpers {
             #[doc = ".\n\nIf the closure is too large, a heap allocation is used to ensure that"]
             #[doc = "it fits into [`RawFuncRefData`].\n\n"]
             #[doc = "# Panics\n\n"]
-            #[doc = "Panics if the `alloc` feature is not enabled when `size_of(C) > "]
+            #[doc = "Panics if the `alloc` feature is not enabled when `size_of(C) >"]
             #[doc = "size_of(RawFuncRefData) && align_of(C) > align_of(RawFuncRefData)`."]
-            #[cfg(feature = "alloc")]
             pub fn $from_closure<$($param,)* R, C>(closure: C) -> Self
             where
                 $($param: 'static,)*
@@ -284,6 +319,8 @@ macro_rules! helpers {
                             unsafe {
                                 &*(data.inline.as_ptr() as *const Self)
                             }
+                        } else if cfg!(not(feature = "alloc")) {
+                            unreachable!()
                         } else {
                             // SAFETY: `IS_INLINE` is false here.
                             // SAFETY: `pointer` originates from `Box::<Self>::into_raw`.
@@ -304,10 +341,15 @@ macro_rules! helpers {
 
                             data
                         } else {
-                            let boxed = alloc::boxed::Box::<Self>::new(closure);
-                            RawFuncRefData {
-                                pointer: alloc::boxed::Box::into_raw(boxed) as *const ()
-                            }
+                            #[cfg(not(feature = "alloc"))]
+                            closure_requires_heap_allocation(core::alloc::Layout::new::<Self>());
+
+                            #[cfg(feature = "alloc")]
+                            return {
+                                let boxed = alloc::boxed::Box::<Self>::new(closure);
+                                let pointer = alloc::boxed::Box::into_raw(boxed) as *const ();
+                                RawFuncRefData { pointer }
+                            };
                         }
                     }
                 }
@@ -344,22 +386,33 @@ macro_rules! helpers {
                             RawFuncRef::new(C::into_data(me.clone()), &C::VTABLE)
                         };
 
-                        let drop: unsafe fn(data: RawFuncRefData) = |mut data| {
-                            if C::IS_INLINE {
+                        let drop: unsafe fn(data: RawFuncRefData);
+                        if C::IS_INLINE {
+                            drop = |mut data| {
                                 // SAFETY: `IS_INLINE` is true here.
                                 // SAFETY: `inline` contains valid instance of `Self`.
                                 unsafe {
                                     core::ptr::drop_in_place(data.inline.as_mut_ptr() as *mut C)
                                 }
-                            } else {
-                                // SAFETY: `IS_INLINE` is false here.
-                                // SAFETY: `inline` contains `*mut Self` originating from `Box::into_raw`.
-                                let boxed = unsafe {
-                                    alloc::boxed::Box::from_raw(data.pointer as *mut () as *mut C)
-                                };
-
-                                core::mem::drop(boxed);
                             };
+                        } else {
+                            #[cfg(not(feature = "alloc"))]
+                            {
+                                drop = |_| unreachable!();
+                            }
+
+                            #[cfg(feature = "alloc")]
+                            {
+                                drop = |data| {
+                                    // SAFETY: `IS_INLINE` is false here.
+                                    // SAFETY: `inline` contains `*mut Self` originating from `Box::into_raw`.
+                                    let boxed = unsafe {
+                                        alloc::boxed::Box::from_raw(data.pointer as *mut () as *mut C)
+                                    };
+
+                                    core::mem::drop(boxed);
+                                };
+                            }
                         };
 
                         let debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug = |_| {
