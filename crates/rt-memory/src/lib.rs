@@ -1,4 +1,28 @@
-//! Implementation for WebAssembly linear memory.
+//! Implementation of WebAssembly linear memory for `wasm2rs`.
+
+#![no_std]
+#![cfg_attr(doc_cfg, feature(doc_auto_cfg))]
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+#![deny(unreachable_pub)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::missing_safety_doc)]
+#![deny(clippy::alloc_instead_of_core)]
+#![deny(clippy::std_instead_of_core)]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+mod empty;
+mod helpers;
+
+pub use empty::EmptyMemory;
+pub use helpers::*;
 
 #[cfg(feature = "alloc")]
 mod allocation;
@@ -8,12 +32,6 @@ mod heap;
 
 #[cfg(feature = "alloc")]
 pub use heap::HeapMemory32;
-
-mod empty;
-mod helpers;
-
-pub use empty::EmptyMemory;
-pub use helpers::*;
 
 /// The size, in bytes, of a WebAssembly linear memory [page].
 ///
@@ -90,7 +108,7 @@ impl AccessError {
     /// [`TrapCode::MemoryBoundsCheck`]: crate::trap::TrapCode::MemoryBoundsCheck
     pub fn trap<TR>(self, memory: u32, address: u64, trap: &TR) -> TR::Repr
     where
-        TR: crate::trap::Trap + ?Sized,
+        TR: trap::Trap + ?Sized,
     {
         trap.trap(
             crate::trap::TrapCode::MemoryBoundsCheck {
@@ -127,7 +145,7 @@ impl core::fmt::Display for AccessError {
 #[cfg(feature = "std")]
 impl std::error::Error for AccessError {}
 
-/// Result type used for reads from or writes to [linear memory].
+/// Result type used for reads from or writes to [linear memory] that may [`Trap`].
 ///
 /// [linear memory]: Memory32
 pub type AccessResult<T> = core::result::Result<T, AccessError>;
