@@ -1,0 +1,14 @@
+[package]
+name = "wasm2rs-rt-simd"
+description = "Runtime support for SIMD operations in wasm2rs"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[features]
+default = ["std", "simd-intrinsics"]
+std = []
+simd-intrinsics = []
+
+[build-dependencies]
+cfg_aliases = "0.2.0"

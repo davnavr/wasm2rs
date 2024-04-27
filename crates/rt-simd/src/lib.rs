@@ -1,7 +1,6 @@
-//! Implements WebAssembly SIMD operations.
+//! Implements WebAssembly SIMD operations for `wasm2rs`.
 //!
-//! Currently, only [fixed width 128-bit SIMD] is supported, provided in the [`v128`] module
-//! enabled by the `simd-128` feature.
+//! Currently, only [fixed width 128-bit SIMD] is supported, provided in the [`v128`] module.
 //!
 //! # Utilizing SIMD Intrinsics
 //!
@@ -21,8 +20,22 @@
 //! [architecture-specific SIMD intrinsics]: core::arch
 //! [target features]: https://doc.rust-lang.org/reference/attributes/codegen.html#available-features
 
-#[cfg(all(feature = "simd-128", not(simd_no_intrinsics)))]
+#![no_std]
+#![cfg_attr(doc_cfg, feature(doc_auto_cfg))]
+#![cfg_attr(simd_no_intrinsics, deny(unsafe_code))]
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+#![deny(unreachable_pub)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::missing_safety_doc)]
+#![deny(clippy::std_instead_of_core)]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(not(simd_no_intrinsics))]
 mod arch;
 
-#[cfg(feature = "simd-128")]
 pub mod v128;

@@ -1,5 +1,5 @@
 #[cfg(simd_sse2_intrinsics)]
-type Repr = crate::simd::arch::__m128i;
+type Repr = crate::arch::__m128i;
 
 #[derive(Clone, Copy)]
 #[repr(align(16))]
@@ -25,7 +25,7 @@ impl I8x16 {
         #[cfg(simd_sse2_intrinsics)]
         return {
             // SAFETY: check for `sse2` occurs above.
-            let lanes = unsafe { crate::simd::arch::_mm_set1_epi8(x) };
+            let lanes = unsafe { crate::arch::_mm_set1_epi8(x) };
             Self(lanes)
         };
 
@@ -37,7 +37,7 @@ impl I8x16 {
     pub fn into_lanes(self) -> [i8; 16] {
         #[cfg(simd_sse2_intrinsics)]
         return {
-            let bytes = crate::simd::v128::V128::from(self).to_bytes();
+            let bytes = crate::v128::V128::from(self).to_bytes();
             // SAFETY: safe to transmute `i8` and `u8`, and array sizes are the same.
             unsafe { core::mem::transmute::<[u8; 16], [i8; 16]>(bytes) }
         };
@@ -47,7 +47,7 @@ impl I8x16 {
     }
 }
 
-impl From<I8x16> for crate::simd::v128::V128 {
+impl From<I8x16> for crate::v128::V128 {
     fn from(v: I8x16) -> Self {
         #[cfg(simd_sse2_intrinsics)]
         return v.0.into();
@@ -57,8 +57,8 @@ impl From<I8x16> for crate::simd::v128::V128 {
     }
 }
 
-impl From<crate::simd::v128::V128> for I8x16 {
-    fn from(v: crate::simd::v128::V128) -> Self {
+impl From<crate::v128::V128> for I8x16 {
+    fn from(v: crate::v128::V128) -> Self {
         #[cfg(simd_sse2_intrinsics)]
         return Self(v.into());
 
@@ -79,7 +79,7 @@ impl core::ops::Add for I8x16 {
         #[cfg(simd_sse2_intrinsics)]
         return {
             // SAFETY: check for `sse2` feature occurs above.
-            let sum = unsafe { crate::simd::arch::_mm_add_epi8(self.0, rhs.0) };
+            let sum = unsafe { crate::arch::_mm_add_epi8(self.0, rhs.0) };
             Self(sum)
         };
 

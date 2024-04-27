@@ -4,7 +4,7 @@
 //! enabled.
 
 #[cfg(all(target_arch = "x86", target_feature = "sse2"))]
-pub(in crate::simd) use core::arch::x86::*;
+pub(crate) use core::arch::x86::*;
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
-pub(in crate::simd) use core::arch::x86_64::*;
+pub(crate) use core::arch::x86_64::*;

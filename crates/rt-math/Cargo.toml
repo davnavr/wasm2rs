@@ -6,7 +6,7 @@ edition.workspace = true
 repository.workspace = true
 
 [features]
-default = []
+default = ["std"]
 std = ["num-traits/std"]
 
 [dependencies]

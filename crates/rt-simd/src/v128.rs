@@ -7,7 +7,7 @@ mod i8x16;
 pub use i8x16::I8x16;
 
 #[cfg(simd_sse2_intrinsics)]
-type Repr = crate::simd::arch::__m128i;
+type Repr = crate::arch::__m128i;
 
 #[derive(Clone, Copy)]
 #[repr(align(16))]
@@ -53,7 +53,7 @@ impl V128 {
             // SAFETY: check for `sse2` target feature occurs above.
             #[allow(clippy::cast_possible_truncation)]
             let v = unsafe {
-                crate::simd::arch::_mm_setr_epi8(
+                crate::arch::_mm_setr_epi8(
                     bytes[15] as i8,
                     bytes[14] as i8,
                     bytes[13] as i8,
@@ -96,8 +96,8 @@ impl V128 {
             // SAFETY: check for `sse2` target feature occurs above.
             // SAFETY: `bytes.bytes` is aligned to 16 bytes.
             unsafe {
-                crate::simd::arch::_mm_storeu_si128(
-                    (&mut bytes) as *mut Bytes as *mut crate::simd::arch::__m128i,
+                crate::arch::_mm_storeu_si128(
+                    (&mut bytes) as *mut Bytes as *mut crate::arch::__m128i,
                     self.0,
                 );
             }
@@ -111,33 +111,33 @@ impl V128 {
 }
 
 #[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<crate::simd::arch::__m128i> for V128 {
-    fn from(v: crate::simd::arch::__m128i) -> Self {
+impl From<crate::arch::__m128i> for V128 {
+    fn from(v: crate::arch::__m128i) -> Self {
         Self(v)
     }
 }
 
 #[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<V128> for crate::simd::arch::__m128i {
+impl From<V128> for crate::arch::__m128i {
     fn from(v: V128) -> Self {
         v.0
     }
 }
 
 #[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<crate::simd::arch::__m128> for V128 {
-    fn from(v: crate::simd::arch::__m128) -> Self {
+impl From<crate::arch::__m128> for V128 {
+    fn from(v: crate::arch::__m128) -> Self {
         // SAFETY: this is compiled only when the `sse2` target feature is enabled.
-        let v = unsafe { crate::simd::arch::_mm_castps_si128(v) };
+        let v = unsafe { crate::arch::_mm_castps_si128(v) };
         Self(v)
     }
 }
 
 #[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<V128> for crate::simd::arch::__m128 {
+impl From<V128> for crate::arch::__m128 {
     fn from(v: V128) -> Self {
         // SAFETY: this is compiled only when the `sse2` target feature is enabled.
-        unsafe { crate::simd::arch::_mm_castsi128_ps(v.0) }
+        unsafe { crate::arch::_mm_castsi128_ps(v.0) }
     }
 }
 
