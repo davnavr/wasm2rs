@@ -234,6 +234,13 @@ name = "wasm2rs-rt-core"
 version = "0.1.0"
 
 [[package]]
+name = "wasm2rs-rt-func-ref"
+version = "0.1.0"
+dependencies = [
+ "wasm2rs-rt-core",
+]
+
+[[package]]
 name = "wasm2rs-rt-math"
 version = "0.1.0"
 dependencies = [

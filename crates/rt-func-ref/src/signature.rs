@@ -1,6 +1,6 @@
 /// Describes the argument and result types of a [`RawFuncRef`].
 ///
-/// [`RawFuncRef`]: crate::func_ref::RawFuncRef
+/// [`RawFuncRef`]: crate::RawFuncRef
 #[derive(Clone, Copy)]
 pub struct FuncRefSignature {
     type_id: fn() -> core::any::TypeId,
@@ -26,8 +26,8 @@ impl FuncRefSignature {
     /// To prevent accidental usage with types that aren't [function pointer]s, `F` is constrained
     /// to implement traits that *all* [function pointer]s implement.
     ///
-    /// [`SignatureMismatchError`]: crate::func_ref::SignatureMismatchError
-    /// [`RawFuncRef`]: crate::func_ref::RawFuncRef
+    /// [`SignatureMismatchError`]: crate::SignatureMismatchError
+    /// [`RawFuncRef`]: crate::RawFuncRef
     /// [function pointer]: fn
     pub const fn of<F>() -> Self
     where
@@ -55,7 +55,7 @@ impl FuncRefSignature {
     }
 }
 
-pub(in crate::func_ref) trait HasFuncRefSignature {
+pub(crate) trait HasFuncRefSignature {
     const SIGNATURE: FuncRefSignature;
 }
 

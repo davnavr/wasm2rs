@@ -1,6 +1,24 @@
-//! Runtime support for [references to functions].
+//! Runtime support for [references to functions] in `wasm2rs`.
 //!
 //! [references to functions]: https://webassembly.github.io/spec/core/syntax/types.html#reference-types
+
+#![no_std]
+#![cfg_attr(doc_cfg, feature(doc_auto_cfg))]
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+#![deny(unreachable_pub)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::missing_safety_doc)]
+#![deny(clippy::alloc_instead_of_core)]
+#![deny(clippy::std_instead_of_core)]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
 mod raw;
 mod signature;
@@ -8,7 +26,7 @@ mod signature;
 pub use raw::{RawFuncRef, RawFuncRefData, RawFuncRefVTable};
 pub use signature::FuncRefSignature;
 
-use crate::trap::Trap;
+use wasm2rs_rt_core::trap::Trap;
 
 /// Error type used when a [`FuncRef`] did not have the correct signature.
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -55,27 +73,6 @@ pub enum FuncRefCastError {
         /// [`NULL`]: FuncRef::NULL
         expected: &'static FuncRefSignature,
     },
-}
-
-impl FuncRefCastError {
-    #[inline(never)]
-    #[cold]
-    fn trap_cold<T>(self, trap: &T) -> T::Repr
-    where
-        T: Trap + ?Sized,
-    {
-        use crate::trap::TrapCode;
-
-        trap.trap(
-            match self {
-                Self::Null { expected } => TrapCode::NullFunctionReference {
-                    expected: Some(expected),
-                },
-                Self::SignatureMismatch(error) => TrapCode::IndirectCallSignatureMismatch(error),
-            },
-            None,
-        )
-    }
 }
 
 impl core::fmt::Display for FuncRefCastError {
@@ -224,16 +221,19 @@ macro_rules! helpers {
         /// [`cast()`]: FuncRef::cast()
         /// [`from_raw()`]: FuncRef::from_raw()
         #[allow(clippy::too_many_arguments)]
-        impl<'a, E: 'static> FuncRef<'a, E> {$(
+        impl<'a, E: 'static + Trap<FuncRefCastError>> FuncRef<'a, E> {$(
             #[doc = "Calls the referenced function with "]
             #[doc = $description]
             #[doc = ".\n\nMultiple return values are represented by a tuple.\n\n"]
             #[doc = "# Errors\n\n"]
-            #[doc = "A [`Trap`] occurs if the function reference is not of the correct type."]
-            pub fn $call<$($param,)* R, H>(&self $(, $argument: $param)* , trap: &H) -> Result<R, E>
+            #[doc = "A [`Trap`] occurs if the function reference is not of the correct type, or "]
+            pub fn $call<$($param,)* R>(
+                &self
+                $(, $argument: $param)*,
+                frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
+            ) -> Result<R, E>
             where
                 $($param: 'static,)*
-                H: Trap<Repr = E> + ?Sized,
                 R: 'static,
             {
                 match self.cast::<unsafe fn(&RawFuncRefData $(, $param)*) -> Result<R, E>>() {
@@ -241,14 +241,17 @@ macro_rules! helpers {
                         // SAFETY: only `data` is passed to the `func`.
                         unsafe { func(data $(, $argument)*) }
                     }
-                    Err(err) => Err(err.trap_cold(trap)),
+                    Err(cast_failed) => Err(E::trap(cast_failed, frame)),
                 }
             }
 
             #[doc = "Creates a new [`FuncRef`] used to invoke the given closure with"]
             #[doc = $description]
             #[doc = ".\n\nIf the closure is too large, a heap allocation is used to ensure that"]
-            #[doc = "it fits into [`RawFuncRefData`]."]
+            #[doc = "it fits into [`RawFuncRefData`].\n\n"]
+            #[doc = "# Panics\n\n"]
+            #[doc = "Panics if the `alloc` feature is not enabled when `size_of(C) > "]
+            #[doc = "size_of(RawFuncRefData) && align_of(C) > align_of(RawFuncRefData)`."]
             #[cfg(feature = "alloc")]
             pub fn $from_closure<$($param,)* R, C>(closure: C) -> Self
             where

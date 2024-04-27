@@ -25,11 +25,11 @@ impl core::fmt::Debug for RawFuncRefData {
 /// A table of functions that specify the behavior of a [`RawFuncRef`].
 #[derive(Clone, Copy, Debug)]
 pub struct RawFuncRefVTable {
-    pub(in crate::func_ref) invoke: *const (),
-    pub(in crate::func_ref) signature: &'static crate::func_ref::FuncRefSignature,
-    pub(in crate::func_ref) clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef,
-    pub(in crate::func_ref) drop: unsafe fn(data: RawFuncRefData),
-    pub(in crate::func_ref) debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug,
+    pub(crate) invoke: *const (),
+    pub(crate) signature: &'static crate::FuncRefSignature,
+    pub(crate) clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef,
+    pub(crate) drop: unsafe fn(data: RawFuncRefData),
+    pub(crate) debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug,
 }
 
 impl RawFuncRefVTable {
@@ -65,16 +65,16 @@ impl RawFuncRefVTable {
     /// This function is called when the [`FuncRef`] is formatted with the [`Debug`] trait. The
     /// original [`FuncRef`] should not be dropped after this function is called.
     ///
-    /// [`FuncRef`]: crate::func_ref::FuncRef
-    /// [`FuncRefSignature::of::<F>()`]: crate::func_ref::FuncRefSignature::of
-    /// [`&RawFuncRefData`]: crate::func_ref::RawFuncRefData
-    /// [`Trap`]: crate::trap
+    /// [`FuncRef`]: crate::FuncRef
+    /// [`FuncRefSignature::of::<F>()`]: crate::FuncRefSignature::of
+    /// [`&RawFuncRefData`]: crate::RawFuncRefData
+    /// [`Trap`]: wasm2rs_rt_core::trap::Trap
     /// [`clone`]: core::clone::Clone::clone
     /// [`drop`]: core::ops::Drop
     /// [`Debug`]: core::fmt::Debug
     pub const fn new(
         invoke: *const (),
-        signature: &'static crate::func_ref::FuncRefSignature,
+        signature: &'static crate::FuncRefSignature,
         clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef,
         drop: unsafe fn(data: RawFuncRefData),
         debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug,
@@ -91,7 +91,7 @@ impl RawFuncRefVTable {
 
 /// Provides an implementation for a [`FuncRef`].
 ///
-/// [`FuncRef`]: crate::func_ref::FuncRef
+/// [`FuncRef`]: crate::FuncRef
 pub struct RawFuncRef {
     data: RawFuncRefData,
     vtable: &'static RawFuncRefVTable,
@@ -103,11 +103,11 @@ impl RawFuncRef {
         Self { data, vtable }
     }
 
-    pub(in crate::func_ref) fn data(&self) -> &RawFuncRefData {
+    pub(crate) fn data(&self) -> &RawFuncRefData {
         &self.data
     }
 
-    pub(in crate::func_ref) fn vtable(&self) -> &'static RawFuncRefVTable {
+    pub(crate) fn vtable(&self) -> &'static RawFuncRefVTable {
         self.vtable
     }
 }
