@@ -8,8 +8,6 @@ pub(crate) enum CallKind {
     /// A `self` argument is added. The generated Rust function is a method.
     ///
     /// A function generated with this [`CallKind`] is always correct.
-    ///
-    /// This is always used by function imports.
     Method,
     // /// An additional argument is added to access embedder specific data.
     // ///
@@ -22,6 +20,23 @@ pub(crate) enum CallKind {
 //enum { NoUnwind, CanUnwind, AlwaysUnwinds }
 
 //enum { Pure, ReadsMemory, Impure }
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum GlobalValue<'a> {
+    Constant(crate::ast::Literal),
+    Defined {
+        value: crate::ast::ExprId,
+        r#type: wasmparser::GlobalType,
+    },
+    Imported {
+        module: &'a str,
+        name: &'a str,
+        r#type: wasmparser::GlobalType,
+    },
+}
+
+//impl GlobalValue
+//fn r#type(&self) ->
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct CallConv<'a> {
