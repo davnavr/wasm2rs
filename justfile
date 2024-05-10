@@ -25,4 +25,4 @@ test_miri:
 
 # Generate documentation; requires Rust nightly.
 doc *FLAGS='--all-features':
-    RUSTDOCFLAGS="--cfg doc_cfg" cargo +nightly doc {{FLAGS}}
+    RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc {{FLAGS}}

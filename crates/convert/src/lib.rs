@@ -4,7 +4,7 @@
 //! [WebAssembly binary modules]: https://webassembly.github.io/spec/core/binary/modules.html#binary-module
 //! [Rust source code]: https://doc.rust-lang.org/reference/items.html
 
-#![cfg_attr(doc_cfg, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
 #![deny(missing_debug_implementations)]

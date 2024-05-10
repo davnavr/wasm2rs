@@ -2,7 +2,7 @@
 //! `wasm2rs`.
 
 #![no_std]
-#![cfg_attr(doc_cfg, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]

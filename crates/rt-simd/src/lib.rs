@@ -21,7 +21,7 @@
 //! [target features]: https://doc.rust-lang.org/reference/attributes/codegen.html#available-features
 
 #![no_std]
-#![cfg_attr(doc_cfg, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(simd_no_intrinsics, deny(unsafe_code))]
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
