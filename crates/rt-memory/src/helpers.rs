@@ -16,7 +16,7 @@ pub fn size<I: Address, M: Memory<I> + ?Sized>(mem: &M) -> I::Signed {
 
 /// This implements the [`memory.grow`] instruction.
 ///
-/// For more information, see the documentation for the [`Memory32::grow()`] method.
+/// For more information, see the documentation for the [`Memory::grow()`] method.
 ///
 /// [`memory.grow`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn grow<I: Address, M: Memory<I> + ?Sized>(mem: &M, delta: I::Signed) -> I::Signed {
@@ -40,7 +40,7 @@ where
 
 /// This implements the [`memory.init`] instruction and [active data segment initialization].
 ///
-/// For more information, see the documentation for the [`Memory32::copy_from_slice()`] method.
+/// For more information, see the documentation for the [`Memory::copy_from_slice()`] method.
 ///
 /// [active data segment initialization]: https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
 /// [`memory.init`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
@@ -87,7 +87,7 @@ where
 /// This implements the [`memory.copy`] instruction in the typical case where the source and
 /// destination is within the same linear memory.
 ///
-/// For more information, see the documentation for the [`Memory32::copy_within()`] method.
+/// For more information, see the documentation for the [`Memory::copy_within()`] method.
 ///
 /// [`memory.copy`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn copy_within<const MEMORY: u32, I, M, E>(
@@ -119,7 +119,7 @@ where
 /// This implements the [`memory.copy`] instruction in the case where the source and destination
 /// memories differ.
 ///
-/// For more information, see the documentation for the [`Memory32::copy_from()`] method.
+/// For more information, see the documentation for the [`Memory::copy_from()`] method.
 ///
 /// [`memory.copy`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn copy<const DST_MEM: u32, const SRC_MEM: u32, I, Dst, Src, E>(
@@ -162,7 +162,7 @@ fn effective_address<I: Address>(offset: I, address: I) -> BoundsCheck<I> {
 
 /// This implements the [**i*nn*.load8_*sx***] instructions.
 ///
-/// For more information, see the documentation for the [`Memory32::i8_load()`] method.
+/// For more information, see the documentation for the [`Memory::i8_load()`] method.
 ///
 /// [**i*nn*.load8_*sx***]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i8_load<const MEMORY: u32, I, M, E>(
@@ -188,7 +188,7 @@ where
 
 /// This implements the [**i*nn*.load16_*sx***] instructions.
 ///
-/// For more information, see the documentation for the [`Memory32::i16_load()`] method.
+/// For more information, see the documentation for the [`Memory::i16_load()`] method.
 ///
 /// [**i*nn*.load16_*sx***]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i16_load<const MEMORY: u32, I, M, E>(
@@ -214,7 +214,7 @@ where
 
 /// This implements the [`i32.load`] instruction.
 ///
-/// For more information, see the documentation for the [`Memory32::i32_load()`] method.
+/// For more information, see the documentation for the [`Memory::i32_load()`] method.
 ///
 /// [`i32.load`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i32_load<const MEMORY: u32, I, M, E>(
@@ -240,7 +240,7 @@ where
 
 /// This implements the [`i64.load` and **i64.load32_*sx***] instructions.
 ///
-/// For more information, see the documentation for the [`Memory32::i64_load()`] method.
+/// For more information, see the documentation for the [`Memory::i64_load()`] method.
 ///
 /// [`i64.load` and **i64.load32_*sx***]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i64_load<const MEMORY: u32, I, M, E>(
@@ -266,7 +266,7 @@ where
 
 /// This implements the [**i*nn*.store8**] instructions.
 ///
-/// For more information, see the documentation for the [`Memory32::i8_store()`] method.
+/// For more information, see the documentation for the [`Memory::i8_store()`] method.
 ///
 /// [**i*nn*.store8**]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i8_store<const MEMORY: u32, I, M, E>(
@@ -298,7 +298,7 @@ where
 
 /// This implements the [**i*nn*.store16**] family of instructions.
 ///
-/// For more information, see the documentation for the [`Memory32::i16_store()`] method.
+/// For more information, see the documentation for the [`Memory::i16_store()`] method.
 ///
 /// [**i*nn*.store16**]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i16_store<const MEMORY: u32, I, M, E>(
@@ -330,7 +330,7 @@ where
 
 /// This implements the [`i32.store` and `i64.store32`] instructions.
 ///
-/// For more information, see the documentation for the [`Memory32::i32_store()`] method.
+/// For more information, see the documentation for the [`Memory::i32_store()`] method.
 ///
 /// [`i32.store` and `i64.store32`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i32_store<const MEMORY: u32, I, M, E>(
@@ -362,7 +362,7 @@ where
 
 /// This implements the [`i64.store`] instruction.
 ///
-/// For more information, see the documentation for the [`Memory32::i64_store()`] method.
+/// For more information, see the documentation for the [`Memory::i64_store()`] method.
 ///
 /// [`i64.store`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i64_store<const MEMORY: u32, I, M, E>(
