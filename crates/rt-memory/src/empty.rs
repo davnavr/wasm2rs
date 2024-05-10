@@ -1,27 +1,27 @@
-/// A [`Memory32`] implementation that always has a size of zero.
+/// A [`Memory`] implementation that always has a size of zero.
 ///
-/// [`Memory32`]: crate::memory::Memory32
+/// [`Memory`]: crate::Memory
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct EmptyMemory;
 
-impl crate::memory::Memory32 for EmptyMemory {
-    fn size(&self) -> u32 {
-        0
+impl<I: crate::Address> crate::Memory<I> for EmptyMemory {
+    fn size(&self) -> I {
+        I::ZERO
     }
 
-    fn limit(&self) -> u32 {
-        0
+    fn limit(&self) -> I {
+        I::ZERO
     }
 
-    fn grow(&self, _: u32) -> u32 {
-        crate::memory::MEMORY_GROW_FAILED
+    fn grow(&self, _: I) -> I {
+        I::max_value()
     }
 
-    fn copy_from_slice(&self, _: u32, _: &[u8]) -> crate::memory::BoundsCheck<()> {
-        Err(crate::memory::BoundsCheckError)
+    fn copy_from_slice(&self, _: I, _: &[u8]) -> crate::BoundsCheck<()> {
+        Err(crate::BoundsCheckError)
     }
 
-    fn copy_to_slice(&self, _: u32, _: &mut [u8]) -> crate::memory::BoundsCheck<()> {
-        Err(crate::memory::BoundsCheckError)
+    fn copy_to_slice(&self, _: I, _: &mut [u8]) -> crate::BoundsCheck<()> {
+        Err(crate::BoundsCheckError)
     }
 }

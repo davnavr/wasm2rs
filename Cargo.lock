@@ -251,6 +251,7 @@ dependencies = [
 name = "wasm2rs-rt-memory"
 version = "0.1.0"
 dependencies = [
+ "num-traits",
  "wasm2rs-rt-core",
 ]
 

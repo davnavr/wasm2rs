@@ -7,8 +7,9 @@ repository.workspace = true
 
 [features]
 default = ["std"]
-std = ["alloc"]
+std = ["alloc", "num-traits/std"]
 alloc = []
 
 [dependencies]
+num-traits = { workspace = true }
 wasm2rs-rt-core = { workspace = true }
