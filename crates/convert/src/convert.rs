@@ -416,12 +416,13 @@ impl Convert<'_> {
         fn print_return_types(
             out: &mut crate::buffer::Writer,
             types: &[wasmparser::ValType],
-            no_unwind: bool,
+            unwind_kind: crate::context::UnwindKind,
         ) {
-            if !no_unwind {
+            if unwind_kind.can_unwind() {
                 out.write_str("::core::result::Result<");
             }
 
+            // if !matches(unwind_kind, crate::context::UnwindKind::Always)
             if types.len() != 1 {
                 out.write_str("(");
             }
@@ -431,8 +432,14 @@ impl Convert<'_> {
             if types.len() != 1 {
                 out.write_str(")");
             }
+            // else { out.write_str("!"); } // `!` is currently nightly-only.
 
-            if !no_unwind {
+            // Remove this when `!` is supported.
+            if matches!(unwind_kind, crate::context::UnwindKind::Always) {
+                out.write_str(" /* ! */");
+            }
+
+            if unwind_kind.can_unwind() {
                 out.write_str(", embedder::Trap>");
             }
         }
@@ -473,7 +480,7 @@ impl Convert<'_> {
             if !signature.results().is_empty() || unwind_kind.can_unwind() {
                 out.write_str(" -> ");
 
-                print_return_types(&mut out, signature.results(), !unwind_kind.can_unwind())
+                print_return_types(&mut out, signature.results(), unwind_kind)
             }
 
             out.write_str(" {\n");

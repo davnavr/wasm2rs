@@ -224,7 +224,7 @@ impl Builder {
 
         if !has_return && matches!(attributes.unwind_kind, crate::context::UnwindKind::Maybe) {
             // Function does not return normally.
-            attributes.unwind_kind = crate::context::UnwindKind::Never;
+            attributes.unwind_kind = crate::context::UnwindKind::Always;
         }
 
         (attributes, crate::convert::code::Definition { body, arena })

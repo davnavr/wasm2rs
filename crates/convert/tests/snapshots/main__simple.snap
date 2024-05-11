@@ -14,7 +14,7 @@ let (_t0, _t1) = '_b0: {
 }; // '_b0
 i32::wrapping_add(_t0, _t1)
 }
-fn _f3() -> ::core::result::Result<i32, embedder::Trap> {
+fn _f3() -> ::core::result::Result<i32 /* ! */, embedder::Trap> {
 return ::core::result::Err(embedder::rt::trap::Trap::with_code(embedder::rt::trap::TrapCode::Unreachable, todo!("how to encode _f3 @ 0x1")));
 }
 fn _f4(_l0: i32) -> i32 {
