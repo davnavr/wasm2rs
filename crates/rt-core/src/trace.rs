@@ -26,3 +26,9 @@ impl WasmFrame {
         Self { symbol, offset }
     }
 }
+
+impl core::fmt::Display for WasmFrame {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{} @ {:#X}", self.symbol, self.offset)
+    }
+}

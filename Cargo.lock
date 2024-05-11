@@ -232,6 +232,9 @@ dependencies = [
 [[package]]
 name = "wasm2rs-rt-core"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
 
 [[package]]
 name = "wasm2rs-rt-func-ref"
