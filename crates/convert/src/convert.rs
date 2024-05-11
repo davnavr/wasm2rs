@@ -4,6 +4,7 @@ use anyhow::Context;
 
 mod allocations;
 mod code;
+mod constant;
 mod options;
 
 pub use allocations::Allocations;
@@ -223,13 +224,14 @@ fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<Module<'a>> {
     unreachable!()
 }
 
-fn get_section_count<T>(section: Option<&wasmparser::SectionLimited<'_, T>>) -> u32 {
-    section.map(|sec| sec.count()).unwrap_or(0)
+fn get_section_count<T>(section: &Option<wasmparser::SectionLimited<'_, T>>) -> u32 {
+    section.as_ref().map(|sec| sec.count()).unwrap_or(0)
 }
 
 fn parse_sections<'wasm>(
-    function_attributes: crate::context::FunctionAttributes,
     types: wasmparser::types::Types,
+    function_attributes: crate::context::FunctionAttributes,
+    allocations: &crate::Allocations,
     sections: Sections<'wasm>,
 ) -> crate::Result<crate::context::Context<'wasm>> {
     let mut context = crate::context::Context {
@@ -239,8 +241,15 @@ fn parse_sections<'wasm>(
         // These will be filled in later.
         imported_modules: Default::default(),
         func_import_modules: Default::default(),
+        global_import_modules: Default::default(),
         func_import_names: Default::default(),
+        global_import_names: Default::default(),
+        global_values: Default::default(),
+        global_initializers: allocations.take_ast_arena(),
     };
+
+    let global_values_count = context.types.global_count() as usize;
+    let mut global_values = Vec::with_capacity(global_values_count);
 
     let total_function_count = context.types.core_function_count() as usize;
     debug_assert_eq!(
@@ -256,24 +265,29 @@ fn parse_sections<'wasm>(
         let mut imported_modules = Vec::with_capacity((import_section.count() as usize).min(2));
 
         let func_import_count = total_function_count - (sections.code_count as usize);
+        let global_import_count =
+            global_values_count - (get_section_count(&sections.globals) as usize);
         let mut func_import_modules = Vec::with_capacity(func_import_count);
+        let mut global_import_modules = Vec::with_capacity(global_import_count);
         let mut func_import_names = Vec::with_capacity(func_import_count);
+        let mut global_import_names = Vec::with_capacity(global_import_count);
 
-        for result in import_section.into_iter() {
+        for result in import_section.into_iter_with_offsets() {
             use wasmparser::TypeRef;
 
-            let import = result?;
-            let module_idx = match imported_modules
+            let (import_offset, import) = result?;
+            let module_idx = if let Some(existing) = imported_modules
                 .iter()
                 .position(|name| *name == import.module)
             {
-                Some(existing) => existing as u16,
-                None => {
-                    let idx = u16::try_from(imported_modules.len())
-                        .context("cannot import from more than 65535 modules")?;
-                    imported_modules.push(import.module);
-                    idx
-                }
+                crate::context::ImportedModule(existing as u16)
+            } else {
+                let idx = u16::try_from(imported_modules.len()).with_context(|| {
+                    format!("cannot import from more than 65535 modules @ {import_offset:#X}")
+                })?;
+
+                imported_modules.push(import.module);
+                crate::context::ImportedModule(idx)
             };
 
             match import.ty {
@@ -284,8 +298,12 @@ fn parse_sections<'wasm>(
                     func_import_names.push(import.name);
                     func_import_modules.push(module_idx);
                 }
-                //TypeRef::Global(ty) => todo!("store the type (since there is no value)"),
-                bad => anyhow::bail!("TODO: Unsupported import {bad:?}"),
+                TypeRef::Global(_) => {
+                    global_values.push(crate::context::GlobalValue::Imported);
+                    global_import_names.push(import.name);
+                    global_import_modules.push(module_idx);
+                }
+                bad => anyhow::bail!("TODO: Unsupported import {bad:?} @ {import_offset:#X}"),
             }
         }
 
@@ -294,9 +312,23 @@ fn parse_sections<'wasm>(
         // Don't need to store the capacity of these `Vec`s.
         context.imported_modules = imported_modules.into_boxed_slice();
         context.func_import_modules = func_import_modules.into_boxed_slice();
+        context.global_import_modules = global_import_modules.into_boxed_slice();
         context.func_import_names = func_import_names.into_boxed_slice();
+        context.global_import_names = global_import_names.into_boxed_slice();
     }
 
+    if let Some(global_section) = sections.globals {
+        let mut global_idx = 0u32;
+        for result in global_section.into_iter_with_offsets() {
+            let (global_offset, global) = result?;
+            global_values.push(crate::context::GlobalValue::Initialized(crate::convert::constant::create_ast(&global.init_expr, &mut context.global_initializers)
+                .with_context(|| format!("invalid initializer expression for global #{global_idx} @ {global_offset:#X}"))?));
+            global_idx += 1;
+        }
+    }
+
+    debug_assert_eq!(global_values.len(), context.types.global_count() as usize);
+    context.global_values = global_values.into_boxed_slice();
     Ok(context)
 }
 
@@ -398,6 +430,10 @@ impl Convert<'_> {
             function_bodies,
         )?;
 
+        let context = parse_sections(types, function_attributes, allocations, sections)?;
+
+        // TODO: Could move printing code to separate method
+
         fn print_result_type(
             out: &mut crate::buffer::Writer,
             types: &[wasmparser::ValType],
@@ -443,8 +479,6 @@ impl Convert<'_> {
                 out.write_str(", embedder::Trap>");
             }
         }
-
-        let context = parse_sections(function_attributes, types, sections)?;
 
         let printer_options = crate::ast::Print::new(self.indentation, &context);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
@@ -551,6 +585,8 @@ impl Convert<'_> {
         )?;
 
         output.write_all(concat!("#[derive(Debug)]", "pub struct Allocated {").as_bytes())?; */
+
+        context.finish(allocations);
 
         crate::buffer::write_all_vectored(
             output,

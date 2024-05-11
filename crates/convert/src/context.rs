@@ -60,16 +60,40 @@ impl FunctionAttributes {
     }
 }
 
+/// Index into [`Context::imported_modules`] indicating the module that a WebAssembly import
+/// originates from.
+#[derive(Clone, Copy, Debug)]
+#[repr(transparent)]
+pub(crate) struct ImportedModule(pub(crate) u16);
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum GlobalValue {
+    /// The global is initialized with the corresponding expression taken from
+    /// [`Context::global_initializers`].
+    Initialized(crate::ast::ExprId),
+    /// The global is imported.
+    Imported,
+}
+
 /// Stores all information relating to a WebAssembly module and how it's components are accessed
 /// when translated to Rust.
+#[must_use = "call .finish()"]
 pub(crate) struct Context<'wasm> {
     pub(crate) types: wasmparser::types::Types,
     pub(crate) imported_modules: Box<[&'wasm str]>,
     /// Specifies the module each imported function originated from.
-    pub(crate) func_import_modules: Box<[u16]>,
+    pub(crate) func_import_modules: Box<[ImportedModule]>,
+    /// Specifies the module each imported global originated from.
+    pub(crate) global_import_modules: Box<[ImportedModule]>,
     /// Specifies the name of each WebAssembly function import.
     pub(crate) func_import_names: Box<[&'wasm str]>,
+    /// Specifies the name of each WebAssembly global import.
+    pub(crate) global_import_names: Box<[&'wasm str]>,
     pub(crate) function_attributes: FunctionAttributes,
+    /// Specifies the initial value of each WebAssembly global.
+    pub(crate) global_values: Box<[GlobalValue]>,
+    /// Stores the initializer expression for each global defined by the WebAssembly module.
+    pub(crate) global_initializers: crate::ast::Arena,
     /// Correspodns to the [**start**] component of the WebAssembly module.
     ///
     /// [**start**]: https://webassembly.github.io/spec/core/syntax/modules.html#start-function
@@ -84,21 +108,8 @@ impl Context<'_> {
     pub(crate) fn function_import_count(&self) -> usize {
         self.func_import_names.len()
     }
+
+    pub(crate) fn finish(self, allocations: &crate::Allocations) {
+        allocations.return_ast_arena(self.global_initializers);
+    }
 }
-
-// #[derive(Clone, Copy, Debug)]
-// pub(crate) enum GlobalValue<'a> {
-//     Constant(crate::ast::Literal),
-//     Defined {
-//         value: crate::ast::ExprId,
-//         r#type: wasmparser::GlobalType,
-//     },
-//     Imported {
-//         module: &'a str,
-//         name: &'a str,
-//         r#type: wasmparser::GlobalType,
-//     },
-// }
-
-//impl GlobalValue
-//fn r#type(&self) ->
