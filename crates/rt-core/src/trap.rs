@@ -1,7 +1,7 @@
 //! Provides the [`Trap`] trait.
 
 /// Trait for implementing WebAssembly traps.
-pub trait Trap<C: core::fmt::Debug>: core::fmt::Debug {
+pub trait Trap<C: core::fmt::Debug>: core::fmt::Debug + crate::trace::Trace {
     /// Generates a trap with the given reason and an optional WebAssembly stack frame indicating
     /// the source of the trap in the original WebAssembly function.
     ///
@@ -10,15 +10,6 @@ pub trait Trap<C: core::fmt::Debug>: core::fmt::Debug {
     fn trap(cause: C, frame: Option<&'static crate::trace::WasmFrame>) -> Self
     where
         Self: Sized;
-
-    /// Appends a WebAssembly stack trace frame to the [`Trap`]'s stack trace, if it has one.
-    fn push_wasm_frame(self, frame: &'static crate::trace::WasmFrame) -> Self
-    where
-        Self: Sized,
-    {
-        let _ = frame;
-        self
-    }
 
     /// Attempts to interpret the [`Trap`] as an [`std::error::Error`].
     #[cfg(feature = "std")]
@@ -41,13 +32,15 @@ impl core::fmt::Display for TrapOccurred {
 
 impl std::error::Error for TrapOccurred {}
 
+impl crate::trace::Trace for TrapOccurred {
+    fn push_wasm_frame(self, _: &'static crate::trace::WasmFrame) -> Self {
+        self
+    }
+}
+
 impl<C: core::fmt::Debug> Trap<C> for TrapOccurred {
     fn trap(_: C, _: Option<&'static crate::trace::WasmFrame>) -> Self {
         Self
-    }
-
-    fn push_wasm_frame(self, _: &'static crate::trace::WasmFrame) -> Self {
-        self
     }
 
     #[cfg(feature = "std")]
@@ -69,17 +62,19 @@ where
         err
     }
 
-    fn push_wasm_frame(self, frame: &'static crate::trace::WasmFrame) -> Self {
-        self.context(frame)
-    }
-
     #[cfg(feature = "std")]
     fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
         Some(self.as_ref())
     }
 }
 
-/// Helper trait for producing [`Trap`]s out of [`Result`]s
+/// Helper trait for producing [`Trap`]s out of [`Result`]s.
+///
+/// To instead append a [`WasmFrame`] to an existing [`Trap`], use the [`UnwindWith`] trait
+/// instead.
+///
+/// [`WasmFrame`]: crate::trace::WasmFrame
+/// [`UnwindWith`]: crate::trace::UnwindWith
 pub trait TrapWith<T, C: core::fmt::Debug> {
     /// Produces a [`Trap`] from a [`Result`]'s [`Err`] case.
     fn trap_with<E: Trap<C>>(self, frame: &'static crate::trace::WasmFrame) -> Result<T, E>;
