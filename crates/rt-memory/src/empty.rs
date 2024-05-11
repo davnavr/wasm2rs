@@ -9,7 +9,7 @@ impl<I: crate::Address> crate::Memory<I> for EmptyMemory {
         I::ZERO
     }
 
-    fn limit(&self) -> I {
+    fn maximum(&self) -> I {
         I::ZERO
     }
 

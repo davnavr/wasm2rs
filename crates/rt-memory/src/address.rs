@@ -5,6 +5,7 @@ mod private {
         num_traits::PrimInt
         + num_traits::ConstZero
         + num_traits::ConstOne
+        + num_traits::AsPrimitive<usize>
         + core::ops::AddAssign
         + core::fmt::Debug
         + core::fmt::Display
@@ -24,16 +25,16 @@ mod private {
 ///
 /// [64-bit]: https://github.com/WebAssembly/memory64
 pub trait Address:
-    private::Integer
-    + num_traits::Unsigned
-    + num_traits::AsPrimitive<usize>
-    + num_traits::AsPrimitive<Self::Signed>
+    private::Integer + num_traits::Unsigned + num_traits::AsPrimitive<Self::Signed>
 {
     /// Signed version of the integer address type.
     type Signed: private::Integer + num_traits::Signed + num_traits::AsPrimitive<Self>;
 
     /// The maximum number of pages that the linear memory can have.
     const MAX_PAGE_COUNT: Self;
+
+    /// Value used when a [`Memory::grow()`](crate::Memory::grow) call fails.
+    const GROW_FAILED: Self;
 
     /// Equivalent to `value as Self`.
     fn cast_from_usize(value: usize) -> Self;
@@ -46,6 +47,7 @@ impl Address for u32 {
     type Signed = i32;
 
     const MAX_PAGE_COUNT: u32 = 65536; // crate::PAGE_SIZE * crate::PAGE_SIZE = u32::MAX + 1
+    const GROW_FAILED: u32 = -1i32 as u32;
 
     fn cast_from_usize(value: usize) -> u32 {
         value as u32

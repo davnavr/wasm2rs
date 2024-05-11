@@ -22,14 +22,38 @@ mod address;
 mod empty;
 mod helpers;
 
+#[cfg(feature = "alloc")]
+mod heap;
+
 pub use address::Address;
 pub use empty::EmptyMemory;
 pub use helpers::*;
+
+#[cfg(feature = "alloc")]
+pub use heap::{HeapMemory, HeapMemory32};
 
 /// The size, in bytes, of a WebAssembly linear memory [page].
 ///
 /// [page]: https://webassembly.github.io/spec/core/exec/runtime.html#page-size
 pub const PAGE_SIZE: u32 = 65536;
+
+/// Error type used when the minimum required number of [pages] for a linear memory could not be
+/// allocated.
+///
+/// [pages]: PAGE_SIZE
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct AllocationError<I: Address> {
+    size: I,
+}
+
+impl<I: Address> AllocationError<I> {
+    /// The minimum number of [pages] that was requested.
+    ///
+    /// [pages]: PAGE_SIZE
+    pub fn size(&self) -> I {
+        self.size
+    }
+}
 
 /// Error type used when an attempt to read or write from a linear [`Memory`] fails.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -166,7 +190,7 @@ pub trait Memory<I: Address = u32> {
     fn size(&self) -> I;
 
     /// Gets the maximum number of pages that this linear memory can have.
-    fn limit(&self) -> I;
+    fn maximum(&self) -> I;
 
     /// Increases the size of the linear memory by the specified number of [pages], and returns the old number of pages.
     ///
