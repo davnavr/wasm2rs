@@ -402,6 +402,13 @@ fn convert_impl<'wasm, 'types>(
                     value,
                 })?;
             }
+            //Operator::Tee
+            Operator::GlobalGet { global_index } => {
+                builder.push_wasm_operand(crate::ast::Expr::GetGlobal(crate::ast::GlobalId(
+                    global_index,
+                )))?;
+            }
+            //Operator::GlobalSet // Need to re-enable `mutable_global` in `SUPPORTED_FEATURES` first
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
             }

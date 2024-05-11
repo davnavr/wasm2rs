@@ -8,9 +8,9 @@ pub use print::Indentation;
 pub(crate) use arena::{Arena, ExprId, ExprListId};
 pub(crate) use print::Print;
 
-/// Represents a WebAssembly [function index].
+/// Represents a WebAssembly [*funcidx*], an index to a function.
 ///
-/// [function index]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
+/// [*funcidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct FuncId(pub(crate) u32);
 
@@ -20,7 +20,25 @@ impl std::fmt::Display for FuncId {
     }
 }
 
-/// Represents a WebAssembly local variable in a function body.
+/// Represents a WebAssembly [*globalidx*], an index to a global variable.
+///
+/// [*globalidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct GlobalId(pub(crate) u32);
+
+impl std::fmt::Display for GlobalId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "_G{}", self.0)
+        } else {
+            write!(f, "_g{}", self.0)
+        }
+    }
+}
+
+/// Represents a WebAssembly [*localidx*], an index to a local variable in a function body.
+///
+/// [*localidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct LocalId(pub(crate) u32);
 
@@ -215,7 +233,13 @@ pub(crate) enum Expr {
         c_2: ExprId,
     },
     /// Gets the value of a local variable. Corresponds to the `local.get` instruction.
+    ///
+    /// [`local.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
     GetLocal(LocalId),
+    /// Gets the value of a global variable. Corresponds to the `global.get` instruction.
+    ///
+    /// [`global.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
+    GetGlobal(GlobalId),
     /// Gets the value of a temporary local variable.
     Temporary(TempId),
     /// Gets the value stored in a temporary loop input variable.
@@ -258,10 +282,14 @@ pub(crate) enum Statement {
     LocalDefinition(LocalId, ValType),
     /// Defines a temporary local variable used to store intermediate results.
     Temporary { temporary: TempId, value: ExprId },
-    /// Assigns a value to a local variable. Corresponds to the [`local.set`] instruction.
+    /// Assigns to a local variable. Corresponds to the [`local.set`] instruction.
     ///
     /// [`local.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
     LocalSet { local: LocalId, value: ExprId },
+    // /// Assigns to a mutable global variable. Corresponds to the [`global.set`] instruction.
+    // ///
+    // /// [`global.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
+    // GlobalSet { global: GlobalId, value: ExprId },
     Call {
         callee: FuncId,
         arguments: ExprListId,

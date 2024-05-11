@@ -868,7 +868,7 @@ pub(in crate::translation) fn write_definition(
                     "let {val_1:#} = if {cond} != 0i32 {{ {val_1} }} else {{ {val_2} }};"
                 );
             }
-            Operator::LocalGet { local_index } => {
+            /* Operator::LocalGet { local_index } => {
                 let _ = write!(out, "let {}", StackValue(validator.operand_stack_height()));
 
                 if let Some(ty) = validator.get_local_type(local_index) {
@@ -884,7 +884,7 @@ pub(in crate::translation) fn write_definition(
                     LocalId(local_index),
                     PoppedValue::pop(validator, 0)
                 );
-            }
+            } */
             Operator::LocalTee { local_index } => {
                 let arg = PoppedValue::pop(validator, 0);
 
@@ -897,7 +897,7 @@ pub(in crate::translation) fn write_definition(
 
                 let _ = writeln!(out, " = {arg};");
             }
-            Operator::GlobalGet { global_index } => {
+            /* Operator::GlobalGet { global_index } => {
                 let _ = write!(out, "let {}", StackValue(validator.operand_stack_height()),);
 
                 if let Some(ty) =
@@ -962,7 +962,7 @@ pub(in crate::translation) fn write_definition(
                 let _ = write!(out, ", {new_value})");
 
                 out.write_str(";\n");
-            }
+            } */
             Operator::I32Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(

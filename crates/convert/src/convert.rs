@@ -79,7 +79,7 @@ struct Module<'a> {
 fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<Module<'a>> {
     /// The set of WebAssembly features that are supported by default.
     const SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
-        mutable_global: true,
+        mutable_global: false,
         saturating_float_to_int: true,
         sign_extension: true,
         reference_types: false,
@@ -325,6 +325,8 @@ fn parse_sections<'wasm>(
                 .with_context(|| format!("invalid initializer expression for global #{global_idx} @ {global_offset:#X}"))?));
             global_idx += 1;
         }
+
+        debug_assert_eq!(global_values.len() as u32, global_idx);
     }
 
     debug_assert_eq!(global_values.len(), context.types.global_count() as usize);
