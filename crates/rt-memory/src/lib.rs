@@ -241,14 +241,13 @@ pub trait Memory<I: Address = u32> {
     /// `dst_addr + len` is not in bounds in `self`.
     fn copy_from<Src>(&self, src: &Src, dst_addr: I, src_addr: I, len: I) -> BoundsCheck<()>
     where
-        Self: Sized,
         Src: Memory<I> + ?Sized,
     {
         // If neither `src` or `self` are zero-sized types, then they should refer to the same
         // object if the pointers are equal.
         if core::mem::size_of_val(self) > 0
             && core::mem::size_of_val(src) > 0
-            && core::ptr::eq(self as *const Self, src as *const Src as *const Self)
+            && core::ptr::addr_eq(self as *const Self, src as *const Src)
         {
             self.copy_within(dst_addr, src_addr, len)
         } else {
