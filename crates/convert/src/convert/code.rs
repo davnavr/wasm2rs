@@ -29,14 +29,30 @@ fn get_block_id(validator: &FuncValidator) -> crate::ast::BlockId {
     crate::ast::BlockId(validator.control_stack_height() - 2)
 }
 
+fn resolve_block_type(
+    types: &wasmparser::types::Types,
+    block_type: wasmparser::BlockType,
+) -> std::borrow::Cow<'_, wasmparser::FuncType> {
+    use std::borrow::Cow;
+    use wasmparser::{BlockType, FuncType};
+
+    match block_type {
+        BlockType::Empty => Cow::Owned(FuncType::new([], [])),
+        BlockType::Type(result) => Cow::Owned(FuncType::new([], [result])),
+        BlockType::FuncType(type_idx) => {
+            Cow::Borrowed(types[types.core_type_at(type_idx).unwrap_sub()].unwrap_func())
+        }
+    }
+}
+
 fn convert_block_start(
     builder: &mut builder::Builder,
     block_type: wasmparser::BlockType,
     kind: crate::ast::BlockKind,
-    module: &crate::convert::Module,
+    types: &wasmparser::types::Types,
     validator: &FuncValidator,
 ) -> crate::Result<()> {
-    let block_type = module.resolve_block_type(block_type);
+    let block_type = resolve_block_type(types, block_type);
 
     let results =
         builder.get_block_results(block_type.results().len(), block_type.params().len())?;
@@ -53,13 +69,13 @@ fn calculate_branch_target(
     function_type: &wasmparser::FuncType,
     validator: &FuncValidator,
     builder: &mut builder::Builder,
-    module: &crate::convert::Module,
+    types: &wasmparser::types::Types,
 ) -> crate::Result<(crate::ast::BranchTarget, crate::ast::ExprListId)> {
     let frame = validator
         .get_control_frame(relative_depth as usize)
         .unwrap();
 
-    let block_type = module.resolve_block_type(frame.block_type);
+    let block_type = resolve_block_type(types, frame.block_type);
     let target;
     let popped_count;
     match (validator.control_stack_height() - relative_depth).checked_sub(2) {
@@ -82,20 +98,26 @@ fn calculate_branch_target(
     Ok((target, builder.wasm_operand_stack_pop_list(popped_count)?))
 }
 
+#[derive(Debug)]
+pub(in crate::convert) struct Attributes {
+    pub(in crate::convert) call_kind: crate::context::CallKind,
+    pub(in crate::convert) unwind_kind: crate::context::UnwindKind,
+}
+
 fn convert_impl<'wasm, 'types>(
-    mut validator: FuncValidator,
-    body: wasmparser::FunctionBody<'wasm>,
-    module: &'types crate::convert::Module<'wasm>,
-    options: &crate::Convert<'_>,
     allocations: &crate::Allocations,
-) -> crate::Result<(crate::context::CallConv<'types>, Definition)> {
+    options: &crate::Convert<'_>,
+    types: &'types wasmparser::types::Types,
+    body: wasmparser::FunctionBody<'wasm>,
+    mut validator: FuncValidator,
+) -> crate::Result<(Attributes, Definition)> {
     use anyhow::Context;
 
     let func_id = crate::ast::FuncId(validator.index());
-    let func_type = module.types[module.types.core_function_at(func_id.0)].unwrap_func();
+    let func_type = types[types.core_function_at(func_id.0)].unwrap_func();
 
     // TODO: Reserve space in Vec<Statement>, collect data on avg. # of statements per byte of code
-    let mut builder = builder::Builder::new(allocations, func_type);
+    let mut builder = builder::Builder::new(allocations);
 
     {
         let mut locals = body
@@ -181,14 +203,14 @@ fn convert_impl<'wasm, 'types>(
                     &mut builder,
                     blockty,
                     crate::ast::BlockKind::Block,
-                    module,
+                    types,
                     &validator,
                 )?;
             }
             Operator::Loop { blockty } => {
                 // See `convert_block_start`
                 let block_id = get_block_id(&validator);
-                let block_type = module.resolve_block_type(blockty);
+                let block_type = resolve_block_type(types, blockty);
                 let input_count = block_type.params().len();
                 let result_count = block_type.results().len();
 
@@ -217,12 +239,12 @@ fn convert_impl<'wasm, 'types>(
                     &mut builder,
                     blockty,
                     crate::ast::BlockKind::If { condition },
-                    module,
+                    types,
                     &validator,
                 )?;
             }
             Operator::Else => {
-                let block_type = module.resolve_block_type(current_frame.block_type);
+                let block_type = resolve_block_type(types, current_frame.block_type);
 
                 let previous_results =
                     builder.wasm_operand_stack_pop_list(block_type.results().len())?;
@@ -241,8 +263,7 @@ fn convert_impl<'wasm, 'types>(
             Operator::End => {
                 if validator.control_stack_height() >= 1 {
                     let id = crate::ast::BlockId(validator.control_stack_height() - 1);
-                    let result_count = module
-                        .resolve_block_type(current_frame.block_type)
+                    let result_count = resolve_block_type(types, current_frame.block_type)
                         .results()
                         .len();
 
@@ -302,7 +323,7 @@ fn convert_impl<'wasm, 'types>(
                     func_type,
                     &validator,
                     &mut builder,
-                    module,
+                    types,
                 )?;
 
                 builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
@@ -319,7 +340,7 @@ fn convert_impl<'wasm, 'types>(
                     func_type,
                     &validator,
                     &mut builder,
-                    module,
+                    types,
                 )?;
 
                 builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
@@ -343,8 +364,7 @@ fn convert_impl<'wasm, 'types>(
                 builder.emit_statement(crate::ast::Statement::r#return(results))?;
             }
             Operator::Call { function_index } => {
-                let signature =
-                    module.types[module.types.core_function_at(function_index)].unwrap_func();
+                let signature = types[types.core_function_at(function_index)].unwrap_func();
 
                 let result_count = signature.results().len();
                 let arguments = builder.wasm_operand_stack_pop_list(signature.params().len())?;
@@ -523,10 +543,10 @@ impl<'wasm> Code<'wasm> {
     /// [`Statement`]: crate::ast::Statement
     pub(in crate::convert) fn convert<'types>(
         self,
-        module: &'types crate::convert::Module<'wasm>,
-        options: &crate::Convert<'_>,
         allocations: &crate::Allocations,
-    ) -> crate::Result<(crate::context::CallConv<'types>, Definition)> {
+        options: &crate::Convert<'_>,
+        types: &'types wasmparser::types::Types,
+    ) -> crate::Result<(Attributes, Definition)> {
         use anyhow::Context;
 
         let validator = self
@@ -535,7 +555,7 @@ impl<'wasm> Code<'wasm> {
 
         let index = validator.index();
 
-        convert_impl(validator, self.body, module, options, allocations)
+        convert_impl(allocations, options, types, self.body, validator)
             .with_context(|| format!("could not format function #{index}"))
     }
 }

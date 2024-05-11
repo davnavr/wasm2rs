@@ -1,18 +1,16 @@
 #[derive(Debug)]
 #[must_use]
-pub(in crate::convert::code) struct Builder<'a> {
+pub(in crate::convert::code) struct Builder {
     wasm_operand_stack: Vec<crate::ast::ExprId>,
     spilled_wasm_operands: usize,
     buffer: Vec<crate::ast::Statement>,
     ast_arena: crate::ast::Arena,
-    calling_convention: crate::context::CallConv<'a>,
+    attributes: crate::convert::code::Attributes,
+    has_return: bool,
 }
 
-impl<'a> Builder<'a> {
-    pub(super) fn new(
-        allocations: &crate::Allocations,
-        wasm_signature: &'a wasmparser::FuncType,
-    ) -> Self {
+impl Builder {
+    pub(super) fn new(allocations: &crate::Allocations) -> Self {
         // TODO: Value stack should be taken from `allocations`.
         Self {
             // TODO: Reserve space in Vec<ExprId>, collect data on avg. max stack height
@@ -20,11 +18,11 @@ impl<'a> Builder<'a> {
             spilled_wasm_operands: 0,
             buffer: allocations.take_statement_buffer(),
             ast_arena: allocations.take_ast_arena(),
-            calling_convention: crate::context::CallConv {
+            attributes: crate::convert::code::Attributes {
                 call_kind: crate::context::CallKind::Function,
-                can_trap: false,
-                wasm_signature,
+                unwind_kind: crate::context::UnwindKind::Never,
             },
+            has_return: false,
         }
     }
 
@@ -101,11 +99,11 @@ impl<'a> Builder<'a> {
     }
 
     pub(super) fn can_trap(&mut self) {
-        self.calling_convention.can_trap = true;
+        self.attributes.unwind_kind = crate::context::UnwindKind::Maybe;
     }
 
     pub(super) fn needs_self(&mut self) {
-        self.calling_convention.call_kind = crate::context::CallKind::Method;
+        self.attributes.call_kind = crate::context::CallKind::Method;
     }
 
     pub(super) fn push_wasm_operand(
@@ -186,6 +184,17 @@ impl<'a> Builder<'a> {
         }
 
         self.buffer.push(statement);
+
+        if matches!(
+            statement,
+            crate::ast::Statement::Branch {
+                target: crate::ast::BranchTarget::Return,
+                ..
+            }
+        ) {
+            self.has_return = true;
+        }
+
         Ok(())
     }
 
@@ -199,22 +208,25 @@ impl<'a> Builder<'a> {
     pub(super) fn finish(
         self,
     ) -> (
-        crate::context::CallConv<'a>,
+        crate::convert::code::Attributes,
         crate::convert::code::Definition,
     ) {
         let Self {
             wasm_operand_stack,
             buffer: body,
             ast_arena: arena,
-            calling_convention,
+            mut attributes,
             spilled_wasm_operands: _,
+            has_return,
         } = self;
 
         debug_assert!(wasm_operand_stack.is_empty());
 
-        (
-            calling_convention,
-            crate::convert::code::Definition { body, arena },
-        )
+        if !has_return && matches!(attributes.unwind_kind, crate::context::UnwindKind::Maybe) {
+            // Function does not return normally.
+            attributes.unwind_kind = crate::context::UnwindKind::Never;
+        }
+
+        (attributes, crate::convert::code::Definition { body, arena })
     }
 }

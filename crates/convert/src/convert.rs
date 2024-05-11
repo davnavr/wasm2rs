@@ -1,5 +1,7 @@
 //! Contains the core code for converting WebAssembly to Rust.
 
+use anyhow::Context;
+
 mod allocations;
 mod code;
 mod options;
@@ -53,38 +55,27 @@ impl Convert<'_> {
     }
 }
 
-struct Module<'a> {
+#[derive(Default)]
+struct Sections<'a> {
     imports: Option<wasmparser::ImportSectionReader<'a>>,
     tables: Option<wasmparser::TableSectionReader<'a>>,
     memories: Option<wasmparser::MemorySectionReader<'a>>,
     //tags: Option<wasmparser::TagSectionReader<'a>>,
     globals: Option<wasmparser::GlobalSectionReader<'a>>,
     exports: Option<wasmparser::ExportSectionReader<'a>>,
-    start_function: Option<u32>,
+    start_function: Option<crate::ast::FuncId>,
     elements: Option<wasmparser::ElementSectionReader<'a>>,
     data: Option<wasmparser::DataSectionReader<'a>>,
+    code_count: u32,
+}
+
+struct Module<'a> {
+    sections: Sections<'a>,
+    function_bodies: Vec<code::Code<'a>>,
     types: wasmparser::types::Types,
 }
 
-impl<'wasm> Module<'wasm> {
-    fn resolve_block_type(
-        &self,
-        block_type: wasmparser::BlockType,
-    ) -> std::borrow::Cow<'_, wasmparser::FuncType> {
-        use std::borrow::Cow;
-        use wasmparser::{BlockType, FuncType};
-
-        match block_type {
-            BlockType::Empty => Cow::Owned(FuncType::new([], [])),
-            BlockType::Type(result) => Cow::Owned(FuncType::new([], [result])),
-            BlockType::FuncType(type_idx) => Cow::Borrowed(
-                self.types[self.types.core_type_at(type_idx).unwrap_sub()].unwrap_func(),
-            ),
-        }
-    }
-}
-
-fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code::Code<'a>>)> {
+fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<Module<'a>> {
     /// The set of WebAssembly features that are supported by default.
     const SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
         mutable_global: true,
@@ -111,15 +102,7 @@ fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code:
     };
 
     let mut validator = wasmparser::Validator::new_with_features(SUPPORTED_FEATURES);
-    let mut imports = None;
-    let mut tables = None;
-    let mut memories = None;
-    //let mut tags = None;
-    let mut globals = None;
-    let mut exports = None;
-    let mut start_function = None;
-    let mut elements = None;
-    let mut data = None;
+    let mut sections = Sections::default();
     let mut function_bodies = Vec::new();
 
     for result in wasmparser::Parser::new(0).parse_all(wasm) {
@@ -138,18 +121,18 @@ fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code:
             }
             Payload::ImportSection(section) => {
                 validator.import_section(&section)?;
-                imports = Some(section);
+                sections.imports = Some(section);
             }
             Payload::FunctionSection(section) => {
                 validator.function_section(&section)?;
             }
             Payload::TableSection(section) => {
                 validator.table_section(&section)?;
-                tables = Some(section);
+                sections.tables = Some(section);
             }
             Payload::MemorySection(section) => {
                 validator.memory_section(&section)?;
-                memories = Some(section);
+                sections.memories = Some(section);
             }
             Payload::TagSection(section) => {
                 validator.tag_section(&section)?;
@@ -157,26 +140,26 @@ fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code:
             }
             Payload::GlobalSection(section) => {
                 validator.global_section(&section)?;
-                globals = Some(section);
+                sections.globals = Some(section);
             }
             Payload::ExportSection(section) => {
                 validator.export_section(&section)?;
-                exports = Some(section);
+                sections.exports = Some(section);
             }
             Payload::StartSection { func, range } => {
                 validator.start_section(func, &range)?;
-                start_function = Some(func);
+                sections.start_function = Some(crate::ast::FuncId(func));
             }
             Payload::ElementSection(section) => {
                 validator.element_section(&section)?;
-                elements = Some(section);
+                sections.elements = Some(section);
             }
             Payload::DataCountSection { count, range } => {
                 validator.data_count_section(count, &range)?
             }
             Payload::DataSection(section) => {
                 validator.data_section(&section)?;
-                data = Some(section);
+                sections.data = Some(section);
             }
             Payload::CodeSectionStart {
                 count,
@@ -185,6 +168,7 @@ fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code:
             } => {
                 validator.code_section_start(count, &range)?;
                 function_bodies.reserve(count as usize);
+                sections.code_count = count;
             }
             Payload::CodeSectionEntry(body) => {
                 function_bodies.push(code::Code::new(&mut validator, body)?)
@@ -194,18 +178,12 @@ fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code:
             }
             Payload::End(offset) => {
                 let module = Module {
-                    imports,
-                    tables,
-                    memories,
-                    globals,
-                    exports,
-                    start_function,
-                    elements,
-                    data,
+                    sections,
+                    function_bodies,
                     types: validator.end(offset)?,
                 };
 
-                return Ok((module, function_bodies));
+                return Ok(module);
             }
             // Component model is not yet supported
             Payload::ModuleSection { parser: _, range } => validator.module_section(&range)?,
@@ -245,34 +223,116 @@ fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<(Module<'a>, Vec<code:
     unreachable!()
 }
 
+fn get_section_count<T>(section: Option<&wasmparser::SectionLimited<'_, T>>) -> u32 {
+    section.map(|sec| sec.count()).unwrap_or(0)
+}
+
+fn parse_sections<'wasm>(
+    function_attributes: crate::context::FunctionAttributes,
+    types: wasmparser::types::Types,
+    sections: Sections<'wasm>,
+) -> crate::Result<crate::context::Context<'wasm>> {
+    let mut context = crate::context::Context {
+        types,
+        function_attributes,
+        start_function: sections.start_function,
+        // These will be filled in later.
+        imported_modules: Default::default(),
+        func_import_modules: Default::default(),
+        func_import_names: Default::default(),
+    };
+
+    let total_function_count = context.types.core_function_count() as usize;
+    debug_assert_eq!(
+        total_function_count,
+        context.function_attributes.call_kinds.len()
+    );
+    debug_assert_eq!(
+        total_function_count,
+        context.function_attributes.unwind_kinds.len()
+    );
+
+    if let Some(import_section) = sections.imports {
+        let mut imported_modules = Vec::with_capacity((import_section.count() as usize).min(2));
+
+        let func_import_count = total_function_count - (sections.code_count as usize);
+        let mut func_import_modules = Vec::with_capacity(func_import_count);
+        let mut func_import_names = Vec::with_capacity(func_import_count);
+
+        for result in import_section.into_iter() {
+            use wasmparser::TypeRef;
+
+            let import = result?;
+            let module_idx = match imported_modules
+                .iter()
+                .position(|name| *name == import.module)
+            {
+                Some(existing) => existing as u16,
+                None => {
+                    let idx = u16::try_from(imported_modules.len())
+                        .context("cannot import from more than 65535 modules")?;
+                    imported_modules.push(import.module);
+                    idx
+                }
+            };
+
+            match import.ty {
+                TypeRef::Func(_) => {
+                    // TODO: set call kind for imported functions
+                    // call_kinds.push(crate::context::CallKind::WithEmbedder);
+
+                    func_import_names.push(import.name);
+                    func_import_modules.push(module_idx);
+                }
+                //TypeRef::Global(ty) => todo!("store the type (since there is no value)"),
+                bad => anyhow::bail!("TODO: Unsupported import {bad:?}"),
+            }
+        }
+
+        imported_modules.resize(imported_modules.capacity(), "THIS IS A BUG");
+
+        // Don't need to store the capacity of these `Vec`s.
+        context.imported_modules = imported_modules.into_boxed_slice();
+        context.func_import_modules = func_import_modules.into_boxed_slice();
+        context.func_import_names = func_import_names.into_boxed_slice();
+    }
+
+    Ok(context)
+}
+
 impl Convert<'_> {
     fn convert_function_definitions<'wasm, 'types>(
         &self,
-        module: &'types Module<'wasm>,
+        types: &'types wasmparser::types::Types,
         allocations: &crate::Allocations,
-        calling_conventions: &mut [crate::context::CallConv<'types>],
+        attributes: &mut crate::context::FunctionAttributes,
         code: Vec<code::Code<'wasm>>,
     ) -> crate::Result<Vec<code::Definition>> {
         let convert_function_bodies =
-            move |call_conv: &mut crate::context::CallConv<'types>, code: code::Code<'wasm>| {
-                let (new_conv, definition) = code.convert(module, &self, allocations)?;
-
-                debug_assert!(
-                    call_conv.wasm_signature.params().is_empty()
-                        && call_conv.wasm_signature.results().is_empty()
-                );
-
-                *call_conv = new_conv;
+            move |call_kind: &mut crate::context::CallKind,
+                  unwind_kind: &mut crate::context::UnwindKind,
+                  code: code::Code<'wasm>| {
+                let (attr, definition) = code.convert(allocations, &self, types)?;
+                *call_kind = attr.call_kind;
+                *unwind_kind = attr.unwind_kind;
                 Ok(definition)
             };
 
+        let import_count = types.core_function_count() as usize - code.len();
+        let call_kinds = &mut attributes.call_kinds[import_count..];
+        let unwind_kinds = &mut attributes.unwind_kinds[import_count..];
+
         #[cfg(not(feature = "rayon"))]
         return {
-            assert_eq!(calling_conventions.len(), code.len());
+            assert_eq!(code.len(), call_kinds.len());
+            assert_eq!(code.len(), unwind_kinds.len());
 
             code.into_iter()
-                .zip(calling_conventions)
-                .map(|(code, call_conv)| convert_function_bodies(call_conv, code))
+                .zip(call_kinds)
+                .zip(unwind_kinds)
+                .map(|((code, call_kind), unwind_kind)| {
+                    convert_function_bodies(call_kind, unwind_kind, code)
+                })
                 .collect::<crate::Result<_>>()
         };
 
@@ -281,11 +341,16 @@ impl Convert<'_> {
             use rayon::prelude::*;
 
             code.into_par_iter()
-                .zip_eq(calling_conventions)
-                .map(|(code, call_conv)| convert_function_bodies(call_conv, code))
+                .zip_eq(call_kinds)
+                .zip_eq(unwind_kinds)
+                .map(|((code, call_kind), unwind_kind)| {
+                    convert_function_bodies(call_kind, unwind_kind, code)
+                })
                 .collect::<crate::Result<_>>()
         };
     }
+
+    //fn convert_from_ast(types, ast, module, output: &mut dyn std::io::Write) -> Result<()>
 
     /// Converts an in-memory WebAssembly binary module, and [`Write`]s the resulting Rust source
     /// code to the given output.
@@ -304,7 +369,11 @@ impl Convert<'_> {
     ) -> crate::Result<()> {
         use anyhow::Context;
 
-        let (module, code) = validate_payloads(&wasm).context("validation failed")?;
+        let Module {
+            sections,
+            function_bodies,
+            types,
+        } = validate_payloads(&wasm).context("validation failed")?;
 
         let new_allocations;
         let allocations = match self.allocations {
@@ -315,66 +384,18 @@ impl Convert<'_> {
             }
         };
 
-        let empty_func_type = wasmparser::FuncType::new([], []);
-
-        // Stores information like function signatures, whether they throw, etc.
-        let mut calling_conventions = vec![
-            crate::context::CallConv {
-                call_kind: crate::context::CallKind::Method,
-                can_trap: true, // Cannot assume function imports won't trap
-                wasm_signature: &empty_func_type,
-            };
-            module.types.core_function_count() as usize
-        ];
-
-        let mut globals = Vec::with_capacity(module.types.global_count() as usize);
-
-        let function_import_count = module.types.core_function_count() as usize - code.len();
-        let global_import_count = module.types.global_count()
-            - module
-                .globals
-                .as_ref()
-                .map(|globals| globals.count())
-                .unwrap_or(0);
-        if let Some(import_section) = module.imports.clone() {
-            let mut func_idx = 0usize;
-            for result in import_section.into_iter() {
-                use wasmparser::TypeRef;
-
-                let import = result?;
-                match import.ty {
-                    TypeRef::Func(type_idx) => {
-                        debug_assert_eq!(
-                            &empty_func_type,
-                            calling_conventions[func_idx].wasm_signature
-                        );
-
-                        calling_conventions[func_idx].wasm_signature = module.types
-                            [module.types.core_type_at(type_idx).unwrap_sub()]
-                        .unwrap_func();
-
-                        func_idx += 1;
-                    }
-                    TypeRef::Global(ty) => {
-                        globals.push(crate::context::GlobalValue::Imported {
-                            module: import.module,
-                            name: import.name,
-                            r#type: ty,
-                        });
-                    }
-                    bad => anyhow::bail!("TODO: Unsupported import {bad:?}"),
-                }
-            }
-
-            debug_assert_eq!(function_import_count, func_idx);
-            debug_assert_eq!(global_import_count, globals.len() as u32);
-        }
+        let function_count = types.core_function_count() as usize;
+        let mut function_attributes = crate::context::FunctionAttributes {
+            call_kinds: vec![crate::context::CallKind::Function; function_count].into_boxed_slice(),
+            unwind_kinds: vec![crate::context::UnwindKind::Maybe; function_count]
+                .into_boxed_slice(),
+        };
 
         let function_definitions = self.convert_function_definitions(
-            &module,
+            &types,
             allocations,
-            &mut calling_conventions[function_import_count..],
-            code,
+            &mut function_attributes,
+            function_bodies,
         )?;
 
         fn print_result_type(
@@ -416,28 +437,28 @@ impl Convert<'_> {
             }
         }
 
-        let calling_conventions = calling_conventions.as_slice();
-        let printer_options = crate::ast::Print::new(self.indentation, calling_conventions);
+        let context = parse_sections(function_attributes, types, sections)?;
+
+        let printer_options = crate::ast::Print::new(self.indentation, &context);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
             use crate::context::CallKind;
 
             // TODO: Use some average # of Rust bytes per # of Wasm bytes
             let mut out = crate::buffer::Writer::new(allocations.byte_buffer_pool());
 
-            let func_idx = function_import_count + index;
-            let call_conv = &calling_conventions[func_idx];
-            let signature = call_conv.wasm_signature;
+            let func_id = crate::ast::FuncId((context.function_import_count() + index) as u32);
+            let signature = context.function_signature(func_id);
 
-            write!(out, "fn {}(", crate::ast::FuncId(func_idx as u32));
+            write!(out, "fn {func_id}(");
 
-            match call_conv.call_kind {
+            let call_kind = context.function_attributes.call_kind(func_id);
+            match call_kind {
                 CallKind::Function => (),
                 CallKind::Method => out.write_str("&self"),
                 // CallKind::WithEmbedder => out.write_str("_embedder: &embedder::State"),
             }
 
-            if !matches!(call_conv.call_kind, CallKind::Function) && !signature.params().is_empty()
-            {
+            if !matches!(call_kind, CallKind::Function) && !signature.params().is_empty() {
                 out.write_str(", ");
             }
 
@@ -448,19 +469,20 @@ impl Convert<'_> {
             out.write_str(")");
 
             // Omit return type for functions that return nothing and can't unwind
-            if !signature.results().is_empty() || call_conv.can_unwind() {
+            let unwind_kind = context.function_attributes.unwind_kind(func_id);
+            if !signature.results().is_empty() || unwind_kind.can_unwind() {
                 out.write_str(" -> ");
 
-                print_return_types(&mut out, signature.results(), !call_conv.can_unwind())
+                print_return_types(&mut out, signature.results(), !unwind_kind.can_unwind())
             }
 
             out.write_str(" {\n");
 
             printer_options.print_statements(
+                func_id,
                 &mut out,
-                &definition.arena,
-                call_conv,
                 &definition.body,
+                &definition.arena,
             );
 
             out.write_str("}\n");
