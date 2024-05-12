@@ -31,7 +31,7 @@ impl Indentation {
     /// Indentation with a signle tab (`\t`).
     pub const TAB: Self = Self(IndentationKind::Tab);
 
-    fn to_str(&self) -> &'static str {
+    pub(crate) fn to_str(&self) -> &'static str {
         match self.0 {
             IndentationKind::Omitted => "",
             IndentationKind::Tab => "\t",
@@ -571,7 +571,11 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
         }
     }
 
-    fn write_indentation(&self, out: &mut crate::buffer::Writer<'_>, indent_level: usize) {
+    pub(crate) fn indentation(&self) -> Indentation {
+        self.indentation
+    }
+
+    fn write_indentation(&self, out: &mut crate::buffer::Writer<'_>, indent_level: u32) {
         for _ in 0..indent_level {
             out.write_str(self.indentation.to_str());
         }
@@ -580,13 +584,13 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
     pub(crate) fn print_statements(
         &self,
         function: crate::ast::FuncId,
+        mut indent_level: u32,
         out: &mut crate::buffer::Writer<'_>,
         statements: &[crate::ast::Statement],
         arena: &crate::ast::Arena,
     ) {
         use crate::ast::Statement;
 
-        let mut indent_level = 0usize;
         for (n, stmt) in statements.iter().copied().enumerate() {
             let is_last = n == statements.len() - 1;
 
