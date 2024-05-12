@@ -14,9 +14,6 @@ pub struct HeapMemory<I: Address = u32> {
     limit: I,
 }
 
-/// An alias for [`HeapMemory`] using a 32-bit address space.
-pub type HeapMemory32 = HeapMemory<u32>;
-
 impl<I: Address> Default for HeapMemory<I> {
     fn default() -> Self {
         Self::new()

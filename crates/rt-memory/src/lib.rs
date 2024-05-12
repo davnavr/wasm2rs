@@ -30,7 +30,7 @@ pub use empty::EmptyMemory;
 pub use helpers::*;
 
 #[cfg(feature = "alloc")]
-pub use heap::{HeapMemory, HeapMemory32};
+pub use heap::HeapMemory;
 
 /// The size, in bytes, of a WebAssembly linear memory [page].
 ///
@@ -42,7 +42,7 @@ pub const PAGE_SIZE: u32 = 65536;
 ///
 /// [pages]: PAGE_SIZE
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct AllocationError<I: Address> {
+pub struct AllocationError<I: Address = u32> {
     size: I,
 }
 
@@ -57,7 +57,7 @@ impl<I: Address> AllocationError<I> {
 
 /// Error type used when an attempt to read or write from a linear [`Memory`] fails.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct AccessError<I: Address> {
+pub struct AccessError<I: Address = u32> {
     memory: u32,
     address: I,
     offset: I,
@@ -307,4 +307,4 @@ pub trait Memory<I: Address = u32> {
     }
 }
 
-//pub trait UnsharedMemory<I: Address>: Memory<I> + core::ops::Deref<Target = core::cell::Cell<[u8]>> + core::ops::DerefMut where Self: !Sync {}
+//pub trait UnsharedMemory<I: Address = u32>: Memory<I> + core::ops::Deref<Target = core::cell::Cell<[u8]>> + core::ops::DerefMut where Self: !Sync {}
