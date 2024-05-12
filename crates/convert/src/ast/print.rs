@@ -60,28 +60,28 @@ mod paths {
     pub(super) const RT_TRAP_CODE: &str = "embedder::rt::trap::TrapCode";
 }
 
-impl crate::ast::ValType {
-    pub(crate) fn print(&self, out: &mut crate::buffer::Writer) {
+impl std::fmt::Display for crate::ast::ValType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::I32 => out.write_str("i32"),
-            Self::I64 => out.write_str("i64"),
-            Self::F32 => out.write_str("f32"),
-            Self::F64 => out.write_str("f64"),
+            Self::I32 => f.write_str("i32"),
+            Self::I64 => f.write_str("i64"),
+            Self::F32 => f.write_str("f32"),
+            Self::F64 => f.write_str("f64"),
         }
     }
 }
 
-impl crate::ast::Literal {
-    fn print(&self, out: &mut crate::buffer::Writer) {
+impl std::fmt::Display for crate::ast::Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::I32(i) if *i <= 9 => write!(out, "{i}i32"),
-            Self::I32(i) if *i <= 0xFFFF => write!(out, "{i:#X}i32"),
-            Self::I32(i) => write!(out, "{i:#010X}i32"),
-            Self::I64(i) if *i <= 9 => write!(out, "{i}i64"),
-            Self::I64(i) if *i <= 0xFFFF => write!(out, "{i:#X}i64"),
-            Self::I64(i) => write!(out, "{i:#018X}i64"),
-            Self::F32(z) => write!(out, "f32::from_bits({z:#010X})"),
-            Self::F64(z) => write!(out, "f64::from_bits({z:#018X})"),
+            Self::I32(i) if *i <= 9 => write!(f, "{i}i32"),
+            Self::I32(i) if *i <= 0xFFFF => write!(f, "{i:#X}i32"),
+            Self::I32(i) => write!(f, "{i:#010X}i32"),
+            Self::I64(i) if *i <= 9 => write!(f, "{i}i64"),
+            Self::I64(i) if *i <= 0xFFFF => write!(f, "{i:#X}i64"),
+            Self::I64(i) => write!(f, "{i:#018X}i64"),
+            Self::F32(z) => write!(f, "f32::from_bits({z:#010X})"),
+            Self::F64(z) => write!(f, "f64::from_bits({z:#018X})"),
         }
     }
 }
@@ -197,7 +197,7 @@ impl crate::ast::Expr {
         }
 
         match self {
-            Self::Literal(literal) => literal.print(out),
+            Self::Literal(literal) => write!(out, "{literal}"),
             Self::UnaryOperator { kind, c_1 } => {
                 use crate::ast::UnOp;
 
@@ -569,10 +569,6 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
             indentation,
             context,
         }
-    }
-
-    pub(crate) fn indentation(&self) -> Indentation {
-        self.indentation
     }
 
     fn write_indentation(&self, out: &mut crate::buffer::Writer<'_>, indent_level: u32) {

@@ -335,7 +335,7 @@ fn parse_sections<'wasm>(
 }
 
 enum AllocationsRef<'a> {
-    Owned(Allocations),
+    Owned(Box<Allocations>),
     Borrowed(&'a Allocations),
 }
 
@@ -418,7 +418,7 @@ impl Convert<'_> {
         // TODO: Helper struct to return objects even if an `Err` is returned.
         let allocations = match self.allocations {
             Some(existing) => AllocationsRef::Borrowed(existing),
-            None => AllocationsRef::Owned(Allocations::default()),
+            None => AllocationsRef::Owned(Box::default()),
         };
 
         let function_count = types.core_function_count() as usize;
@@ -462,7 +462,7 @@ impl Convert<'_> {
                 }
 
                 f(out, i);
-                crate::ast::ValType::from(ty).print(out);
+                write!(out, "{}", crate::ast::ValType::from(ty));
             }
         }
 
@@ -600,6 +600,8 @@ impl Convert<'_> {
         // TODO: Option to specify #[derive(Debug)] impl
         writeln!(o, "{sp}pub struct Allocated {{")?;
 
+        // TODO: Write mutable globals & global imports (ex: `_g0: i32,`)
+
         writeln!(o, "{sp}}}\n")?;
 
         writeln!(o, "{sp}pub struct Instance {{")?;
@@ -608,6 +610,25 @@ impl Convert<'_> {
 
         writeln!(o, "{sp}impl Instance {{")?;
 
+        for (i, global_value) in context.global_values[context.global_import_names.len()..]
+            .iter()
+            .enumerate()
+        {
+            if let crate::context::GlobalValue::Initialized(value_id) = global_value {
+                if let crate::ast::Expr::Literal(literal) =
+                    context.global_initializers.get(*value_id)
+                {
+                    writeln!(
+                        o,
+                        "{sp}{sp}const {:#}: {} = {literal};",
+                        crate::ast::GlobalId(i as u32),
+                        literal.type_of()
+                    )?;
+                }
+            }
+        }
+
+        // Write function definitions
         crate::buffer::write_all_vectored(
             o,
             &function_items,

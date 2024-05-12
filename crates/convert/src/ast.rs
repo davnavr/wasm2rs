@@ -97,6 +97,17 @@ pub(crate) enum Literal {
     F64(u64),
 }
 
+impl Literal {
+    pub(crate) fn type_of(&self) -> ValType {
+        match self {
+            Self::I32(_) => ValType::I32,
+            Self::I64(_) => ValType::I64,
+            Self::F32(_) => ValType::F32,
+            Self::F64(_) => ValType::F64,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum UnOp {
     /// Compares an integer value to `0`. Corresponds to the `i32.eqz` and `i64.eqz` instuctions.
