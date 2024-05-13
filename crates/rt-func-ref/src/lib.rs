@@ -121,6 +121,10 @@ impl<E: 'static> Default for FuncRef<'_, E> {
     }
 }
 
+impl<E: 'static> wasm2rs_rt_core::global::GlobalValue for FuncRef<'_, E> {
+    const ZERO: Self = Self::NULL;
+}
+
 impl<E: 'static> FuncRef<'_, E> {
     /// Gets the [`null`] function reference.
     ///

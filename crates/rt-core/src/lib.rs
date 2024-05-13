@@ -17,6 +17,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+pub mod global;
 pub mod symbol;
 pub mod trace;
 pub mod trap;
