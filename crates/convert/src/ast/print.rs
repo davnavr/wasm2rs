@@ -60,6 +60,8 @@ mod paths {
     pub(super) const RT_TRAP_CODE: &str = "embedder::rt::trap::TrapCode";
 }
 
+const INST: &str = "self.inst";
+
 impl std::fmt::Display for crate::ast::ValType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -491,7 +493,7 @@ impl crate::ast::Expr {
                         todo!("attempt to get imported global {import_name:?} from {import_module:?}, but global imports are not yet supported");
                     }
                     crate::context::GlobalValue::Initialized(_) if ty.mutable => {
-                        todo!("mutable globals are not yet supported")
+                        write!(out, "{INST}.{global}.get()")
                     }
                     crate::context::GlobalValue::Initialized(value_id) => {
                         let value = context.global_initializers.get(value_id);
@@ -500,7 +502,7 @@ impl crate::ast::Expr {
                         if matches!(value, Self::Literal(_)) {
                             write!(out, "Self::{global:#}");
                         } else {
-                            write!(out, "self.{global}");
+                            write!(out, "{INST}.{global}");
                         }
                     }
                 }
@@ -731,7 +733,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                         out.write_str("}");
                     }
                 }
-                Statement::LocalDefinition(local, ty) => {
+                Statement::DefineLocal(local, ty) => {
                     use crate::ast::ValType;
 
                     write!(out, "let mut {local} = ");
@@ -749,10 +751,28 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     value.print(out, arena, false, self.context);
                     out.write_str(";");
                 }
-                Statement::LocalSet { local, value } => {
+                Statement::SetLocal { local, value } => {
                     write!(out, "{local} = ");
                     value.print(out, arena, false, self.context);
                     out.write_str(";");
+                }
+                Statement::SetGlobal { global, value } => {
+                    out.write_str("embedder::rt::global::Global::set(");
+
+                    if self
+                        .context
+                        .global_import_modules
+                        .get(global.0 as usize)
+                        .is_some()
+                    {
+                        todo!("set global import");
+                    } else {
+                        write!(out, "&self.{global}")
+                    }
+
+                    out.write_str(", ");
+                    value.print(out, arena, false, self.context);
+                    out.write_str(");")
                 }
                 Statement::BlockStart { id, results, kind } => {
                     debug_assert!(!is_last);

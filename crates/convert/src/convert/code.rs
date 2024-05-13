@@ -129,7 +129,7 @@ fn convert_impl<'wasm, 'types>(
             let (count, ty) = locals.read().context("could not read local variables")?;
             validator.define_locals(locals.original_position(), count, ty)?;
             for _ in 0..count {
-                builder.emit_statement(crate::ast::Statement::LocalDefinition(id, ty.into()))?;
+                builder.emit_statement(crate::ast::Statement::DefineLocal(id, ty.into()))?;
                 id.0 += 1;
             }
         }
@@ -397,18 +397,25 @@ fn convert_impl<'wasm, 'types>(
             }
             Operator::LocalSet { local_index } => {
                 let value = builder.pop_wasm_operand();
-                builder.emit_statement(crate::ast::Statement::LocalSet {
+                builder.emit_statement(crate::ast::Statement::SetLocal {
                     local: crate::ast::LocalId(local_index),
                     value,
                 })?;
             }
-            //Operator::Tee
+            //Operator::LocalTee
             Operator::GlobalGet { global_index } => {
                 builder.push_wasm_operand(crate::ast::Expr::GetGlobal(crate::ast::GlobalId(
                     global_index,
                 )))?;
             }
-            //Operator::GlobalSet // Need to re-enable `mutable_global` in `SUPPORTED_FEATURES` first
+            Operator::GlobalSet { global_index } => {
+                let value = builder.pop_wasm_operand();
+                builder.needs_self();
+                builder.emit_statement(crate::ast::Statement::SetGlobal {
+                    global: crate::ast::GlobalId(global_index),
+                    value,
+                })?;
+            }
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
             }

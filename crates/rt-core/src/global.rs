@@ -129,7 +129,7 @@ impl<T: GlobalValue> Global<T> {
     /// Gets the value of the global variable by [`Copy`]ing it.
     ///
     /// This exists as a separate method due to a lack of specialization in stable Rust. If you
-    /// know `T: Copy`, then call this method rather than [`Global::get_cloned()`].
+    /// know `T: Copy`, then call this method rather than [`Global::get()`].
     pub fn get_copied(&self) -> T
     where
         T: Copy,
@@ -145,7 +145,7 @@ impl<T: GlobalValue> Global<T> {
     /// [`Global::get_copied()`] instead.
     ///
     /// [`global.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
-    pub fn get_cloned(&self) -> T {
+    pub fn get(&self) -> T {
         if let Some(copy) = T::try_copy(&self.contents, private::Private) {
             copy
         } else {
@@ -168,7 +168,7 @@ impl<T: GlobalValue> From<T> for Global<T> {
 
 impl<T: GlobalValue> Clone for Global<T> {
     fn clone(&self) -> Self {
-        Self::new(self.get_cloned())
+        Self::new(self.get())
     }
 }
 

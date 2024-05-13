@@ -290,17 +290,17 @@ pub(crate) enum Statement {
     /// Defines a local variable. These statements should be placed at the start of the function.
     ///
     /// These correspond to the local variables of a WebAssembly code section entry.
-    LocalDefinition(LocalId, ValType),
+    DefineLocal(LocalId, ValType),
     /// Defines a temporary local variable used to store intermediate results.
     Temporary { temporary: TempId, value: ExprId },
     /// Assigns to a local variable. Corresponds to the [`local.set`] instruction.
     ///
     /// [`local.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
-    LocalSet { local: LocalId, value: ExprId },
-    // /// Assigns to a mutable global variable. Corresponds to the [`global.set`] instruction.
-    // ///
-    // /// [`global.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
-    // GlobalSet { global: GlobalId, value: ExprId },
+    SetLocal { local: LocalId, value: ExprId },
+    /// Assigns to a mutable global variable. Corresponds to the [`global.set`] instruction.
+    ///
+    /// [`global.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
+    SetGlobal { global: GlobalId, value: ExprId },
     Call {
         callee: FuncId,
         arguments: ExprListId,
