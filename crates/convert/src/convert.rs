@@ -79,7 +79,7 @@ struct Module<'a> {
 fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<Module<'a>> {
     /// The set of WebAssembly features that are supported by default.
     const SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
-        mutable_global: false,
+        mutable_global: true,
         saturating_float_to_int: true,
         sign_extension: true,
         reference_types: false,
@@ -600,7 +600,42 @@ impl Convert<'_> {
         // TODO: Option to specify #[derive(Debug)] impl
         writeln!(o, "{sp}pub struct Allocated {{")?;
 
-        // TODO: Write mutable globals & global imports (ex: `_g0: i32,`)
+        let global_indices = (0u32..=u32::MAX).map(crate::ast::GlobalId);
+
+        // Non-mutable globals initialized w/ complex expressions should be included here too.
+        let mut const_global_count = 0usize;
+        for (global_value, global_id) in context.global_values.iter().zip(global_indices.clone()) {
+            let global_type = context.types.global_at(global_id.0);
+            match global_value {
+                crate::context::GlobalValue::Imported => {
+                    anyhow::bail!("global {global_id} is an import, which is not yet supported");
+                }
+                crate::context::GlobalValue::Initialized(value_id) => {
+                    match context.global_initializers.get(*value_id) {
+                        crate::ast::Expr::Literal(_) if !global_type.mutable => {
+                            // Immutable, defined globals are translated to `const` instead.
+                            const_global_count += 1;
+                            continue;
+                        }
+                        _ => (),
+                    }
+                }
+            }
+
+            write!(o, "{sp}{sp}{global_id}: ")?;
+
+            if global_type.mutable {
+                o.write_all(b"embedder::rt::global::Global<")?;
+            }
+
+            write!(o, "{}", crate::ast::ValType::from(global_type.content_type))?;
+
+            if global_type.mutable {
+                o.write_all(b">")?;
+            }
+
+            writeln!(o, ",")?;
+        }
 
         writeln!(o, "{sp}}}\n")?;
 
@@ -610,20 +645,24 @@ impl Convert<'_> {
 
         writeln!(o, "{sp}impl Instance {{")?;
 
-        for (i, global_value) in context.global_values[context.global_import_names.len()..]
+        for (global_value, global_id) in context.global_values[context.global_import_names.len()..]
             .iter()
-            .enumerate()
+            .zip(global_indices)
+            .take(const_global_count)
         {
             if let crate::context::GlobalValue::Initialized(value_id) = global_value {
-                if let crate::ast::Expr::Literal(literal) =
-                    context.global_initializers.get(*value_id)
-                {
-                    writeln!(
-                        o,
-                        "{sp}{sp}const {:#}: {} = {literal};",
-                        crate::ast::GlobalId(i as u32),
-                        literal.type_of()
-                    )?;
+                match context.global_initializers.get(*value_id) {
+                    crate::ast::Expr::Literal(literal)
+                        if !context.types.global_at(global_id.0).mutable =>
+                    {
+                        // Constants are only generated for immutable, defined globals.
+                        writeln!(
+                            o,
+                            "{sp}{sp}const {global_id:#}: {} = {literal};",
+                            literal.type_of()
+                        )?
+                    }
+                    _ => (),
                 }
             }
         }

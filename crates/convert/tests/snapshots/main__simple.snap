@@ -14,6 +14,7 @@ $vis mod $module {
     use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 
     pub struct Allocated {
+        _g1: embedder::rt::global::Global<i32>,
     }
 
     pub struct Instance {
