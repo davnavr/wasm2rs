@@ -5,7 +5,7 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(clippy::std_instead_of_core)]
 
 #[cfg(feature = "std")]

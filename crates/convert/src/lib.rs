@@ -5,7 +5,7 @@
 //! [Rust source code]: https://doc.rust-lang.org/reference/items.html
 
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(unreachable_pub)]
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]

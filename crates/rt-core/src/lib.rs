@@ -8,7 +8,7 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(clippy::exhaustive_enums)]
 #![deny(clippy::exhaustive_structs)]
