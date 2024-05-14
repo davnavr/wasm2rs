@@ -31,7 +31,7 @@ impl Indentation {
     /// Indentation with a signle tab (`\t`).
     pub const TAB: Self = Self(IndentationKind::Tab);
 
-    pub(crate) fn to_str(&self) -> &'static str {
+    pub(crate) fn to_str(self) -> &'static str {
         match self.0 {
             IndentationKind::Omitted => "",
             IndentationKind::Tab => "\t",

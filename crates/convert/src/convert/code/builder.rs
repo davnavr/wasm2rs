@@ -110,9 +110,10 @@ impl Builder {
         &mut self,
         operand: impl Into<crate::ast::Expr>,
     ) -> crate::Result<()> {
-        Ok(self
+        self
             .wasm_operand_stack
-            .push(self.ast_arena.allocate(operand)?))
+            .push(self.ast_arena.allocate(operand)?);
+        Ok(())
     }
 
     pub(super) fn pop_wasm_operand(&mut self) -> crate::ast::ExprId {

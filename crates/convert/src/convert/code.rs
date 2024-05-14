@@ -104,11 +104,11 @@ pub(in crate::convert) struct Attributes {
     pub(in crate::convert) unwind_kind: crate::context::UnwindKind,
 }
 
-fn convert_impl<'wasm, 'types>(
+fn convert_impl(
     allocations: &crate::Allocations,
     options: &crate::Convert<'_>,
-    types: &'types wasmparser::types::Types,
-    body: wasmparser::FunctionBody<'wasm>,
+    types: &wasmparser::types::Types,
+    body: wasmparser::FunctionBody<'_>,
     mut validator: FuncValidator,
 ) -> crate::Result<(Attributes, Definition)> {
     use anyhow::Context;
@@ -662,11 +662,11 @@ impl<'wasm> Code<'wasm> {
     ///
     /// [WebAssembly function body]: https://webassembly.github.io/spec/core/syntax/modules.html#syntax-func
     /// [`Statement`]: crate::ast::Statement
-    pub(in crate::convert) fn convert<'types>(
+    pub(in crate::convert) fn convert(
         self,
         allocations: &crate::Allocations,
         options: &crate::Convert<'_>,
-        types: &'types wasmparser::types::Types,
+        types: &wasmparser::types::Types,
     ) -> crate::Result<(Attributes, Definition)> {
         use anyhow::Context;
 

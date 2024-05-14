@@ -76,7 +76,7 @@ struct Module<'a> {
     types: wasmparser::types::Types,
 }
 
-fn validate_payloads<'a>(wasm: &'a [u8]) -> crate::Result<Module<'a>> {
+fn validate_payloads(wasm: &[u8]) -> crate::Result<Module<'_>> {
     /// The set of WebAssembly features that are supported by default.
     const SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
         mutable_global: true,
@@ -346,12 +346,12 @@ fn parse_sections<'wasm>(
             match export.kind {
                 ExternalKind::Func => {
                     let func_idx = crate::ast::FuncId(export.index);
-                    context.function_export_names.insert(func_idx, &export.name);
+                    context.function_export_names.insert(func_idx, export.name);
                 }
                 ExternalKind::Global => {
                     let global_idx = crate::ast::GlobalId(export.index);
                     context.global_exports.push(global_idx);
-                    context.global_export_names.insert(global_idx, &export.name);
+                    context.global_export_names.insert(global_idx, export.name);
                 }
                 bad => anyhow::bail!("TODO: Unsupported export {bad:?} @ {export_offset:#X}"),
             }
@@ -379,7 +379,7 @@ impl std::ops::Deref for AllocationsRef<'_> {
     fn deref(&self) -> &Allocations {
         match self {
             Self::Owned(owned) => owned,
-            Self::Borrowed(borrowed) => *borrowed,
+            Self::Borrowed(borrowed) => borrowed,
         }
     }
 }
@@ -402,7 +402,7 @@ impl Convert<'_> {
             move |call_kind: &mut crate::context::CallKind,
                   unwind_kind: &mut crate::context::UnwindKind,
                   code: code::Code<'wasm>| {
-                let (attr, definition) = code.convert(allocations, &self, types)?;
+                let (attr, definition) = code.convert(allocations, self, types)?;
                 *call_kind = attr.call_kind;
                 *unwind_kind = attr.unwind_kind;
                 Ok(definition)
@@ -447,7 +447,7 @@ impl Convert<'_> {
             sections,
             function_bodies,
             types,
-        } = validate_payloads(&wasm).context("validation failed")?;
+        } = validate_payloads(wasm).context("validation failed")?;
 
         // TODO: Helper struct to return objects even if an `Err` is returned.
         let allocations = match self.allocations {
@@ -541,7 +541,7 @@ impl Convert<'_> {
             }
         }
 
-        let printer_options = crate::ast::Print::new(self.indentation, &context);
+        let printer_options = crate::ast::Print::new(self.indentation, context);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
             use crate::context::CallKind;
 
