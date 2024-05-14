@@ -30,6 +30,7 @@ impl core::fmt::Display for TrapOccurred {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for TrapOccurred {}
 
 impl crate::trace::Trace for TrapOccurred {

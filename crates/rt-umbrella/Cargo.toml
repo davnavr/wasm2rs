@@ -1,0 +1,60 @@
+[package]
+name = "wasm2rs-rt"
+description = "Runtime support crate for wasm2rs"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[features]
+default = [
+    "std",
+    "memory",
+    "simd-intrinsics",
+    "feature-reference-types",
+    "feature-simd128"
+]
+std = [
+    "alloc",
+    "wasm2rs-rt-core/std",
+    "rt-math/std",
+    "rt-simd/std",
+    "rt-memory/std"
+]
+alloc = ["rt-memory/alloc"]
+func-ref = ["dep:rt-func-ref"]
+memory = ["dep:rt-memory"]
+simd-intrinsics = ["rt-simd/simd-intrinsics"]
+stack-overflow-checks = ["rt-stack/enabled"]
+feature-reference-types = ["func-ref"]
+feature-simd128 = ["dep:rt-simd"]
+
+[dependencies]
+wasm2rs-rt-core = { workspace = true, default-features = false }
+
+[dependencies.rt-stack]
+package = "wasm2rs-rt-stack"
+path = "../rt-stack"
+default-features = false
+
+[dependencies.rt-func-ref]
+package = "wasm2rs-rt-func-ref"
+path = "../rt-func-ref"
+default-features = false
+optional = true
+
+[dependencies.rt-math]
+package = "wasm2rs-rt-math"
+path = "../rt-math"
+default-features = false
+
+[dependencies.rt-memory]
+package = "wasm2rs-rt-memory"
+path = "../rt-memory"
+default-features = false
+optional = true
+
+[dependencies.rt-simd]
+package = "wasm2rs-rt-simd"
+path = "../rt-simd"
+default-features = false
+optional = true

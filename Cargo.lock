@@ -264,6 +264,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm2rs-rt"
+version = "0.1.0"
+dependencies = [
+ "wasm2rs-rt-core",
+ "wasm2rs-rt-func-ref",
+ "wasm2rs-rt-math",
+ "wasm2rs-rt-memory",
+ "wasm2rs-rt-simd",
+ "wasm2rs-rt-stack",
+]
+
+[[package]]
 name = "wasm2rs-rt-core"
 version = "0.1.0"
 dependencies = [
