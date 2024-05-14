@@ -135,24 +135,15 @@ impl crate::ast::ExprListId {
     }
 }
 
-fn print_call(
+fn print_call_common<F>(
     out: &mut crate::buffer::Writer,
     callee: crate::ast::FuncId,
-    arguments: crate::ast::ExprListId,
-    arena: &crate::ast::Arena,
     context: &crate::context::Context,
-) {
+    arguments: F,
+) where
+    F: FnOnce(&mut crate::buffer::Writer),
+{
     use crate::context::CallKind;
-
-    let wasm_signature = context.function_signature(callee);
-
-    debug_assert_eq!(
-        arguments.len(),
-        wasm_signature.params().len() as u32,
-        "cannot call {callee} with {} arguments, expected {:?}",
-        arguments.len(),
-        wasm_signature.params()
-    );
 
     match context.function_attributes.call_kind(callee) {
         CallKind::Function => out.write_str("Self::"),
@@ -160,16 +151,26 @@ fn print_call(
     }
 
     write!(out, "{}(", context.function_name(callee));
-
-    for (i, arg) in arena.get_list(arguments).iter().enumerate() {
-        if i > 0 {
-            out.write_str(", ");
-        }
-
-        arg.print(out, arena, false, context);
-    }
-
+    arguments(out);
     out.write_str(")");
+}
+
+fn print_call_expr(
+    out: &mut crate::buffer::Writer,
+    callee: crate::ast::FuncId,
+    arguments: crate::ast::ExprListId,
+    arena: &crate::ast::Arena,
+    context: &crate::context::Context,
+) {
+    print_call_common(out, callee, context, |out| {
+        for (i, arg) in arena.get_list(arguments).iter().enumerate() {
+            if i > 0 {
+                out.write_str(", ");
+            }
+
+            arg.print(out, arena, false, context);
+        }
+    });
 
     if context.function_attributes.unwind_kind(callee).can_unwind() {
         out.write_str("?");
@@ -510,7 +511,7 @@ impl crate::ast::Expr {
             Self::Temporary(temp) => write!(out, "{temp}"),
             Self::LoopInput(input) => write!(out, "{input}"),
             Self::Call { callee, arguments } => {
-                print_call(out, *callee, *arguments, arena, context)
+                print_call_expr(out, *callee, *arguments, arena, context)
             }
         }
     }
@@ -576,7 +577,11 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
         }
     }
 
-    fn write_indentation(&self, out: &mut crate::buffer::Writer<'_>, indent_level: u32) {
+    pub(crate) fn context(&self) -> &'ctx crate::context::Context<'wasm> {
+        self.context
+    }
+
+    fn write_indentation(&self, out: &mut crate::buffer::Writer, indent_level: u32) {
         for _ in 0..indent_level {
             out.write_str(self.indentation.to_str());
         }
@@ -586,7 +591,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
         &self,
         function: crate::ast::FuncId,
         mut indent_level: u32,
-        out: &mut crate::buffer::Writer<'_>,
+        out: &mut crate::buffer::Writer,
         statements: &[crate::ast::Statement],
         arena: &crate::ast::Arena,
     ) {
@@ -636,7 +641,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     }
 
                     out.write_str(" = ");
-                    print_call(out, callee, arguments, arena, self.context);
+                    print_call_expr(out, callee, arguments, arena, self.context);
                     out.write_str(";");
                 }
                 Statement::Branch {
@@ -933,5 +938,25 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
 
             out.write_str("\n");
         }
+    }
+
+    pub(crate) fn print_stub(
+        &self,
+        indent_level: u32,
+        out: &mut crate::buffer::Writer,
+        function: crate::ast::FuncId,
+        arguments: u32,
+    ) {
+        self.write_indentation(out, indent_level);
+        print_call_common(out, function, self.context, |out| {
+            for i in 0u32..arguments {
+                if i > 0 {
+                    out.write_str(", ");
+                }
+
+                write!(out, "{}", crate::ast::LocalId(i));
+            }
+        });
+        out.write_str("\n");
     }
 }

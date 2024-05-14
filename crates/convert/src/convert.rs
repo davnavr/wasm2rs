@@ -246,7 +246,6 @@ fn parse_sections<'wasm>(
         global_import_names: Default::default(),
         function_export_names: Default::default(),
         global_export_names: Default::default(),
-        function_exports: Default::default(),
         global_exports: Default::default(),
         global_values: Default::default(),
         global_initializers: allocations.take_ast_arena(),
@@ -336,9 +335,9 @@ fn parse_sections<'wasm>(
     // Validation already ensures there are no duplicated export names.
     if let Some(export_section) = sections.exports {
         // This assumes most exports are functions.
-        let reserve_exported_functions = (export_section.count() as usize / 2).min(context.types.core_function_count() as usize);
-        context.function_exports.reserve(reserve_exported_functions);
-        context.function_export_names.reserve(reserve_exported_functions);
+        context.function_export_names.reserve(
+            (export_section.count() as usize / 2).min(context.types.core_function_count() as usize),
+        );
 
         for result in export_section.into_iter_with_offsets() {
             use wasmparser::ExternalKind;
@@ -347,22 +346,21 @@ fn parse_sections<'wasm>(
             match export.kind {
                 ExternalKind::Func => {
                     let func_idx = crate::ast::FuncId(export.index);
-                    context
-                        .function_exports.push(func_idx);
-                        context.function_export_names.insert(func_idx, &export.name);
+                    context.function_export_names.insert(func_idx, &export.name);
                 }
                 ExternalKind::Global => {
                     let global_idx = crate::ast::GlobalId(export.index);
-                    context
-                        .global_exports.push(global_idx);
-                        context.global_export_names.insert(global_idx, &export.name);
+                    context.global_exports.push(global_idx);
+                    context.global_export_names.insert(global_idx, &export.name);
                 }
                 bad => anyhow::bail!("TODO: Unsupported export {bad:?} @ {export_offset:#X}"),
             }
         }
 
-        debug_assert_eq!(context.function_exports.len(), context.function_export_names.len());
-        debug_assert_eq!(context.global_exports.len(), context.global_export_names.len());
+        debug_assert_eq!(
+            context.global_exports.len(),
+            context.global_export_names.len()
+        );
     }
 
     debug_assert_eq!(global_values.len(), context.types.global_count() as usize);
@@ -487,10 +485,12 @@ impl Convert<'_> {
         function_definitions: Vec<code::Definition>,
         output: &mut dyn std::io::Write,
     ) -> crate::Result<()> {
+        use crate::buffer::Writer;
+
         fn print_result_type(
-            out: &mut crate::buffer::Writer,
+            out: &mut Writer,
             types: &[wasmparser::ValType],
-            mut f: impl FnMut(&mut crate::buffer::Writer, u32),
+            mut f: impl FnMut(&mut Writer, u32),
         ) {
             for (ty, i) in types.iter().copied().zip(0u32..=u32::MAX) {
                 if i > 0 {
@@ -502,14 +502,22 @@ impl Convert<'_> {
             }
         }
 
+        fn print_param_types(out: &mut Writer, signature: &wasmparser::FuncType) {
+            print_result_type(out, signature.params(), |out, i| {
+                write!(out, "{}: ", crate::ast::LocalId(i))
+            })
+        }
+
         fn print_return_types(
             out: &mut crate::buffer::Writer,
-            types: &[wasmparser::ValType],
+            signature: &wasmparser::FuncType,
             unwind_kind: crate::context::UnwindKind,
         ) {
             if unwind_kind.can_unwind() {
                 out.write_str("::core::result::Result<");
             }
+
+            let types = signature.results();
 
             // if !matches(unwind_kind, crate::context::UnwindKind::Always)
             if types.len() != 1 {
@@ -537,8 +545,10 @@ impl Convert<'_> {
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
             use crate::context::CallKind;
 
+            let context = printer_options.context();
+
             // TODO: Use some average # of Rust bytes per # of Wasm bytes
-            let mut out = crate::buffer::Writer::new(allocations.byte_buffer_pool());
+            let mut out = Writer::new(allocations.byte_buffer_pool());
 
             let func_id = crate::ast::FuncId((context.function_import_count() + index) as u32);
             let signature = context.function_signature(func_id);
@@ -553,22 +563,22 @@ impl Convert<'_> {
                 // CallKind::WithEmbedder => out.write_str("_embedder: &embedder::State"),
             }
 
-            if !matches!(call_kind, CallKind::Function) && !signature.params().is_empty() {
+            let has_parameters = signature.params().is_empty();
+            if !matches!(call_kind, CallKind::Function) && !has_parameters {
                 out.write_str(", ");
             }
 
-            print_result_type(&mut out, signature.params(), |out, i| {
-                write!(out, "{}: ", crate::ast::LocalId(i))
-            });
+            print_param_types(&mut out, signature);
 
             out.write_str(")");
 
             // Omit return type for functions that return nothing and can't unwind
             let unwind_kind = context.function_attributes.unwind_kind(func_id);
-            if !signature.results().is_empty() || unwind_kind.can_unwind() {
+            let has_return_types = !signature.results().is_empty() || unwind_kind.can_unwind();
+            if has_return_types {
                 out.write_str(" -> ");
 
-                print_return_types(&mut out, signature.results(), unwind_kind)
+                print_return_types(&mut out, signature, unwind_kind)
             }
 
             out.write_str(" {\n");
@@ -582,6 +592,43 @@ impl Convert<'_> {
             );
 
             out.write_str("}\n");
+
+            // Check if an additional Rust function must be generated to access the function
+            // export. A stub function is used to hides implementation details, such as the
+            // possible omission of the `&self` parameter in the original function.
+            match context.function_export_names.get(&func_id) {
+                Some(export) if matches!(function_name, crate::context::FunctionName::Id(_)) => {
+                    write!(
+                        out,
+                        "\npub fn {}(&self",
+                        crate::ident::SafeIdent::from(*export)
+                    );
+
+                    if !has_parameters {
+                        out.write_str(", ");
+                    }
+
+                    print_param_types(&mut out, signature);
+                    out.write_str(")");
+                    if has_return_types {
+                        out.write_str(" -> ");
+
+                        print_return_types(&mut out, signature, unwind_kind)
+                    }
+
+                    out.write_str(" {\n");
+
+                    printer_options.print_stub(
+                        1,
+                        &mut out,
+                        func_id,
+                        signature.params().len() as u32,
+                    );
+
+                    out.write_str("}\n");
+                }
+                _ => (),
+            }
 
             definition.finish(allocations);
             out.finish()

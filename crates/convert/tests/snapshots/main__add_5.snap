@@ -26,6 +26,10 @@ fn _f0(_l0: i32) -> i32 {
     i32::wrapping_add(_l0, 5i32)
 }
 
+pub fn r#add_five(&self, _l0: i32) -> i32 {
+    Self::_f0(_l0)
+}
+
     } // impl Instance
 } // mod $module
 

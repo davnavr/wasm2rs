@@ -65,7 +65,11 @@ impl FunctionAttributes {
         assert_eq!(self.call_kinds.len(), self.unwind_kinds.len());
 
         // Currently, `UnwindKind::Always` results in the same generated code as `UnwindKind::Maybe`.
-        matches!(self.call_kinds[idx], CallKind::Method) && matches!(self.unwind_kinds[idx], UnwindKind::Maybe | UnwindKind::Always)
+        matches!(self.call_kinds[idx], CallKind::Method)
+            && matches!(
+                self.unwind_kinds[idx],
+                UnwindKind::Maybe | UnwindKind::Always
+            )
     }
 }
 
@@ -131,9 +135,9 @@ pub(crate) struct Context<'wasm> {
     pub(crate) function_export_names: std::collections::HashMap<crate::ast::FuncId, &'wasm str>,
     /// Lookup table for each exported WebAssembly global.
     pub(crate) global_export_names: std::collections::HashMap<crate::ast::GlobalId, &'wasm str>,
-    /// Specifies which functions are exported.
-    pub(crate) function_exports: Vec<crate::ast::FuncId>,
     /// Specifies which globals are exported.
+    ///
+    /// These are in the order they were specified in the WebAssembly export section.
     pub(crate) global_exports: Vec<crate::ast::GlobalId>,
     pub(crate) function_attributes: FunctionAttributes,
     /// Specifies the initial value of each WebAssembly global.
@@ -158,16 +162,12 @@ impl<'wasm> Context<'wasm> {
     /// Gets the name of the function to use when it is being invoked.
     pub(crate) fn function_name(&self, f: FuncId) -> FunctionName<'wasm> {
         match self.function_export_names.get(&f).copied() {
-            Some(name) if self.function_attributes.can_use_export_name(f) => FunctionName::Export(name),
+            Some(name) if self.function_attributes.can_use_export_name(f) => {
+                FunctionName::Export(name)
+            }
             Some(_) | None => FunctionName::Id(f),
         }
     }
-
-    // /// Returns an iterator over the exported functions that require an additional stub function.
-    // ///
-    // /// A stub function is used to hides implementation details, such as the possible omission of
-    // /// the `&self` parameter in the original function.
-    // pub(crate) fn function_export_stubs(&self) -> impl Iterator<> {}
 
     pub(crate) fn finish(self, allocations: &crate::Allocations) {
         allocations.return_ast_arena(self.global_initializers);
