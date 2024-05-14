@@ -110,8 +110,7 @@ impl Builder {
         &mut self,
         operand: impl Into<crate::ast::Expr>,
     ) -> crate::Result<()> {
-        self
-            .wasm_operand_stack
+        self.wasm_operand_stack
             .push(self.ast_arena.allocate(operand)?);
         Ok(())
     }
