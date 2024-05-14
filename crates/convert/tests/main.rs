@@ -19,11 +19,12 @@ macro_rules! snapshots {
 }
 
 snapshots! {
-    add_5(256) = r#"(module
+    add_5(64) = r#"(module
     (func (export "add_five") (param i32) (result i32)
         local.get 0
         i32.const 5
         i32.add))
 "#;
-    simple(1024) = include_str!("simple.wat");
+    simple(512) = include_str!("simple.wat");
+    memory(256) = include_str!("memory.wat");
 }
