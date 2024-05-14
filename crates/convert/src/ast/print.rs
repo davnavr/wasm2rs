@@ -1021,6 +1021,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     print_memory_offset(out, offset, memory64);
                     out.write_str(", ");
                     address.print(out, arena, false, self.context);
+                    out.write_str(", ");
 
                     match kind {
                         StoreKind::F32 => out.write_str("f32::to_bits("),
