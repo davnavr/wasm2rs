@@ -252,29 +252,31 @@ pub(crate) enum SignExtensionMode {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum I32StorageSize {
+pub(crate) enum I32StorageSize {
     I8,
     I16,
-    I32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum I64StorageSize {
+pub(crate) enum I64StorageSize {
     I8,
     I16,
     I32,
-    I64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum LoadKind {
-    /// Corresponds to the `i32.load` and **i32.load*N*_*sx*** instructions.
-    I32 {
+    /// Corresponds to the `i32.load` instruction.
+    I32,
+    /// Represents instructions of the form **i32.load*N*_*sx***.
+    AsI32 {
         storage_size: I32StorageSize,
         sign_extension: SignExtensionMode,
     },
-    /// Corresponds to the `i64.load` and **i64.load*N*_*sx*** instructions.
-    I64 {
+    /// Corresponds to the `i64.load` instruction.
+    I64,
+    /// Represents instructions of the form **i64.load*N*_*sx***.
+    AsI64 {
         storage_size: I64StorageSize,
         sign_extension: SignExtensionMode,
     },
@@ -286,14 +288,16 @@ pub(crate) enum LoadKind {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum StoreKind {
-    /// Corresponds to the `i32.store` and **i32.store*N*** instructions.
-    I32 {
-        storage_size: I32StorageSize,
-    },
-    /// Corresponds to the `i64.store` and **i64.store*N*** instructions.
-    I64 {
-        storage_size: I64StorageSize,
-    },
+    /// Corresponds to the **i*NN*.store8** instructions.
+    I8,
+    /// Corresponds to the **i*NN*.store16** instructions.
+    I16,
+    /// Corresponds to the `i32.store` instruction.
+    I32,
+    /// Corresponds to the `i64.store32` instruction.
+    AsI32,
+    /// Corresponds to the `i64.store` instruction.
+    I64,
     /// Corresponds to the `f32.store` instructions.
     F32,
     /// Corresponds to the `f64.store` instructions.

@@ -962,7 +962,7 @@ pub(in crate::translation) fn write_definition(
                 let _ = write!(out, ", {new_value})");
 
                 out.write_str(";\n");
-            } */
+            }
             Operator::I32Load { memarg } => {
                 let address = PoppedValue::pop(validator, 0);
                 let _ = writeln!(
@@ -1210,7 +1210,7 @@ pub(in crate::translation) fn write_definition(
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
-            }
+            } */
             Operator::MemorySize { mem, mem_byte: _ } => {
                 let _ = writeln!(
                     out,

@@ -140,6 +140,7 @@ fn convert_impl<'wasm, 'types>(
         .context("could not obtain operators")?;
 
     while !operators.eof() {
+        use crate::ast::{I32StorageSize, I64StorageSize, LoadKind, SignExtensionMode, StoreKind};
         use wasmparser::Operator;
 
         let (op, op_offset) = operators.read_with_offset()?;
@@ -184,6 +185,36 @@ fn convert_impl<'wasm, 'types>(
             ($name:ident) => {{
                 builder.can_trap();
                 bin_op!($name);
+            }};
+        }
+
+        macro_rules! memory_load {
+            ($memarg:ident => $kind:expr) => {{
+                builder.can_trap();
+                builder.needs_self();
+                let address = builder.pop_wasm_operand();
+                builder.push_wasm_operand(crate::ast::Expr::MemoryLoad {
+                    memory: crate::ast::MemoryId($memarg.memory),
+                    kind: $kind,
+                    address,
+                    offset: $memarg.offset,
+                })?;
+            }};
+        }
+
+        macro_rules! memory_store {
+            ($memarg:ident => $kind:ident) => {{
+                builder.can_trap();
+                builder.needs_self();
+                let value = builder.pop_wasm_operand();
+                let address = builder.pop_wasm_operand();
+                builder.push_wasm_operand(crate::ast::Expr::MemoryStore {
+                    memory: crate::ast::MemoryId($memarg.memory),
+                    kind: StoreKind::$kind,
+                    address,
+                    value,
+                    offset: $memarg.offset,
+                })?;
             }};
         }
 
@@ -416,6 +447,82 @@ fn convert_impl<'wasm, 'types>(
                     value,
                 })?;
             }
+            Operator::I32Load { memarg } => memory_load!(memarg => LoadKind::I32),
+            Operator::I64Load { memarg } => memory_load!(memarg => LoadKind::I64),
+            Operator::F32Load { memarg } => memory_load!(memarg => LoadKind::F32),
+            Operator::F64Load { memarg } => memory_load!(memarg => LoadKind::F64),
+            Operator::I32Load8S { memarg } => {
+                memory_load!(memarg => LoadKind::AsI32 {
+                    storage_size: I32StorageSize::I8,
+                    sign_extension: SignExtensionMode::Signed,
+                })
+            }
+            Operator::I32Load8U { memarg } => {
+                memory_load!(memarg => LoadKind::AsI32 {
+                    storage_size: I32StorageSize::I8,
+                    sign_extension: SignExtensionMode::Unsigned,
+                })
+            }
+            Operator::I32Load16S { memarg } => {
+                memory_load!(memarg => LoadKind::AsI32 {
+                    storage_size: I32StorageSize::I16,
+                    sign_extension: SignExtensionMode::Signed,
+                })
+            }
+            Operator::I32Load16U { memarg } => {
+                memory_load!(memarg => LoadKind::AsI32 {
+                    storage_size: I32StorageSize::I16,
+                    sign_extension: SignExtensionMode::Unsigned,
+                })
+            }
+            Operator::I64Load8S { memarg } => {
+                memory_load!(memarg => LoadKind::AsI64 {
+                    storage_size: I64StorageSize::I8,
+                    sign_extension: SignExtensionMode::Signed,
+                })
+            }
+            Operator::I64Load8U { memarg } => {
+                memory_load!(memarg => LoadKind::AsI64 {
+                    storage_size: I64StorageSize::I8,
+                    sign_extension: SignExtensionMode::Unsigned,
+                })
+            }
+            Operator::I64Load16S { memarg } => {
+                memory_load!(memarg => LoadKind::AsI64 {
+                    storage_size: I64StorageSize::I16,
+                    sign_extension: SignExtensionMode::Signed,
+                })
+            }
+            Operator::I64Load16U { memarg } => {
+                memory_load!(memarg => LoadKind::AsI64 {
+                    storage_size: I64StorageSize::I16,
+                    sign_extension: SignExtensionMode::Unsigned,
+                })
+            }
+            Operator::I64Load32S { memarg } => {
+                memory_load!(memarg => LoadKind::AsI64 {
+                    storage_size: I64StorageSize::I32,
+                    sign_extension: SignExtensionMode::Signed,
+                })
+            }
+            Operator::I64Load32U { memarg } => {
+                memory_load!(memarg => LoadKind::AsI64 {
+                    storage_size: I64StorageSize::I32,
+                    sign_extension: SignExtensionMode::Unsigned,
+                })
+            }
+            Operator::I32Store { memarg } => memory_store!(memarg => I32),
+            Operator::I64Store { memarg } => memory_store!(memarg => I64),
+            Operator::F32Store { memarg } => memory_store!(memarg => F32),
+            Operator::F64Store { memarg } => memory_store!(memarg => F64),
+            Operator::I32Store8 { memarg } | Operator::I64Store8 { memarg } => {
+                memory_store!(memarg => I8)
+            }
+            Operator::I32Store16 { memarg } | Operator::I64Store16 { memarg } => {
+                memory_store!(memarg => I16)
+            }
+            Operator::I64Store32 { memarg } => memory_store!(memarg => AsI32),
+            // Misc. memory instructions
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
             }
@@ -570,6 +677,6 @@ impl<'wasm> Code<'wasm> {
         let index = validator.index();
 
         convert_impl(allocations, options, types, self.body, validator)
-            .with_context(|| format!("could not format function #{index}"))
+            .with_context(|| format!("could not convert function #{index}"))
     }
 }
