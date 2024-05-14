@@ -12,7 +12,7 @@ members = [
 # Temporary
 exclude = [
     "crates/compiler",
-    "crates/rt",
+    "crates/rt-old",
     "crates/spectest",
 ]
 
