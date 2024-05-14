@@ -360,29 +360,6 @@ pub(crate) enum Expr {
         /// This value must not exceed `u32::MAX` for 32-bit linear memories.
         offset: u64,
     },
-    /// Corresponds the [**store** instructions] that store a value into linear memory.
-    ///
-    /// Note that alignment information from the original WebAssembly is discarded.
-    ///
-    /// [**store** instructions]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
-    MemoryStore {
-        /// The linear memory that is being accessed.
-        memory: MemoryId,
-        /// Specifies what is being stored into linear memory.
-        kind: StoreKind,
-        /// The dynamic address operand.
-        ///
-        /// This is evaluated *before* the [`value`](Expr::MemoryStore::value) to store.
-        address: ExprId,
-        /// The value to store.
-        ///
-        /// This is evaluated *after* the [`address`](Expr::MemoryStore::address).
-        value: ExprId,
-        /// An additional byte offset that is added to the `address`.
-        ///
-        /// This value must not exceed `u32::MAX` for 32-bit linear memories.
-        offset: u64,
-    },
     Call {
         callee: FuncId,
         arguments: ExprListId,
@@ -469,6 +446,29 @@ pub(crate) enum Statement {
         id: BlockId,
         has_results: bool,
         kind: BlockKind<(), ()>,
+    },
+    /// Corresponds the [**store** instructions] that store a value into linear memory.
+    ///
+    /// Note that alignment information from the original WebAssembly is discarded.
+    ///
+    /// [**store** instructions]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+    MemoryStore {
+        /// The linear memory that is being accessed.
+        memory: MemoryId,
+        /// Specifies what is being stored into linear memory.
+        kind: StoreKind,
+        /// The dynamic address operand.
+        ///
+        /// This is evaluated *before* the [`value`](Expr::MemoryStore::value) to store.
+        address: ExprId,
+        /// The value to store.
+        ///
+        /// This is evaluated *after* the [`address`](Expr::MemoryStore::address).
+        value: ExprId,
+        /// An additional byte offset that is added to the `address`.
+        ///
+        /// This value must not exceed `u32::MAX` for 32-bit linear memories.
+        offset: u64,
     },
 }
 

@@ -184,7 +184,7 @@ fn print_memory_offset(out: &mut crate::buffer::Writer, offset: u64, memory64: b
     // Ensure the Rust compiler won't complain about out-of-range literals.
     if !memory64 && offset > (i32::MAX as u64) {
         out.write_str("u32 as i32");
-    } else if memory64 && offset > (i32::MAX as u64) {
+    } else if memory64 && offset > (i64::MAX as u64) {
         out.write_str("u64 as i64");
     }
 }
@@ -566,9 +566,11 @@ impl crate::ast::Expr {
                     LoadKind::I64 | LoadKind::F64 => "i64",
                 });
 
-                out.write_str("_load(&self.");
-                write!(out, "{memory}, ");
-                print_memory_offset(out, *offset, context.types.memory_at(memory.0).memory64);
+                let memory64 = context.types.memory_at(memory.0).memory64;
+                write!(out, "_load::<{}, ", memory.0);
+                out.write_str(if memory64 { "u64" } else { "u32" });
+                write!(out, ", _, _>(&self.{memory}, ");
+                print_memory_offset(out, *offset, memory64);
                 out.write_str(", ");
                 address.print(out, arena, false, context);
 
@@ -579,18 +581,6 @@ impl crate::ast::Expr {
                 if matches!(kind, LoadKind::F32 | LoadKind::F64) {
                     out.write_str(")");
                 }
-            }
-            Self::MemoryStore {
-                memory,
-                kind,
-                address,
-                value,
-                offset,
-            } => {
-                // TODO: Check if memory is imported.
-
-                out.write_str(paths::RT_MEM);
-                out.write_str("::");
             }
             Self::Call { callee, arguments } => {
                 print_call_expr(out, *callee, *arguments, arena, context)
@@ -1004,6 +994,59 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     }
 
                     write!(out, " // {id}");
+                }
+                Statement::MemoryStore {
+                    memory,
+                    kind,
+                    address,
+                    value,
+                    offset,
+                } => {
+                    use crate::ast::StoreKind;
+
+                    // TODO: Check if memory is imported.
+
+                    out.write_str(paths::RT_MEM);
+                    out.write_str("::");
+                    out.write_str(match kind {
+                        StoreKind::I8 => "i8",
+                        StoreKind::I16 => "i16",
+                        StoreKind::I32 | StoreKind::AsI32 | StoreKind::F32 => "i32",
+                        StoreKind::I64 | StoreKind::F64 => "i64",
+                    });
+                    write!(out, "_store::<{}, ", memory.0);
+                    let memory64 = self.context.types.memory_at(memory.0).memory64;
+                    out.write_str(if memory64 { "u64" } else { "u32" });
+                    write!(out, ", _, _>(&self.{memory}, ");
+                    print_memory_offset(out, offset, memory64);
+                    out.write_str(", ");
+                    address.print(out, arena, false, self.context);
+
+                    match kind {
+                        StoreKind::F32 => out.write_str("f32::to_bits("),
+                        StoreKind::F64 => out.write_str("f64::to_bits("),
+                        _ => (),
+                    }
+
+                    value.print(
+                        out,
+                        arena,
+                        matches!(kind, StoreKind::I8 | StoreKind::I16 | StoreKind::AsI32),
+                        self.context,
+                    );
+
+                    match kind {
+                        StoreKind::I8 => out.write_str(" as i8"),
+                        StoreKind::I16 => out.write_str(" as i16"),
+                        StoreKind::AsI32 => out.write_str(" as i32"),
+                        StoreKind::F32 => out.write_str(") as i32"),
+                        StoreKind::F64 => out.write_str(") as i64"),
+                        _ => (),
+                    }
+
+                    out.write_str(", None"); // TODO: WASM frame info for memory stores.
+
+                    out.write_str(")?;");
                 }
                 Statement::Unreachable { function, offset } => {
                     write!(

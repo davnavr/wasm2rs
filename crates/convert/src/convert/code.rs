@@ -208,7 +208,7 @@ fn convert_impl<'wasm, 'types>(
                 builder.needs_self();
                 let value = builder.pop_wasm_operand();
                 let address = builder.pop_wasm_operand();
-                builder.push_wasm_operand(crate::ast::Expr::MemoryStore {
+                builder.emit_statement(crate::ast::Statement::MemoryStore {
                     memory: crate::ast::MemoryId($memarg.memory),
                     kind: StoreKind::$kind,
                     address,
