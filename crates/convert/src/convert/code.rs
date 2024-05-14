@@ -516,10 +516,10 @@ fn convert_impl<'wasm, 'types>(
             Operator::F32Store { memarg } => memory_store!(memarg => F32),
             Operator::F64Store { memarg } => memory_store!(memarg => F64),
             Operator::I32Store8 { memarg } | Operator::I64Store8 { memarg } => {
-                memory_store!(memarg => I8)
+                memory_store!(memarg => I8);
             }
             Operator::I32Store16 { memarg } | Operator::I64Store16 { memarg } => {
-                memory_store!(memarg => I16)
+                memory_store!(memarg => I16);
             }
             Operator::I64Store32 { memarg } => memory_store!(memarg => AsI32),
             // Misc. memory instructions

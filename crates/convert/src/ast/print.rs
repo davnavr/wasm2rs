@@ -58,6 +58,7 @@ mod paths {
     pub(super) const RT_MATH: &str = "embedder::rt::math";
     pub(super) const RT_TRAP: &str = "embedder::rt::trap";
     pub(super) const RT_TRAP_CODE: &str = "embedder::rt::trap::TrapCode";
+    pub(super) const RT_MEM: &str = "embedder::rt::memory";
 }
 
 const INST: &str = "self.inst";
@@ -174,6 +175,17 @@ fn print_call_expr(
 
     if context.function_attributes.unwind_kind(callee).can_unwind() {
         out.write_str("?");
+    }
+}
+
+fn print_memory_offset(out: &mut crate::buffer::Writer, offset: u64, memory64: bool) {
+    write!(out, "{offset:#X}");
+
+    // Ensure the Rust compiler won't complain about out-of-range literals.
+    if !memory64 && offset > (i32::MAX as u64) {
+        out.write_str("u32 as i32");
+    } else if memory64 && offset > (i32::MAX as u64) {
+        out.write_str("u64 as i64");
     }
 }
 
@@ -510,6 +522,76 @@ impl crate::ast::Expr {
             }
             Self::Temporary(temp) => write!(out, "{temp}"),
             Self::LoopInput(input) => write!(out, "{input}"),
+            Self::MemoryLoad {
+                memory,
+                kind,
+                address,
+                offset,
+            } => {
+                use crate::ast::{I32StorageSize, I64StorageSize, LoadKind};
+
+                // TODO: Check if memory is imported.
+
+                match kind {
+                    LoadKind::F32 => out.write_str("f32::from_bits("),
+                    LoadKind::F64 => out.write_str("f64::from_bits("),
+                    _ => (),
+                }
+
+                out.write_str(paths::RT_MEM);
+                out.write_str("::");
+                out.write_str(match kind {
+                    LoadKind::AsI32 {
+                        storage_size: I32StorageSize::I8,
+                        ..
+                    }
+                    | LoadKind::AsI64 {
+                        storage_size: I64StorageSize::I8,
+                        ..
+                    } => "i8",
+                    LoadKind::AsI32 {
+                        storage_size: I32StorageSize::I16,
+                        ..
+                    }
+                    | LoadKind::AsI64 {
+                        storage_size: I64StorageSize::I16,
+                        ..
+                    } => "i16",
+                    LoadKind::I32
+                    | LoadKind::F32
+                    | LoadKind::AsI64 {
+                        storage_size: I64StorageSize::I32,
+                        ..
+                    } => "i32",
+                    LoadKind::I64 | LoadKind::F64 => "i64",
+                });
+
+                out.write_str("_load(&self.");
+                write!(out, "{memory}, ");
+                print_memory_offset(out, *offset, context.types.memory_at(memory.0).memory64);
+                out.write_str(", ");
+                address.print(out, arena, false, context);
+
+                out.write_str(", None"); // TODO: WASM frame info for memory loads.
+
+                out.write_str(")?");
+
+                if matches!(kind, LoadKind::F32 | LoadKind::F64) {
+                    out.write_str(")");
+                }
+            }
+            Self::MemoryStore {
+                memory,
+                kind,
+                address,
+                value,
+                offset,
+            } => {
+                // TODO: Check if memory is imported.
+
+                out.write_str(paths::RT_MEM);
+                out.write_str("::");
+            }
             Self::Call { callee, arguments } => {
                 print_call_expr(out, *callee, *arguments, arena, context)
             }

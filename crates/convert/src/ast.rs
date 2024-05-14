@@ -26,7 +26,16 @@ impl std::fmt::Display for FuncId {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct MemoryId(pub(crate) u32);
 
-//impl std::fmt::Display for MemoryId
+impl std::fmt::Display for MemoryId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0 == 0 {
+            // Main memory is given a shorter name.
+            f.write_str("_m")
+        } else {
+            write!(f, "_mem{}", self.0)
+        }
+    }
+}
 
 /// Represents a WebAssembly [*globalidx*], an index to a global variable.
 ///
@@ -363,9 +372,7 @@ pub(crate) enum Expr {
         kind: StoreKind,
         /// The dynamic address operand.
         ///
-        /// This is evaluated *before* the [`value`] to store.
-        ///
-        /// [`value`]: Expr::MemoryStore::value
+        /// This is evaluated *before* the [`value`](Expr::MemoryStore::value) to store.
         address: ExprId,
         /// The value to store.
         ///
