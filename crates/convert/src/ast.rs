@@ -20,6 +20,14 @@ impl std::fmt::Display for FuncId {
     }
 }
 
+/// Represents a WebAssembly [*memidx*], an index to a linear memory.
+///
+/// [*memidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct MemoryId(pub(crate) u32);
+
+//impl std::fmt::Display for MemoryId
+
 /// Represents a WebAssembly [*globalidx*], an index to a global variable.
 ///
 /// [*globalidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
@@ -225,6 +233,73 @@ impl std::fmt::Display for LoopInput {
     }
 }
 
+/// The [sign extension mode] to use for [loads] and [stores] from linear memory.
+///
+/// In the WebAssembly specification, this is specified by the **_*sx*** suffix on an instruction.
+///
+/// [sign extension mode]: https://webassembly.github.io/spec/core/syntax/instructions.html#memory-instructions
+/// [loads]: Expr::MemoryLoad
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SignExtensionMode {
+    /// The high bits are filled with the sign bit.
+    ///
+    /// This corresponds to the `_s` suffix on an instruction.
+    Signed,
+    /// The high bits are filled with zero.
+    ///
+    /// This corresponds to the `_u` suffix on an instruction.
+    Unsigned,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum I32StorageSize {
+    I8,
+    I16,
+    I32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum I64StorageSize {
+    I8,
+    I16,
+    I32,
+    I64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum LoadKind {
+    /// Corresponds to the `i32.load` and **i32.load*N*_*sx*** instructions.
+    I32 {
+        storage_size: I32StorageSize,
+        sign_extension: SignExtensionMode,
+    },
+    /// Corresponds to the `i64.load` and **i64.load*N*_*sx*** instructions.
+    I64 {
+        storage_size: I64StorageSize,
+        sign_extension: SignExtensionMode,
+    },
+    /// Corresponds to the `f32.load` instructions.
+    F32,
+    /// Corresponds to the `f64.load` instructions.
+    F64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum StoreKind {
+    /// Corresponds to the `i32.store` and **i32.store*N*** instructions.
+    I32 {
+        storage_size: I32StorageSize,
+    },
+    /// Corresponds to the `i64.store` and **i64.store*N*** instructions.
+    I64 {
+        storage_size: I64StorageSize,
+    },
+    /// Corresponds to the `f32.store` instructions.
+    F32,
+    /// Corresponds to the `f64.store` instructions.
+    F64,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Expr {
     Literal(Literal),
@@ -255,6 +330,48 @@ pub(crate) enum Expr {
     Temporary(TempId),
     /// Gets the value stored in a temporary loop input variable.
     LoopInput(LoopInput),
+    /// Corresponds the [**load** instructions] that read a value from linear memory.
+    ///
+    /// Note that alignment information from the original WebAssembly is discarded.
+    ///
+    /// [**load** instructions]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+    MemoryLoad {
+        /// The linear memory that is being accessed.
+        memory: MemoryId,
+        /// Specifies what is being loaded from linear memory.
+        kind: LoadKind,
+        /// The dynamic address operand.
+        address: ExprId,
+        /// An additional byte offset that is added to the `address`.
+        ///
+        /// This value must not exceed `u32::MAX` for 32-bit linear memories.
+        offset: u64,
+    },
+    /// Corresponds the [**store** instructions] that store a value into linear memory.
+    ///
+    /// Note that alignment information from the original WebAssembly is discarded.
+    ///
+    /// [**store** instructions]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+    MemoryStore {
+        /// The linear memory that is being accessed.
+        memory: MemoryId,
+        /// Specifies what is being stored into linear memory.
+        kind: StoreKind,
+        /// The dynamic address operand.
+        ///
+        /// This is evaluated *before* the [`value`] to store.
+        ///
+        /// [`value`]: Expr::MemoryStore::value
+        address: ExprId,
+        /// The value to store.
+        ///
+        /// This is evaluated *after* the [`address`](Expr::MemoryStore::address).
+        value: ExprId,
+        /// An additional byte offset that is added to the `address`.
+        ///
+        /// This value must not exceed `u32::MAX` for 32-bit linear memories.
+        offset: u64,
+    },
     Call {
         callee: FuncId,
         arguments: ExprListId,
@@ -285,7 +402,7 @@ pub(crate) struct BlockResults {
 // TODO: Consider having the list of statements be of variable width.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Statement {
-    /// An expression that is evaluated, with any results discarded.
+    /// An expression that is evaluated, with the final results are discarded.
     Expr(ExprId),
     /// Defines a local variable. These statements should be placed at the start of the function.
     ///
