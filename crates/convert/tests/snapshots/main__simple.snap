@@ -28,7 +28,7 @@ fn _f0(_l0: i32) -> i32 {
     i32::wrapping_add(_l0, 5i32)
 }
 
-fn _f1(&self, _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
+pub fn r#add_fifteen(&self, _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
     Ok(Self::_f0(Self::_f0(Self::_f0(_l0))))
 }
 

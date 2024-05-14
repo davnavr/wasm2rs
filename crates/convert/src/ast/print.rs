@@ -159,7 +159,7 @@ fn print_call(
         CallKind::Method => out.write_str("self."),
     }
 
-    write!(out, "{callee}(");
+    write!(out, "{}(", context.function_name(callee));
 
     for (i, arg) in arena.get_list(arguments).iter().enumerate() {
         if i > 0 {
@@ -515,6 +515,9 @@ impl crate::ast::Expr {
         }
     }
 
+    /// Emits Rust code evaluating to a `bool` expression.
+    ///
+    /// This is used when translating WebAssembly comparison instructions.
     fn print_bool(
         &self,
         out: &mut crate::buffer::Writer<'_>,

@@ -58,6 +58,15 @@ impl FunctionAttributes {
     pub(crate) fn unwind_kind(&self, f: FuncId) -> UnwindKind {
         self.unwind_kinds[f.0 as usize]
     }
+
+    pub(crate) fn can_use_export_name(&self, f: FuncId) -> bool {
+        let idx = f.0 as usize;
+
+        assert_eq!(self.call_kinds.len(), self.unwind_kinds.len());
+
+        // Currently, `UnwindKind::Always` results in the same generated code as `UnwindKind::Maybe`.
+        matches!(self.call_kinds[idx], CallKind::Method) && matches!(self.unwind_kinds[idx], UnwindKind::Maybe | UnwindKind::Always)
+    }
 }
 
 /// Index into [`Context::imported_modules`] indicating the module that a WebAssembly import
@@ -75,11 +84,40 @@ pub(crate) enum GlobalValue {
     Imported,
 }
 
+/// Describes the identifier used to refer to the Rust function corresponding to a WebAssembly
+/// function.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum FunctionName<'wasm> {
+    /// The function's WebAssembly export name is used.
+    Export(&'wasm str),
+    /// An identifier based on the [**funcidx**](FuncId) is used.
+    Id(FuncId),
+}
+
+impl FunctionName<'_> {
+    pub(crate) const fn visibility(&self) -> &str {
+        match self {
+            Self::Export(_) => "pub ",
+            Self::Id(_) => "",
+        }
+    }
+}
+
+impl std::fmt::Display for FunctionName<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Export(name) => std::fmt::Display::fmt(&crate::ident::SafeIdent::from(*name), f),
+            Self::Id(idx) => std::fmt::Display::fmt(idx, f),
+        }
+    }
+}
+
 /// Stores all information relating to a WebAssembly module and how it's components are accessed
 /// when translated to Rust.
 #[must_use = "call .finish()"]
 pub(crate) struct Context<'wasm> {
     pub(crate) types: wasmparser::types::Types,
+    /// Contains the name of each [`ImportedModule`].
     pub(crate) imported_modules: Box<[&'wasm str]>,
     /// Specifies the module each imported function originated from.
     pub(crate) func_import_modules: Box<[ImportedModule]>,
@@ -89,18 +127,26 @@ pub(crate) struct Context<'wasm> {
     pub(crate) func_import_names: Box<[&'wasm str]>,
     /// Specifies the name of each WebAssembly global import.
     pub(crate) global_import_names: Box<[&'wasm str]>,
+    /// Lookup table for each exported WebAssembly function.
+    pub(crate) function_export_names: std::collections::HashMap<crate::ast::FuncId, &'wasm str>,
+    /// Lookup table for each exported WebAssembly global.
+    pub(crate) global_export_names: std::collections::HashMap<crate::ast::GlobalId, &'wasm str>,
+    /// Specifies which functions are exported.
+    pub(crate) function_exports: Vec<crate::ast::FuncId>,
+    /// Specifies which globals are exported.
+    pub(crate) global_exports: Vec<crate::ast::GlobalId>,
     pub(crate) function_attributes: FunctionAttributes,
     /// Specifies the initial value of each WebAssembly global.
     pub(crate) global_values: Box<[GlobalValue]>,
     /// Stores the initializer expression for each global defined by the WebAssembly module.
     pub(crate) global_initializers: crate::ast::Arena,
-    /// Correspodns to the [**start**] component of the WebAssembly module.
+    /// Corresponds to the [**start**] component of the WebAssembly module.
     ///
     /// [**start**]: https://webassembly.github.io/spec/core/syntax/modules.html#start-function
     pub(crate) start_function: Option<FuncId>,
 }
 
-impl Context<'_> {
+impl<'wasm> Context<'wasm> {
     pub(crate) fn function_signature(&self, f: FuncId) -> &wasmparser::FuncType {
         self.types[self.types.core_function_at(f.0)].unwrap_func()
     }
@@ -108,6 +154,20 @@ impl Context<'_> {
     pub(crate) fn function_import_count(&self) -> usize {
         self.func_import_names.len()
     }
+
+    /// Gets the name of the function to use when it is being invoked.
+    pub(crate) fn function_name(&self, f: FuncId) -> FunctionName<'wasm> {
+        match self.function_export_names.get(&f).copied() {
+            Some(name) if self.function_attributes.can_use_export_name(f) => FunctionName::Export(name),
+            Some(_) | None => FunctionName::Id(f),
+        }
+    }
+
+    // /// Returns an iterator over the exported functions that require an additional stub function.
+    // ///
+    // /// A stub function is used to hides implementation details, such as the possible omission of
+    // /// the `&self` parameter in the original function.
+    // pub(crate) fn function_export_stubs(&self) -> impl Iterator<> {}
 
     pub(crate) fn finish(self, allocations: &crate::Allocations) {
         allocations.return_ast_arena(self.global_initializers);

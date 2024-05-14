@@ -11,8 +11,8 @@ rayon = ["dep:rayon", "crossbeam-queue"]
 
 [dependencies]
 anyhow = { workspace = true }
-crossbeam-queue = { workspace = true, optional = true }
 bytes = "1.5.0"
+crossbeam-queue = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 wasmparser = "0.201.0"
 

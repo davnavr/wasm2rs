@@ -244,6 +244,10 @@ fn parse_sections<'wasm>(
         global_import_modules: Default::default(),
         func_import_names: Default::default(),
         global_import_names: Default::default(),
+        function_export_names: Default::default(),
+        global_export_names: Default::default(),
+        function_exports: Default::default(),
+        global_exports: Default::default(),
         global_values: Default::default(),
         global_initializers: allocations.take_ast_arena(),
     };
@@ -327,6 +331,38 @@ fn parse_sections<'wasm>(
         }
 
         debug_assert_eq!(global_values.len() as u32, global_idx);
+    }
+
+    // Validation already ensures there are no duplicated export names.
+    if let Some(export_section) = sections.exports {
+        // This assumes most exports are functions.
+        let reserve_exported_functions = (export_section.count() as usize / 2).min(context.types.core_function_count() as usize);
+        context.function_exports.reserve(reserve_exported_functions);
+        context.function_export_names.reserve(reserve_exported_functions);
+
+        for result in export_section.into_iter_with_offsets() {
+            use wasmparser::ExternalKind;
+
+            let (export_offset, export) = result?;
+            match export.kind {
+                ExternalKind::Func => {
+                    let func_idx = crate::ast::FuncId(export.index);
+                    context
+                        .function_exports.push(func_idx);
+                        context.function_export_names.insert(func_idx, &export.name);
+                }
+                ExternalKind::Global => {
+                    let global_idx = crate::ast::GlobalId(export.index);
+                    context
+                        .global_exports.push(global_idx);
+                        context.global_export_names.insert(global_idx, &export.name);
+                }
+                bad => anyhow::bail!("TODO: Unsupported export {bad:?} @ {export_offset:#X}"),
+            }
+        }
+
+        debug_assert_eq!(context.function_exports.len(), context.function_export_names.len());
+        debug_assert_eq!(context.global_exports.len(), context.global_export_names.len());
     }
 
     debug_assert_eq!(global_values.len(), context.types.global_count() as usize);
@@ -507,7 +543,8 @@ impl Convert<'_> {
             let func_id = crate::ast::FuncId((context.function_import_count() + index) as u32);
             let signature = context.function_signature(func_id);
 
-            write!(out, "\nfn {func_id}(",);
+            let function_name = context.function_name(func_id);
+            write!(out, "\n{}fn {function_name}(", function_name.visibility());
 
             let call_kind = context.function_attributes.call_kind(func_id);
             match call_kind {

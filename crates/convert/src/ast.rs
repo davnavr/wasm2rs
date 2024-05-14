@@ -11,7 +11,7 @@ pub(crate) use print::Print;
 /// Represents a WebAssembly [*funcidx*], an index to a function.
 ///
 /// [*funcidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct FuncId(pub(crate) u32);
 
 impl std::fmt::Display for FuncId {
@@ -23,7 +23,7 @@ impl std::fmt::Display for FuncId {
 /// Represents a WebAssembly [*globalidx*], an index to a global variable.
 ///
 /// [*globalidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct GlobalId(pub(crate) u32);
 
 impl std::fmt::Display for GlobalId {
