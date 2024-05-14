@@ -24,6 +24,10 @@ $vis mod $module {
     impl Instance {
         const _G0: i32 = 0x400i32;
 
+        pub fn r#counter(&self) -> &embedder::rt::global::Global<i32> {
+            &self._g1
+        }
+
 fn _f0(_l0: i32) -> i32 {
     i32::wrapping_add(_l0, 5i32)
 }

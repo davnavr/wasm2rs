@@ -751,7 +751,56 @@ impl Convert<'_> {
             }
         }
 
-        // Write function definitions
+        // Write exported globals.
+        for global_id in context.global_exports.iter() {
+            let export = *context
+                .global_export_names
+                .get(global_id)
+                .expect("global export did not have a name");
+            write!(
+                o,
+                "\n{sp}{sp}pub fn {}(&self) -> ",
+                crate::ident::SafeIdent::from(export)
+            )?;
+
+            let global_type = context.types.global_at(global_id.0);
+
+            if global_type.mutable {
+                write!(o, "&embedder::rt::global::Global<")?;
+            }
+
+            write!(o, "{}", crate::ast::ValType::from(global_type.content_type))?;
+
+            if global_type.mutable {
+                o.write_all(b">")?;
+            }
+
+            write!(o, " {{\n{sp}{sp}{sp}")?;
+
+            match context.global_values[global_id.0 as usize] {
+                crate::context::GlobalValue::Imported => {
+                    anyhow::bail!("re-exporting globals is not yet supported");
+                }
+                crate::context::GlobalValue::Initialized(value_id) => {
+                    match context.global_initializers.get(value_id) {
+                        crate::ast::Expr::Literal(_) if !global_type.mutable => {
+                            write!(o, "{global_id:#}")?;
+                        }
+                        _ => {
+                            if global_type.mutable {
+                                o.write_all(b"&")?;
+                            }
+
+                            write!(o, "self.{global_id}")?
+                        }
+                    }
+                }
+            }
+
+            write!(o, "\n{sp}{sp}}}\n")?;
+        }
+
+        // Write function definitions and their bodies.
         crate::buffer::write_all_vectored(
             o,
             &function_items,
