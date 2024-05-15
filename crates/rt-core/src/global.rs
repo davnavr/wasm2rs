@@ -158,6 +158,11 @@ impl<T: GlobalValue> Global<T> {
     pub fn into_inner(self) -> T {
         self.contents.into_inner()
     }
+
+    /// Gets a mutable reference to the underlying value.
+    pub fn get_mut(&mut self) -> &mut T {
+        self.contents.get_mut()
+    }
 }
 
 impl<T: GlobalValue> From<T> for Global<T> {
