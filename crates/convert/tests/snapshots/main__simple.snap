@@ -11,22 +11,28 @@ macro_rules! wasm {
 #[allow(unreachable_code)]
 #[allow(unreachable_pub)]
 $vis mod $module {
-    use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 
-    pub struct Allocated {
-        _g1: embedder::rt::global::Global<i32>,
+use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
+
+pub struct Allocated {
+    _g1: embedder::rt::global::Global<i32>,
+}
+
+pub struct Instance {
+    _inst: embedder::Module<Allocated>,
+}
+
+impl Instance {
+    const _G0: i32 = 0x400i32;
+
+    pub fn r#counter(&self) -> &embedder::rt::global::Global<i32> {
+        &self._g1
     }
 
-    pub struct Instance {
-        inst: Allocated,
+    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
+        let _inst = embedder::store::AllocateModule::allocate(store.instance);
+        Self { _inst }
     }
-
-    impl Instance {
-        const _G0: i32 = 0x400i32;
-
-        pub fn r#counter(&self) -> &embedder::rt::global::Global<i32> {
-            &self._g1
-        }
 
 fn _f0(_l0: i32) -> i32 {
     i32::wrapping_add(_l0, 5i32)
@@ -168,7 +174,8 @@ pub fn r#trap_on_three(&self, _l0: i32) -> ::core::result::Result<(), embedder::
     Self::_f12(_l0)
 }
 
-    } // impl Instance
+} // impl Instance
+
 } // mod $module
 
     }

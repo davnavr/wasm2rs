@@ -675,14 +675,16 @@ impl Convert<'_> {
         o.write_all(b"#[allow(dead_code)]\n")?; // Some functions may not be called
         o.write_all(b"#[allow(unreachable_code)]\n")?; // Some branches may not be taken (e.g. infinite loops detected by rustc)
         o.write_all(b"#[allow(unreachable_pub)]\n")?; // Macro may be invoked within a non-public module.
-        o.write_all(b"$vis mod $module {\n")?;
+        o.write_all(b"$vis mod $module {\n\n")?;
         writeln!(
             o,
-            "{sp}use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n"
+            "use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n"
         )?;
 
+        // TODO: After `$module`, add `$(<$lifetime:lifetime>)?`
+
         // TODO: Option to specify #[derive(Debug)] impl
-        writeln!(o, "{sp}pub struct Allocated {{")?;
+        writeln!(o, "pub struct Allocated {{")?;
 
         let global_indices = (0u32..=u32::MAX).map(crate::ast::GlobalId);
 
@@ -706,7 +708,7 @@ impl Convert<'_> {
                 }
             }
 
-            write!(o, "{sp}{sp}{global_id}: ")?;
+            write!(o, "{sp}{global_id}: ")?;
 
             if global_type.mutable {
                 o.write_all(b"embedder::rt::global::Global<")?;
@@ -721,13 +723,13 @@ impl Convert<'_> {
             writeln!(o, ",")?;
         }
 
-        writeln!(o, "{sp}}}\n")?;
+        writeln!(o, "}}\n")?;
 
-        writeln!(o, "{sp}pub struct Instance {{")?;
-        writeln!(o, "{sp}{sp}inst: Allocated,")?;
-        writeln!(o, "{sp}}}\n")?;
+        writeln!(o, "pub struct Instance {{")?;
+        writeln!(o, "{sp}_inst: embedder::Module<Allocated>,")?;
+        writeln!(o, "}}\n")?;
 
-        writeln!(o, "{sp}impl Instance {{")?;
+        writeln!(o, "impl Instance {{")?;
 
         for (global_value, global_id) in context.global_values[context.global_import_names.len()..]
             .iter()
@@ -742,7 +744,7 @@ impl Convert<'_> {
                         // Constants are only generated for immutable, defined globals.
                         writeln!(
                             o,
-                            "{sp}{sp}const {global_id:#}: {} = {literal};",
+                            "{sp}const {global_id:#}: {} = {literal};",
                             literal.type_of()
                         )?
                     }
@@ -757,9 +759,10 @@ impl Convert<'_> {
                 .global_export_names
                 .get(global_id)
                 .expect("global export did not have a name");
+
             write!(
                 o,
-                "\n{sp}{sp}pub fn {}(&self) -> ",
+                "\n{sp}pub fn {}(&self) -> ",
                 crate::ident::SafeIdent::from(export)
             )?;
 
@@ -775,7 +778,7 @@ impl Convert<'_> {
                 o.write_all(b">")?;
             }
 
-            write!(o, " {{\n{sp}{sp}{sp}")?;
+            write!(o, " {{\n{sp}{sp}")?;
 
             match context.global_values[global_id.0 as usize] {
                 crate::context::GlobalValue::Imported => {
@@ -797,18 +800,42 @@ impl Convert<'_> {
                 }
             }
 
-            write!(o, "\n{sp}{sp}}}\n")?;
+            write!(o, "\n{sp}}}\n")?;
         }
 
+        // Write module's `instantiate()` method.
+        writeln!(
+            o,
+            "\n{sp}pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {{"
+        )?;
+
+        writeln!(
+            o,
+            "{sp}{sp}let _inst = embedder::store::AllocateModule::allocate(store.instance);"
+        )?;
+
+        // TODO: Initialize globals, memory and all that good stuff.
+        // TODO: Context should store non-const globals in a Vec.
+
+        if let Some(start_function) = context.start_function {
+            writeln!(o, "{sp}{sp}let module = Self {{ _inst }}")?;
+            // TODO: Call start function
+            writeln!(o, "{sp}{sp}module")?;
+        } else {
+            writeln!(o, "{sp}{sp}Self {{ _inst }}")?;
+        }
+
+        writeln!(o, "{sp}}}")?;
+
         // Write function definitions and their bodies.
+        o.flush()?; // If a `BufWriter` is being used, this might allow it to be bypassed.
         crate::buffer::write_all_vectored(
             o,
             &function_items,
             &mut Vec::with_capacity(function_items.len()),
         )?;
 
-        writeln!(o, "\n{sp}}} // impl Instance")?;
-
+        o.write_all(b"\n} // impl Instance\n\n")?;
         o.write_all(b"} // mod $module\n\n")?;
         writeln!(o, "{sp}}}")?; // ($vis mod $module use $path)
         o.write_all(b"}\n")?; // macro_rules!
