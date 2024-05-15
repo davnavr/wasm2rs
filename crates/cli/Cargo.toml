@@ -1,0 +1,29 @@
+[package]
+name = "wasm2rs-cli"
+description = "The wasm2rs command line interface"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "wasm2rs"
+path = "src/bin.rs"
+
+[features]
+default = ["rayon"]
+rayon = ["dep:rayon", "wasm2rs-convert/rayon"]
+friendly = [
+    "clap/color",
+    "clap/error-context",
+    "clap/help",
+    "clap/usage",
+    "clap/suggestions"
+]
+test-utils = ["rayon"]
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { version = "4.5.4", default-features = false, features = ["std", "derive"] }
+rayon = { workspace = true, optional = true }
+wasm2rs-convert = { path = "../convert", default-features = false }
+wat = { workspace = true }
