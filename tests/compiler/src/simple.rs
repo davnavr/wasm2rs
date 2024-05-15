@@ -1,6 +1,6 @@
-include!(concat!(env!("OUT_DIR"), "/simple.rs"));
+include!("simple.wasm.rs");
 
-wasm!(pub mod wasm);
+wasm!(pub mod wasm use wasm2rs_rt::embedder::self_contained);
 
 #[test]
 fn add_works() {

@@ -9,11 +9,13 @@ resolver = "2"
 members = [
     "crates/*"
 ]
-# Temporary
 exclude = [
+    # Temporary
     "crates/compiler",
     "crates/rt-old",
     "crates/spectest",
+
+    "tests/compiler"
 ]
 
 [workspace.dependencies]

@@ -7,7 +7,7 @@ struct Arguments {
     ///
     /// If set to zero, then the number of threads used is dependent on the `RAYON_NUM_THREADS`
     /// environment variable, or the number of logical CPUs.
-    #[arg(long)]
+    #[arg(long, default_value_t = 0)]
     #[cfg(feature = "rayon")]
     threads: usize,
     #[command(subcommand)]
@@ -58,7 +58,7 @@ pub fn main() -> anyhow::Result<()> {
             let wasm =
                 wat::parse_file(&input).with_context(|| format!("could not parse {input:?}"))?;
 
-            let output_path = output.unwrap_or_else(|| input.with_extension("rs"));
+            let output_path = output.unwrap_or_else(|| input.with_extension("wasm.rs"));
             let out = std::fs::File::create(&output_path)
                 .with_context(|| format!("could not create output file {output_path:?}"))?;
 

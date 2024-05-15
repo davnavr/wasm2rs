@@ -1,11 +1,7 @@
 [package]
 name = "wasm2rs-compiler-tests"
-edition.workspace = true
+edition = "2021"
 publish = false
 
 [dependencies]
-wasm2rs-rt = { workspace = true }
-
-[build-dependencies]
-wat = "1.201.0"
-wasm2rs = { path = "../../crates/compiler/" }
+wasm2rs-rt = { path = "../../crates/rt-umbrella" }
