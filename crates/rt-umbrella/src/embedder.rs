@@ -6,23 +6,23 @@
 /// - At most, one main linear memory with a 32-bit address space.
 /// - No imports of any kind.
 #[cfg(feature = "alloc")]
+#[allow(missing_docs)]
 pub mod self_contained {
     pub use crate as rt;
 
-    //pub type Trap
+    //pub type Trap = crate::trap::TrapValue; // TODO: Need to make trap a module
 
-    /// The imports accessible by the WebAssembly module, of which there are none.
     pub type Imports = ();
 
     /// Contains all of state needed by the allocated WebAssembly module.
-    #[allow(missing_docs)]
     #[derive(Debug, Default)]
     pub struct Store {
-        pub imports: Imports,
+        /// The imports accessible by the WebAssembly module, of which there are none.
+        pub imports: Imports, // TODO: Add a trait to initialize the imports, providing the `Module<T>` as an argument
+        pub instance: crate::store::AllocateModuleRc,
         /// Allocates the WebAssembly module's main memory.
         pub memory0: crate::store::AllocateHeapMemory,
     }
 
-    /// The type used to contain the WebAssembly module state.
     pub type Module<T> = alloc::rc::Rc<T>;
 }
