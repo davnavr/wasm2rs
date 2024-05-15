@@ -24,8 +24,12 @@ pub struct Instance {
 impl Instance {
 
     pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
-        let _inst = embedder::store::AllocateModule::allocate(store.instance);
-        Self { _inst }
+        let allocated = Allocated {
+        };
+        let mut module = Self {
+            _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated) },
+        };
+        module
     }
 
 fn _f0(_l0: i32) -> i32 {

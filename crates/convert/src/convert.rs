@@ -809,22 +809,37 @@ impl Convert<'_> {
             "\n{sp}pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {{"
         )?;
 
+        writeln!(o, "{sp}{sp}let allocated = Allocated {{")?;
+
+        // TODO: Write default values for globals.
+
+        writeln!(o, "{sp}{sp}}};")?;
+
+        writeln!(o, "{sp}{sp}let mut module = Self {{")?;
         writeln!(
             o,
-            "{sp}{sp}let _inst = embedder::store::AllocateModule::allocate(store.instance);"
+            "{sp}{sp}{sp}_inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated) }},"
         )?;
+        writeln!(o, "{sp}{sp}}};")?;
+
+        let mut got_inst_mut = false;
+        let make_inst_mut = move |o: &mut dyn std::io::Write| {
+            if got_inst_mut {
+                Ok(())
+            } else {
+                got_inst_mut = true;
+                writeln!(o, "let mut inst = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);")
+            }
+        };
 
         // TODO: Initialize globals, memory and all that good stuff.
         // TODO: Context should store non-const globals in a Vec.
 
         if let Some(start_function) = context.start_function {
-            writeln!(o, "{sp}{sp}let module = Self {{ _inst }}")?;
-            // TODO: Call start function
-            writeln!(o, "{sp}{sp}module")?;
-        } else {
-            writeln!(o, "{sp}{sp}Self {{ _inst }}")?;
+            writeln!(o, "{sp}{sp}// TODO: call {start_function}")?;
         }
 
+        writeln!(o, "{sp}{sp}module")?;
         writeln!(o, "{sp}}}")?;
 
         // Write function definitions and their bodies.
