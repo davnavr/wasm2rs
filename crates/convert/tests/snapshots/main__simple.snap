@@ -26,15 +26,18 @@ impl Instance {
     const _G0: i32 = 0x400i32;
 
     pub fn r#counter(&self) -> &embedder::rt::global::Global<i32> {
-        &self._g1
+        &self._inst._g1
     }
 
     pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
         let allocated = Allocated {
+            _g1: rt::global::Global::<_>::ZERO,
         };
         let mut module = Self {
             _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated) },
         };
+        let mut inst: &mut Allocated = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);
+        inst._g1.get_mut() = todo!("non-const globals not yet supported");
         module
     }
 
@@ -143,7 +146,7 @@ pub fn r#size_of_kibibyte(&self) -> i32 {
 }
 
 fn _f9(&self) {
-    embedder::rt::global::Global::set(&self._g1, i32::wrapping_add(self.inst._g1.get(), 1i32));
+    embedder::rt::global::Global::set(&self._g1, i32::wrapping_add(self._inst._g1.get(), 1i32));
     ()
 }
 

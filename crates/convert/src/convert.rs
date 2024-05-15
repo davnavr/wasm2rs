@@ -234,6 +234,8 @@ fn parse_sections<'wasm>(
     allocations: &crate::Allocations,
     sections: Sections<'wasm>,
 ) -> crate::Result<crate::context::Context<'wasm>> {
+    let total_global_count = types.global_count() as usize;
+    let total_function_count = types.core_function_count() as usize;
     let mut context = crate::context::Context {
         types,
         function_attributes,
@@ -247,14 +249,12 @@ fn parse_sections<'wasm>(
         function_export_names: Default::default(),
         global_export_names: Default::default(),
         global_exports: Default::default(),
-        global_values: Default::default(),
         global_initializers: allocations.take_ast_arena(),
+        instantiate_globals: Vec::new(),
+        defined_globals: Vec::new(),
+        constant_globals: Vec::with_capacity(total_global_count / 2),
     };
 
-    let global_values_count = context.types.global_count() as usize;
-    let mut global_values = Vec::with_capacity(global_values_count);
-
-    let total_function_count = context.types.core_function_count() as usize;
     debug_assert_eq!(
         total_function_count,
         context.function_attributes.call_kinds.len()
@@ -269,11 +269,15 @@ fn parse_sections<'wasm>(
 
         let func_import_count = total_function_count - (sections.code_count as usize);
         let global_import_count =
-            global_values_count - (get_section_count(&sections.globals) as usize);
+            total_global_count - (get_section_count(&sections.globals) as usize);
         let mut func_import_modules = Vec::with_capacity(func_import_count);
         let mut global_import_modules = Vec::with_capacity(global_import_count);
         let mut func_import_names = Vec::with_capacity(func_import_count);
         let mut global_import_names = Vec::with_capacity(global_import_count);
+
+        context.instantiate_globals.reserve(global_import_count);
+
+        let mut global_idx = crate::ast::GlobalId(0);
 
         for result in import_section.into_iter_with_offsets() {
             use wasmparser::TypeRef;
@@ -301,10 +305,13 @@ fn parse_sections<'wasm>(
                     func_import_names.push(import.name);
                     func_import_modules.push(module_idx);
                 }
-                TypeRef::Global(_) => {
-                    global_values.push(crate::context::GlobalValue::Imported);
+                TypeRef::Global(global_type) => {
                     global_import_names.push(import.name);
                     global_import_modules.push(module_idx);
+                    if !global_type.mutable {
+                        context.instantiate_globals.push(global_idx);
+                    }
+                    global_idx.0 += 1;
                 }
                 bad => anyhow::bail!("TODO: Unsupported import {bad:?} @ {import_offset:#X}"),
             }
@@ -321,15 +328,30 @@ fn parse_sections<'wasm>(
     }
 
     if let Some(global_section) = sections.globals {
-        let mut global_idx = 0u32;
-        for result in global_section.into_iter_with_offsets() {
+        let ids = 0u32..global_section.count();
+        for (result, global_idx) in global_section.into_iter_with_offsets().zip(ids) {
             let (global_offset, global) = result?;
-            global_values.push(crate::context::GlobalValue::Initialized(crate::convert::constant::create_ast(&global.init_expr, &mut context.global_initializers)
-                .with_context(|| format!("invalid initializer expression for global #{global_idx} @ {global_offset:#X}"))?));
-            global_idx += 1;
-        }
+            let id = crate::ast::GlobalId(global_idx);
+            let initializer = crate::convert::constant::create_ast(
+                &global.init_expr,
+                &mut context.global_initializers,
+            )
+            .with_context(|| {
+                format!("invalid initializer expression for {id} @ {global_offset:#X}")
+            })?;
 
-        debug_assert_eq!(global_values.len() as u32, global_idx);
+            match context.global_initializers.get(initializer) {
+                crate::ast::Expr::Literal(_) if !global.ty.mutable => context
+                    .constant_globals
+                    .push(crate::context::DefinedGlobal { id, initializer }),
+                _ => {
+                    context
+                        .defined_globals
+                        .push(crate::context::DefinedGlobal { id, initializer });
+                    context.instantiate_globals.push(id);
+                }
+            }
+        }
     }
 
     // Validation already ensures there are no duplicated export names.
@@ -363,8 +385,6 @@ fn parse_sections<'wasm>(
         );
     }
 
-    debug_assert_eq!(global_values.len(), context.types.global_count() as usize);
-    context.global_values = global_values.into_boxed_slice();
     Ok(context)
 }
 
@@ -686,28 +706,8 @@ impl Convert<'_> {
         // TODO: Option to specify #[derive(Debug)] impl
         writeln!(o, "pub struct Allocated {{")?;
 
-        let global_indices = (0u32..=u32::MAX).map(crate::ast::GlobalId);
-
-        // Non-mutable globals initialized w/ complex expressions should be included here too.
-        let mut const_global_count = 0usize;
-        for (global_value, global_id) in context.global_values.iter().zip(global_indices.clone()) {
+        for global_id in context.instantiate_globals.iter() {
             let global_type = context.types.global_at(global_id.0);
-            match global_value {
-                crate::context::GlobalValue::Imported => {
-                    anyhow::bail!("global {global_id} is an import, which is not yet supported");
-                }
-                crate::context::GlobalValue::Initialized(value_id) => {
-                    match context.global_initializers.get(*value_id) {
-                        crate::ast::Expr::Literal(_) if !global_type.mutable => {
-                            // Immutable, defined globals are translated to `const` instead.
-                            const_global_count += 1;
-                            continue;
-                        }
-                        _ => (),
-                    }
-                }
-            }
-
             write!(o, "{sp}{global_id}: ")?;
 
             if global_type.mutable {
@@ -731,33 +731,26 @@ impl Convert<'_> {
 
         writeln!(o, "impl Instance {{")?;
 
-        for (global_value, global_id) in context.global_values[context.global_import_names.len()..]
-            .iter()
-            .zip(global_indices)
-            .take(const_global_count)
-        {
-            if let crate::context::GlobalValue::Initialized(value_id) = global_value {
-                match context.global_initializers.get(*value_id) {
-                    crate::ast::Expr::Literal(literal)
-                        if !context.types.global_at(global_id.0).mutable =>
-                    {
-                        // Constants are only generated for immutable, defined globals.
-                        writeln!(
-                            o,
-                            "{sp}const {global_id:#}: {} = {literal};",
-                            literal.type_of()
-                        )?
-                    }
-                    _ => (),
-                }
+        for global in context.constant_globals.iter() {
+            match context.global_initializers.get(global.initializer) {
+                crate::ast::Expr::Literal(literal) => writeln!(
+                    o,
+                    "{sp}const {:#}: {} = {literal};",
+                    global.id,
+                    literal.type_of()
+                )?,
+                bad => unreachable!(
+                    "expected global {} to be constant, but got {bad:?}",
+                    global.id
+                ),
             }
         }
 
         // Write exported globals.
-        for global_id in context.global_exports.iter() {
+        for global_id in context.global_exports.iter().copied() {
             let export = *context
                 .global_export_names
-                .get(global_id)
+                .get(&global_id)
                 .expect("global export did not have a name");
 
             write!(
@@ -779,27 +772,16 @@ impl Convert<'_> {
             }
 
             write!(o, " {{\n{sp}{sp}")?;
-
-            match context.global_values[global_id.0 as usize] {
-                crate::context::GlobalValue::Imported => {
-                    anyhow::bail!("re-exporting globals is not yet supported");
+            match context.global_kind(global_id) {
+                crate::context::GlobalKind::Const => write!(o, "Self::{global_id:#}")?,
+                crate::context::GlobalKind::ImmutableField => write!(o, "self._inst.{global_id}")?,
+                crate::context::GlobalKind::MutableField { import: None } => {
+                    write!(o, "&self._inst.{global_id}")?
                 }
-                crate::context::GlobalValue::Initialized(value_id) => {
-                    match context.global_initializers.get(value_id) {
-                        crate::ast::Expr::Literal(_) if !global_type.mutable => {
-                            write!(o, "{global_id:#}")?;
-                        }
-                        _ => {
-                            if global_type.mutable {
-                                o.write_all(b"&")?;
-                            }
-
-                            write!(o, "self.{global_id}")?
-                        }
-                    }
-                }
+                crate::context::GlobalKind::MutableField {
+                    import: Some(import),
+                } => todo!("printing of mutable global imports {import:?}"),
             }
-
             write!(o, "\n{sp}}}\n")?;
         }
 
@@ -811,7 +793,15 @@ impl Convert<'_> {
 
         writeln!(o, "{sp}{sp}let allocated = Allocated {{")?;
 
-        // TODO: Write default values for globals.
+        for global in context.instantiate_globals.iter() {
+            write!(o, "{sp}{sp}{sp}{global}: ")?;
+            if context.types.global_at(global.0).mutable {
+                o.write_all(b"rt::global::Global::<_>::ZERO")?;
+            } else {
+                o.write_all(b"Default::default()")?;
+            }
+            o.write_all(b",\n")?;
+        }
 
         writeln!(o, "{sp}{sp}}};")?;
 
@@ -823,17 +813,41 @@ impl Convert<'_> {
         writeln!(o, "{sp}{sp}}};")?;
 
         let mut got_inst_mut = false;
-        let make_inst_mut = move |o: &mut dyn std::io::Write| {
+        let mut make_inst_mut = move |o: &mut dyn std::io::Write| {
             if got_inst_mut {
                 Ok(())
             } else {
                 got_inst_mut = true;
-                writeln!(o, "let mut inst = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);")
+                writeln!(o, "{sp}{sp}let mut inst: &mut Allocated = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);")
             }
         };
 
-        // TODO: Initialize globals, memory and all that good stuff.
-        // TODO: Context should store non-const globals in a Vec.
+        if !context.instantiate_globals.is_empty() {
+            make_inst_mut(o)?;
+        }
+
+        for global in context.instantiate_globals.iter().copied() {
+            write!(o, "{sp}{sp}inst.{global}")?;
+
+            if context.types.global_at(global.0).mutable {
+                o.write_all(b".get_mut()")?;
+            }
+
+            o.write_all(b" = ")?;
+
+            if let Some(import) = context.global_import(global) {
+                anyhow::bail!("initialize global import {import:?}");
+            } else {
+                o.write_all(b"todo!(\"non-const globals not yet supported\")")?;
+            }
+
+            o.write_all(b";\n")?;
+        }
+
+        // TODO: Initialize tables
+        // TODO: Initialize memories
+        // TODO: Copy element segments.
+        // TODO: Copy data segments.
 
         if let Some(start_function) = context.start_function {
             writeln!(o, "{sp}{sp}// TODO: call {start_function}")?;

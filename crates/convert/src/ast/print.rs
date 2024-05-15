@@ -61,7 +61,7 @@ mod paths {
     pub(super) const RT_MEM: &str = "embedder::rt::memory";
 }
 
-const INST: &str = "self.inst";
+const INST: &str = "self._inst";
 
 impl std::fmt::Display for crate::ast::ValType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -496,30 +496,16 @@ impl crate::ast::Expr {
                 }
             }
             Self::GetLocal(local) => write!(out, "{local}"),
-            Self::GetGlobal(global) => {
-                let ty = context.types.global_at(global.0);
-                let global_idx = global.0 as usize;
-                match context.global_values[global_idx] {
-                    crate::context::GlobalValue::Imported => {
-                        let import_module = context.global_import_modules[global_idx];
-                        let import_name = context.global_import_names[global_idx];
-                        todo!("attempt to get imported global {import_name:?} from {import_module:?}, but global imports are not yet supported");
-                    }
-                    crate::context::GlobalValue::Initialized(_) if ty.mutable => {
-                        write!(out, "{INST}.{global}.get()")
-                    }
-                    crate::context::GlobalValue::Initialized(value_id) => {
-                        let value = context.global_initializers.get(value_id);
-
-                        // Special case when a Rust constant is used.
-                        if matches!(value, Self::Literal(_)) {
-                            write!(out, "Self::{global:#}");
-                        } else {
-                            write!(out, "{INST}.{global}");
-                        }
-                    }
+            Self::GetGlobal(global) => match context.global_kind(*global) {
+                crate::context::GlobalKind::Const => write!(out, "Self::{global:#}"),
+                crate::context::GlobalKind::ImmutableField => write!(out, "{INST}.{global}"),
+                crate::context::GlobalKind::MutableField { import: None } => {
+                    write!(out, "{INST}.{global}.get()")
                 }
-            }
+                crate::context::GlobalKind::MutableField {
+                    import: Some(import),
+                } => todo!("printing of mutable global imports {import:?}"),
+            },
             Self::Temporary(temp) => write!(out, "{temp}"),
             Self::LoopInput(input) => write!(out, "{input}"),
             Self::MemoryLoad {
@@ -839,13 +825,8 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                 Statement::SetGlobal { global, value } => {
                     out.write_str("embedder::rt::global::Global::set(");
 
-                    if self
-                        .context
-                        .global_import_modules
-                        .get(global.0 as usize)
-                        .is_some()
-                    {
-                        todo!("set global import");
+                    if let Some(import) = self.context.global_import(global) {
+                        todo!("set global import {import:?}");
                     } else {
                         write!(out, "&self.{global}")
                     }

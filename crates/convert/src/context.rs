@@ -1,6 +1,6 @@
 //! Types describing a WebAssembly module and the mapping of WebAssembly constructs to Rust.
 
-use crate::ast::FuncId;
+use crate::ast::{FuncId, GlobalId};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum CallKind {
@@ -80,12 +80,9 @@ impl FunctionAttributes {
 pub(crate) struct ImportedModule(pub(crate) u16);
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum GlobalValue {
-    /// The global is initialized with the corresponding expression taken from
-    /// [`Context::global_initializers`].
-    Initialized(crate::ast::ExprId),
-    /// The global is imported.
-    Imported,
+pub(crate) struct Import<'ctx, 'wasm> {
+    pub(crate) module: &'ctx &'wasm str,
+    pub(crate) name: &'ctx &'wasm str,
 }
 
 /// Describes the identifier used to refer to the Rust function corresponding to a WebAssembly
@@ -96,6 +93,7 @@ pub(crate) enum FunctionName<'wasm> {
     Export(&'wasm str),
     /// An identifier based on the [**funcidx**](FuncId) is used.
     Id(FuncId),
+    //Import
 }
 
 impl FunctionName<'_> {
@@ -116,6 +114,21 @@ impl std::fmt::Display for FunctionName<'_> {
     }
 }
 
+pub(crate) struct DefinedGlobal {
+    pub(crate) id: GlobalId,
+    pub(crate) initializer: crate::ast::ExprId,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum GlobalKind<'ctx, 'wasm> {
+    /// The global is translated to a Rust `const`.
+    Const,
+    ImmutableField,
+    MutableField {
+        import: Option<Import<'ctx, 'wasm>>,
+    },
+}
+
 /// Stores all information relating to a WebAssembly module and how it's components are accessed
 /// when translated to Rust.
 #[must_use = "call .finish()"]
@@ -132,18 +145,29 @@ pub(crate) struct Context<'wasm> {
     /// Specifies the name of each WebAssembly global import.
     pub(crate) global_import_names: Box<[&'wasm str]>,
     /// Lookup table for each exported WebAssembly function.
-    pub(crate) function_export_names: std::collections::HashMap<crate::ast::FuncId, &'wasm str>,
+    pub(crate) function_export_names: std::collections::HashMap<FuncId, &'wasm str>,
     /// Lookup table for each exported WebAssembly global.
-    pub(crate) global_export_names: std::collections::HashMap<crate::ast::GlobalId, &'wasm str>,
+    pub(crate) global_export_names: std::collections::HashMap<GlobalId, &'wasm str>,
     /// Specifies which globals are exported.
     ///
     /// These are in the order they were specified in the WebAssembly export section.
-    pub(crate) global_exports: Vec<crate::ast::GlobalId>,
+    pub(crate) global_exports: Vec<GlobalId>,
     pub(crate) function_attributes: FunctionAttributes,
-    /// Specifies the initial value of each WebAssembly global.
-    pub(crate) global_values: Box<[GlobalValue]>,
     /// Stores the initializer expression for each global defined by the WebAssembly module.
     pub(crate) global_initializers: crate::ast::Arena,
+    /// Specifies the WebAssembly globals that correspond to a Rust field. These require
+    /// assignment of their initial value within the generated `instantiate()` function.
+    ///
+    /// These are stored in ascending order.
+    pub(crate) instantiate_globals: Vec<GlobalId>,
+    /// Specifies the *defined* WebAssembly globals that correspond to a Rust field.
+    ///
+    /// These are stored in ascending order.
+    pub(crate) defined_globals: Vec<DefinedGlobal>,
+    /// Specifies the *defined* WebAsembly globals that correspond to a Rust `const`.
+    ///
+    /// These are stored in ascending order.
+    pub(crate) constant_globals: Vec<DefinedGlobal>,
     /// Corresponds to the [**start**] component of the WebAssembly module.
     ///
     /// [**start**]: https://webassembly.github.io/spec/core/syntax/modules.html#start-function
@@ -166,6 +190,38 @@ impl<'wasm> Context<'wasm> {
                 FunctionName::Export(name)
             }
             Some(_) | None => FunctionName::Id(f),
+        }
+    }
+
+    pub(crate) fn global_import(&self, g: GlobalId) -> Option<Import<'_, 'wasm>> {
+        let index = g.0 as usize;
+        self.global_import_names.get(index).map(|name| {
+            assert_eq!(
+                self.global_import_modules.len(),
+                self.global_import_names.len()
+            );
+            Import {
+                module: &self.imported_modules[usize::from(self.global_import_modules[index].0)],
+                name,
+            }
+        })
+    }
+
+    // TODO: fn global_name
+
+    pub(crate) fn global_kind(&self, g: GlobalId) -> GlobalKind {
+        if self.types.global_at(g.0).mutable {
+            GlobalKind::MutableField {
+                import: self.global_import(g),
+            }
+        } else if self
+            .constant_globals
+            .binary_search_by_key(&g, |global| global.id)
+            .is_ok()
+        {
+            GlobalKind::Const
+        } else {
+            GlobalKind::ImmutableField
         }
     }
 
