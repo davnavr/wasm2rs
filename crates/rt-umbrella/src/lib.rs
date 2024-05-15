@@ -125,3 +125,6 @@ pub use rt_simd as simd;
 pub use rt_func_ref as func_ref;
 
 pub use rt_stack as stack;
+
+pub mod embedder;
+pub mod store;
