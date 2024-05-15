@@ -90,9 +90,9 @@ impl std::fmt::Display for crate::ast::Literal {
 }
 
 impl crate::ast::ExprId {
-    fn print(
+    pub(crate) fn print(
         self,
-        out: &mut crate::buffer::Writer,
+        out: &mut dyn crate::write::Write,
         arena: &crate::ast::Arena,
         nested: bool,
         context: &crate::context::Context,
@@ -102,7 +102,7 @@ impl crate::ast::ExprId {
 
     fn print_bool(
         self,
-        out: &mut crate::buffer::Writer<'_>,
+        out: &mut dyn crate::write::Write,
         arena: &crate::ast::Arena,
         context: &crate::context::Context,
     ) {
@@ -113,7 +113,7 @@ impl crate::ast::ExprId {
 impl crate::ast::ExprListId {
     fn print(
         self,
-        out: &mut crate::buffer::Writer,
+        out: &mut dyn crate::write::Write,
         arena: &crate::ast::Arena,
         enclosed: bool,
         context: &crate::context::Context,
@@ -137,12 +137,12 @@ impl crate::ast::ExprListId {
 }
 
 fn print_call_common<F>(
-    out: &mut crate::buffer::Writer,
+    out: &mut dyn crate::write::Write,
     callee: crate::ast::FuncId,
     context: &crate::context::Context,
     arguments: F,
 ) where
-    F: FnOnce(&mut crate::buffer::Writer),
+    F: FnOnce(&mut dyn crate::write::Write),
 {
     use crate::context::CallKind;
 
@@ -157,7 +157,7 @@ fn print_call_common<F>(
 }
 
 fn print_call_expr(
-    out: &mut crate::buffer::Writer,
+    out: &mut dyn crate::write::Write,
     callee: crate::ast::FuncId,
     arguments: crate::ast::ExprListId,
     arena: &crate::ast::Arena,
@@ -178,7 +178,7 @@ fn print_call_expr(
     }
 }
 
-fn print_memory_offset(out: &mut crate::buffer::Writer, offset: u64, memory64: bool) {
+fn print_memory_offset(out: &mut dyn crate::write::Write, offset: u64, memory64: bool) {
     write!(out, "{offset:#X}");
 
     // Ensure the Rust compiler won't complain about out-of-range literals.
@@ -190,9 +190,9 @@ fn print_memory_offset(out: &mut crate::buffer::Writer, offset: u64, memory64: b
 }
 
 impl crate::ast::Expr {
-    fn print(
+    pub(crate) fn print(
         &self,
-        out: &mut crate::buffer::Writer<'_>,
+        out: &mut dyn crate::write::Write,
         arena: &crate::ast::Arena,
         nested: bool,
         context: &crate::context::Context,
@@ -579,7 +579,7 @@ impl crate::ast::Expr {
     /// This is used when translating WebAssembly comparison instructions.
     fn print_bool(
         &self,
-        out: &mut crate::buffer::Writer<'_>,
+        out: &mut dyn crate::write::Write,
         arena: &crate::ast::Arena,
         context: &crate::context::Context,
     ) {
@@ -639,7 +639,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
         self.context
     }
 
-    fn write_indentation(&self, out: &mut crate::buffer::Writer, indent_level: u32) {
+    fn write_indentation(&self, out: &mut dyn crate::write::Write, indent_level: u32) {
         for _ in 0..indent_level {
             out.write_str(self.indentation.to_str());
         }
@@ -649,7 +649,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
         &self,
         function: crate::ast::FuncId,
         mut indent_level: u32,
-        out: &mut crate::buffer::Writer,
+        out: &mut dyn crate::write::Write,
         statements: &[crate::ast::Statement],
         arena: &crate::ast::Arena,
     ) {
@@ -1050,7 +1050,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
     pub(crate) fn print_stub(
         &self,
         indent_level: u32,
-        out: &mut crate::buffer::Writer,
+        out: &mut dyn crate::write::Write,
         function: crate::ast::FuncId,
         arguments: u32,
     ) {

@@ -160,10 +160,9 @@ pub(crate) struct Context<'wasm> {
     ///
     /// These are stored in ascending order.
     pub(crate) instantiate_globals: Vec<GlobalId>,
-    /// Specifies the *defined* WebAssembly globals that correspond to a Rust field.
-    ///
-    /// These are stored in ascending order.
-    pub(crate) defined_globals: Vec<DefinedGlobal>,
+    /// Specifies the *defined* WebAssembly globals that correspond to a Rust field, and their
+    /// initial values.
+    pub(crate) defined_globals: std::collections::HashMap<GlobalId, crate::ast::ExprId>,
     /// Specifies the *defined* WebAsembly globals that correspond to a Rust `const`.
     ///
     /// These are stored in ascending order.

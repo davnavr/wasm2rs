@@ -37,7 +37,7 @@ impl Instance {
             _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated) },
         };
         let mut inst: &mut Allocated = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);
-        inst._g1.get_mut() = todo!("non-const globals not yet supported");
+        inst._g1.get_mut() = 0i32;
         module
     }
 

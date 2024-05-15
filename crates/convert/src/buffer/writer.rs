@@ -97,7 +97,7 @@ impl<'a> Writer<'a> {
     /// [`Display::fmt()`]: std::fmt::Display::fmt()
     /// [`Error`]: std::fmt::Error
     pub fn write_fmt(&mut self, args: std::fmt::Arguments) {
-        <Self as std::fmt::Write>::write_fmt(self, args).unwrap()
+        <Self as std::fmt::Write>::write_fmt(self, args).unwrap();
     }
 }
 
@@ -105,6 +105,16 @@ impl std::fmt::Write for Writer<'_> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.write_str(s);
         Ok(())
+    }
+}
+
+impl crate::write::Write for Writer<'_> {
+    fn write_str(&mut self, s: &str) {
+        <Self>::write_str(self, s);
+    }
+
+    fn write_fmt(&mut self, args: std::fmt::Arguments) {
+        <Self>::write_fmt(self, args)
     }
 }
 
