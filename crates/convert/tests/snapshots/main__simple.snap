@@ -34,7 +34,7 @@ impl Instance {
             _g1: rt::global::Global::<_>::ZERO,
         };
         let mut module = Self {
-            _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated) },
+            _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated),
         };
         let mut inst: &mut Allocated = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);
         inst._g1.get_mut() = 0i32;

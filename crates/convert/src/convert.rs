@@ -804,7 +804,7 @@ impl Convert<'_> {
         writeln!(o, "{sp}{sp}let mut module = Self {{");
         writeln!(
             o,
-            "{sp}{sp}{sp}_inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated) }},"
+            "{sp}{sp}{sp}_inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated),"
         );
         writeln!(o, "{sp}{sp}}};");
 

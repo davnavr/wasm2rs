@@ -27,7 +27,7 @@ impl Instance {
         let allocated = Allocated {
         };
         let mut module = Self {
-            _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated) },
+            _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated),
         };
         module
     }
