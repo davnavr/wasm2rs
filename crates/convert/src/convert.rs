@@ -792,7 +792,7 @@ impl Convert<'_> {
         for global in context.instantiate_globals.iter() {
             write!(o, "{sp}{sp}{sp}{global}: ");
             if context.types.global_at(global.0).mutable {
-                o.write_str("rt::global::Global::<_>::ZERO");
+                o.write_str("embedder::rt::global::Global::<_>::ZERO");
             } else {
                 o.write_str("Default::default()");
             }
@@ -821,7 +821,7 @@ impl Convert<'_> {
         }
 
         for global in context.instantiate_globals.iter().copied() {
-            write!(o, "{sp}{sp}inst.{global}");
+            write!(o, "{sp}{sp}*inst.{global}");
 
             if context.types.global_at(global.0).mutable {
                 o.write_str(".get_mut()");
@@ -852,7 +852,7 @@ impl Convert<'_> {
             writeln!(o, "{sp}{sp}// TODO: call {start_function}");
         }
 
-        writeln!(o, "{sp}{sp}module");
+        writeln!(o, "{sp}{sp}Ok(module)");
         writeln!(o, "{sp}}}");
 
         // Write function definitions and their bodies.
