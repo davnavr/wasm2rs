@@ -94,12 +94,16 @@ where
 /// [`UnwindWith`]: crate::trace::UnwindWith
 pub trait TrapWith<T, C: core::fmt::Debug> {
     /// Produces a [`Trap`] from a [`Result`]'s [`Err`] case.
-    fn trap_with<E: Trap<C>>(self, frame: Option<&'static crate::trace::WasmFrame>) -> Result<T, E>;
+    fn trap_with<E: Trap<C>>(self, frame: Option<&'static crate::trace::WasmFrame>)
+        -> Result<T, E>;
 }
 
 impl<T, C: core::fmt::Debug> TrapWith<T, C> for Result<T, C> {
     #[inline]
-    fn trap_with<E: Trap<C>>(self, frame: Option<&'static crate::trace::WasmFrame>) -> Result<T, E> {
+    fn trap_with<E: Trap<C>>(
+        self,
+        frame: Option<&'static crate::trace::WasmFrame>,
+    ) -> Result<T, E> {
         match self {
             Ok(ok) => Ok(ok),
             Err(cause) => Err(E::trap(cause, frame)),

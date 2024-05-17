@@ -13,6 +13,7 @@ macro_rules! wasm {
 $vis mod $module {
 
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
+use embedder::rt::trap::TrapWith as _;
 
 pub struct Allocated {
     _g1: embedder::rt::global::Global<i32>,
@@ -123,7 +124,7 @@ fn _f7(mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
     '_b0: {
         let mut _b1_0 = _l0;
         '_b1: loop {
-            '_b2: { if embedder::rt::math::i32_rem_u(_b1_0, 2i32)? == 0 {
+            '_b2: { if embedder::rt::math::i32_rem_u(_b1_0, 2i32).trap_with(None)? == 0 {
                 return Ok(());
             } } // '_b2
             _b1_0 = 1i32;

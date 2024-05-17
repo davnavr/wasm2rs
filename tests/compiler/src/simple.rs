@@ -74,7 +74,7 @@ fn br_if() {
 
     let result = inst.trap_on_three(3);
     assert!(
-        matches!(&result, Err(e) if e.code() == wasm2rs_rt::trap::TrapCode::Unreachable),
+        matches!(&result, Err(e) if matches!(e.cause(), wasm2rs_rt::trap::TrapCause::Unreachable { .. })),
         "expected trap unreachable, but got {result:?}"
     );
 }

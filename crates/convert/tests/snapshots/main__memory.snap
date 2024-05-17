@@ -13,6 +13,7 @@ macro_rules! wasm {
 $vis mod $module {
 
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
+use embedder::rt::trap::TrapWith as _;
 
 pub struct Allocated {
 }
