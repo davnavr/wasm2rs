@@ -384,7 +384,7 @@ impl crate::ast::Expr {
                 macro_rules! rt_math_function {
                     ($name:ident) => {{
                         function!(paths::RT_MATH, concat!("::", stringify!($name)));
-                        out.write_str("?");
+                        out.write_str(".trap_with(None)?");
                     }};
                 }
 

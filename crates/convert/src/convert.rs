@@ -690,8 +690,9 @@ impl Convert<'_> {
         o.write_str("$vis mod $module {\n\n");
         writeln!(
             o,
-            "use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n"
+            "use $(::$embedder_start::)? $($embedder_more)::+ as embedder;"
         );
+        writeln!(o, "use embedder::rt::trap::TrapWith as _;\n");
 
         // TODO: After `$module`, add `$(<$lifetime:lifetime>)?`
 
