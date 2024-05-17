@@ -6,8 +6,13 @@ check: fmt
     # cargo clippy --package wasm2rs-rt --no-default-features --features alloc,merged
     # cargo clippy --package wasm2rs-rt --no-default-features --features merged
 
-fmt:
-    cargo fmt
+clippy_rt:
+    cargo clippy -p "wasm2rs-rt*" --no-default-features
+    cargo clippy -p "wasm2rs-rt*"
+    cargo clippy -p "wasm2rs-rt*" --all-features
+
+fmt *FLAGS='':
+    cargo fmt {{FLAGS}}
 
 compiler_test:
     cargo run -- convert -i ./tests/compiler/src/simple.wat
