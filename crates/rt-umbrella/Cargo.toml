@@ -16,9 +16,11 @@ default = [
 std = [
     "alloc",
     "wasm2rs-rt-core/std",
+    "rt-func-ref/std",
     "rt-math/std",
+    "rt-memory/std",
     "rt-simd/std",
-    "rt-memory/std"
+    "rt-stack/std"
 ]
 alloc = ["rt-memory/alloc"]
 func-ref = ["dep:rt-func-ref"]
