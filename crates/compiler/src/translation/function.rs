@@ -851,14 +851,14 @@ pub(in crate::translation) fn write_definition(
                 out.write_str(")?;\n");
             }
             // Operator::CallIndirect { type_index, table_index, table_byte } => { todo!() }
-            Operator::Drop => {
+            /* Operator::Drop => {
                 // TODO: Should `drop` call ::core::mem::drop() for FuncRef/ExternRef?
                 let _ = writeln!(
                     out,
                     "// ::core::mem::drop({});",
                     PoppedValue::pop(validator, 0)
                 );
-            }
+            } */
             Operator::Select | Operator::TypedSelect { ty: _ } => {
                 let cond = PoppedValue::pop(validator, 0);
                 let val_2 = PoppedValue::pop(validator, 1);

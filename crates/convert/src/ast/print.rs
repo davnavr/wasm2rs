@@ -559,7 +559,7 @@ impl crate::ast::Expr {
             }
             Self::MemoryGrow { memory, delta } => {
                 // TODO: Check if memory is imported.
-                write!(out, "{}::size(&self.{memory}, ", paths::RT_MEM);
+                write!(out, "{}::grow(&self.{memory}, ", paths::RT_MEM);
                 delta.print(out, arena, nested, context);
                 out.write_str(")");
             }
@@ -671,8 +671,19 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                 Statement::Expr(expr) => {
                     debug_assert!(!is_last, "expected a terminator statement");
 
-                    expr.print(out, arena, false, self.context);
-                    out.write_str(";");
+                    match arena.get(expr) {
+                        crate::ast::Expr::Literal(literal) => write!(out, "// {literal}"),
+                        // No side effects or sub-expressions to evauluate.
+                        crate::ast::Expr::GetGlobal(_)
+                        | crate::ast::Expr::GetLocal(_)
+                        | crate::ast::Expr::LoopInput(_)
+                        | crate::ast::Expr::Temporary(_)
+                        | crate::ast::Expr::MemorySize(_) => (),
+                        expr => {
+                            expr.print(out, arena, false, self.context);
+                            out.write_str(";");
+                        }
+                    }
                 }
                 Statement::Call {
                     callee,

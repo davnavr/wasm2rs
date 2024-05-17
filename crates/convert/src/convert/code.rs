@@ -420,6 +420,11 @@ fn convert_impl(
                     builder.push_block_results(result_count)?;
                 }
             }
+            //Operator::CallIndirect
+            Operator::Drop => {
+                let expr = builder.pop_wasm_operand();
+                builder.emit_statement(expr)?;
+            }
             Operator::LocalGet { local_index } => {
                 builder.push_wasm_operand(crate::ast::Expr::GetLocal(crate::ast::LocalId(
                     local_index,
