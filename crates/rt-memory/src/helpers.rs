@@ -159,7 +159,7 @@ where
 /// [**i*nn*.load8_*sx***]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i8_load<const MEMORY: u32, I, M, E>(
     mem: &M,
-    offset: I::Signed,
+    offset: I,
     addr: I::Signed,
     frame: Option<&'static WasmFrame>,
 ) -> Result<i8, E>
@@ -175,7 +175,7 @@ where
         mem.i8_load(address.calculate()?)
     }
 
-    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    let address = EffectiveAddress::<I>::signed_with_offset(offset, addr);
     load(mem, address).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
@@ -186,7 +186,7 @@ where
 /// [**i*nn*.load16_*sx***]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i16_load<const MEMORY: u32, I, M, E>(
     mem: &M,
-    offset: I::Signed,
+    offset: I,
     addr: I::Signed,
     frame: Option<&'static WasmFrame>,
 ) -> Result<i16, E>
@@ -202,7 +202,7 @@ where
         mem.i16_load(address.calculate()?)
     }
 
-    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    let address = EffectiveAddress::<I>::signed_with_offset(offset, addr);
     load(mem, address).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
@@ -213,7 +213,7 @@ where
 /// [`i32.load`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i32_load<const MEMORY: u32, I, M, E>(
     mem: &M,
-    offset: I::Signed,
+    offset: I,
     addr: I::Signed,
     frame: Option<&'static WasmFrame>,
 ) -> Result<i32, E>
@@ -229,7 +229,7 @@ where
         mem.i32_load(address.calculate()?)
     }
 
-    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    let address = EffectiveAddress::<I>::signed_with_offset(offset, addr);
     load(mem, address).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
@@ -240,7 +240,7 @@ where
 /// [`i64.load` and **i64.load32_*sx***]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i64_load<const MEMORY: u32, I, M, E>(
     mem: &M,
-    offset: I::Signed,
+    offset: I,
     addr: I::Signed,
     frame: Option<&'static WasmFrame>,
 ) -> Result<i64, E>
@@ -256,7 +256,7 @@ where
         mem.i64_load(address.calculate()?)
     }
 
-    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    let address = EffectiveAddress::<I>::signed_with_offset(offset, addr);
     load(mem, address).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
@@ -267,7 +267,7 @@ where
 /// [**i*nn*.store8**]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i8_store<const MEMORY: u32, I, M, E>(
     mem: &M,
-    offset: I::Signed,
+    offset: I,
     addr: I::Signed,
     c: i8,
     frame: Option<&'static WasmFrame>,
@@ -285,7 +285,7 @@ where
         mem.i8_store(address.calculate()?, c)
     }
 
-    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    let address = EffectiveAddress::<I>::signed_with_offset(offset, addr);
     store(mem, address, c).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
@@ -296,7 +296,7 @@ where
 /// [**i*nn*.store16**]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i16_store<const MEMORY: u32, I, M, E>(
     mem: &M,
-    offset: I::Signed,
+    offset: I,
     addr: I::Signed,
     c: i16,
     frame: Option<&'static WasmFrame>,
@@ -314,7 +314,7 @@ where
         mem.i16_store(address.calculate()?, c)
     }
 
-    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    let address = EffectiveAddress::<I>::signed_with_offset(offset, addr);
     store(mem, address, c).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
@@ -325,7 +325,7 @@ where
 /// [`i32.store` and `i64.store32`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i32_store<const MEMORY: u32, I, M, E>(
     mem: &M,
-    offset: I::Signed,
+    offset: I,
     addr: I::Signed,
     c: i32,
     frame: Option<&'static WasmFrame>,
@@ -343,7 +343,7 @@ where
         mem.i32_store(address.calculate()?, c)
     }
 
-    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    let address = EffectiveAddress::<I>::signed_with_offset(offset, addr);
     store(mem, address, c).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
@@ -354,7 +354,7 @@ where
 /// [`i64.store`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
 pub fn i64_store<const MEMORY: u32, I, M, E>(
     mem: &M,
-    offset: I::Signed,
+    offset: I,
     addr: I::Signed,
     c: i64,
     frame: Option<&'static WasmFrame>,
@@ -372,6 +372,6 @@ where
         mem.i64_store(address.calculate()?, c)
     }
 
-    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    let address = EffectiveAddress::<I>::signed_with_offset(offset, addr);
     store(mem, address, c).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
