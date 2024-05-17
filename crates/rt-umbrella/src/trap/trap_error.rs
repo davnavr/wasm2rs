@@ -6,10 +6,16 @@ use crate::trap::Trap;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub enum TrapCause {
-    /// An [**`unreachable`**] instruction was executed.
+    /// An [**`unreachable`**] instruction was executed. This corresponds to a
+    /// [`trap::UnreachableError`].
     ///
+    /// [`trap::UnreachableError`]: crate::trap::UnreachableError
     /// [**`unreachable`**]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-control
-    Unreachable,
+    #[non_exhaustive]
+    Unreachable {
+        #[allow(missing_docs)]
+        error: crate::trap::UnreachableError,
+    },
     /// An attempt to convert a float value to an integer failed. This corresponds to a
     /// [`math::ConversionToIntegerError`].
     ///
@@ -91,7 +97,7 @@ pub enum TrapCause {
 impl core::fmt::Display for TrapCause {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Unreachable => f.write_str("unreachable instruction executed"),
+            Self::Unreachable { error } => core::fmt::Display::fmt(error, f),
             Self::ConversionToInteger => f.write_str("invalid conversion to integer"),
             Self::IntegerDivisionByZero => f.write_str("integer division by zero"),
             Self::IntegerOverflow => f.write_str("integer overflow"),
@@ -195,6 +201,21 @@ impl crate::trace::Trace for TrapError {
     // TODO: Implement fn push_wasm_frame
 }
 
+impl Trap<crate::trap::UnreachableError> for TrapError {
+    fn trap(
+        cause: crate::trap::UnreachableError,
+        frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
+    ) -> Self {
+        Self::new(TrapCause::Unreachable { error: cause }, frame)
+    }
+
+    // TODO: Make a common `TrapInfo` trait that has `as_error and `as_display` and `Self: Debug + Trace`
+    // #[cfg(feature = "std")]
+    // fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
+    //     Some(self)
+    // }
+}
+
 impl Trap<crate::math::ConversionToIntegerError> for TrapError {
     fn trap(
         cause: crate::math::ConversionToIntegerError,
@@ -203,12 +224,6 @@ impl Trap<crate::math::ConversionToIntegerError> for TrapError {
         let crate::math::ConversionToIntegerError = cause;
         Self::new(TrapCause::ConversionToInteger, frame)
     }
-
-    // TODO: Make a common `TrapInfo` trait that has `as_error and `as_display` and `Self: Debug + Trace`
-    // #[cfg(feature = "std")]
-    // fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
-    //     Some(self)
-    // }
 }
 
 impl Trap<crate::math::DivisionByZeroError> for TrapError {

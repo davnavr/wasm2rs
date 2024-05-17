@@ -1,5 +1,21 @@
 //! Provides the [`Trap`] trait.
 
+/// Error type used when the [`unreachable`] WebAssembly instruction is executed.
+///
+/// [`unreachable`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-control
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[allow(clippy::exhaustive_structs)]
+pub struct UnreachableError;
+
+impl core::fmt::Display for UnreachableError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("unreachable instruction executed")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for UnreachableError {}
+
 /// Trait for implementing WebAssembly traps.
 pub trait Trap<C: core::fmt::Debug>: core::fmt::Debug + crate::trace::Trace {
     /// Generates a trap with the given reason and an optional WebAssembly stack frame indicating

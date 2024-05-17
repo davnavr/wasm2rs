@@ -5,4 +5,4 @@
 mod trap_error;
 
 pub use trap_error::{TrapCause, TrapError};
-pub use wasm2rs_rt_core::trap::{Trap, TrapOccurred, TrapWith};
+pub use wasm2rs_rt_core::trap::{Trap, TrapOccurred, TrapWith, UnreachableError};
