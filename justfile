@@ -16,7 +16,7 @@ clippy_rt:
 fmt *FLAGS='':
     cargo fmt {{FLAGS}}
 
-test_compiler:
+test_compiler: clippy_rt
     cargo run -- convert -i ./tests/compiler/src/simple.wat
     cd ./tests/compiler && cargo test
 
