@@ -335,7 +335,7 @@ pub(crate) enum Expr {
     ///
     /// [`local.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
     GetLocal(LocalId),
-    /// Gets the value of a global variable. Corresponds to the `global.get` instruction.
+    /// Gets the value of a global variable. Corresponds to the [`global.get`] instruction.
     ///
     /// [`global.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
     GetGlobal(GlobalId),
@@ -359,6 +359,20 @@ pub(crate) enum Expr {
         ///
         /// This value must not exceed `u32::MAX` for 32-bit linear memories.
         offset: u64,
+    },
+    /// Gets the current number of pages allocated for a linear memory. Corresponds to the
+    /// [`memory.size`] instruction.
+    ///
+    /// [`memory.size`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+    MemorySize(MemoryId),
+    /// Allocates more pages for a linear memory. Correspodns to the [`memory.grow`] instruction.
+    ///
+    /// [`memory.grow`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+    MemoryGrow {
+        /// The linear memory to grow.
+        memory: MemoryId,
+        /// The number of additional pages to allocate.
+        delta: ExprId,
     },
     Call {
         callee: FuncId,
@@ -416,7 +430,6 @@ pub(crate) enum Statement {
     ///
     /// [`unreachable`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions
     Unreachable {
-        function: FuncId,
         /// An offset from the start of the code section entry of the function to the `unreachable`
         /// instruction.
         offset: u32,

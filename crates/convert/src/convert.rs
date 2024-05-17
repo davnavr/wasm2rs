@@ -858,7 +858,7 @@ impl Convert<'_> {
             let memory_type = context.types.memory_at(memory_id.0);
             writeln!(
                 o,
-                "{sp}{sp}{sp}{memory_id}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, {}, {}, None)?,",
+                "{sp}{sp}{sp}{memory_id}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, {}, {})?,",
                 memory_id.0,
                 memory_id.0,
                 memory_type.initial,

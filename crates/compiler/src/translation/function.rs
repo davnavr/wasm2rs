@@ -1210,7 +1210,7 @@ pub(in crate::translation) fn write_definition(
                     memarg.memory,
                     MemAccess::new(memarg.memory, import_counts),
                 );
-            } */
+            }
             Operator::MemorySize { mem, mem_byte: _ } => {
                 let _ = writeln!(
                     out,
@@ -1226,7 +1226,7 @@ pub(in crate::translation) fn write_definition(
                     "let {operand:#}: i32 = {MEMORY}::grow({}, {operand});",
                     MemAccess::new(mem, import_counts),
                 );
-            }
+            } */
             //Operator::MemoryFill
             Operator::MemoryCopy { dst_mem, src_mem } => {
                 let length = PoppedValue::pop(validator, 0);

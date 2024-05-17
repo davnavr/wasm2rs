@@ -553,6 +553,16 @@ impl crate::ast::Expr {
                     out.write_str(")");
                 }
             }
+            Self::MemorySize(memory) => {
+                // TODO: Check if memory is imported.
+                write!(out, "{}::size(&self.{memory})", paths::RT_MEM);
+            }
+            Self::MemoryGrow { memory, delta } => {
+                // TODO: Check if memory is imported.
+                write!(out, "{}::size(&self.{memory}, ", paths::RT_MEM);
+                delta.print(out, arena, nested, context);
+                out.write_str(")");
+            }
             Self::Call { callee, arguments } => {
                 print_call_expr(out, *callee, *arguments, arena, context)
             }
@@ -1035,10 +1045,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
 
                     out.write_str(")?;");
                 }
-                Statement::Unreachable {
-                    function: _,
-                    offset: _,
-                } => {
+                Statement::Unreachable { offset: _ } => {
                     out.write_str("return ::core::result::Result::Err(");
 
                     write!(

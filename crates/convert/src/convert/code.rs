@@ -223,7 +223,6 @@ fn convert_impl(
                 builder.can_trap();
                 builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
                 builder.emit_statement(crate::ast::Statement::Unreachable {
-                    function: func_id,
                     offset: u32::try_from(op_offset - body.range().start).unwrap_or(u32::MAX),
                 })?;
             }
@@ -522,6 +521,19 @@ fn convert_impl(
                 memory_store!(memarg => I16);
             }
             Operator::I64Store32 { memarg } => memory_store!(memarg => AsI32),
+            Operator::MemorySize { mem, mem_byte: _ } => {
+                builder.needs_self();
+                builder
+                    .push_wasm_operand(crate::ast::Expr::MemorySize(crate::ast::MemoryId(mem)))?;
+            }
+            Operator::MemoryGrow { mem, mem_byte: _ } => {
+                builder.needs_self();
+                let delta = builder.pop_wasm_operand();
+                builder.push_wasm_operand(crate::ast::Expr::MemoryGrow {
+                    memory: crate::ast::MemoryId(mem),
+                    delta,
+                })?;
+            }
             // Misc. memory instructions
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
