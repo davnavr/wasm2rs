@@ -815,7 +815,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     if let Some(import) = self.context.global_import(global) {
                         todo!("set global import {import:?}");
                     } else {
-                        write!(out, "&self.{global}")
+                        write!(out, "&{INST}.{global}")
                     }
 
                     out.write_str(", ");
