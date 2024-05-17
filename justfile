@@ -18,6 +18,7 @@ fmt *FLAGS='':
 
 test_compiler: clippy_rt
     cargo run -- convert -i ./tests/compiler/src/simple.wat
+    cargo run -- convert -i ./tests/compiler/src/memory.wat
     cd ./tests/compiler && cargo test
 
 # Generate documentation; requires Rust nightly.
