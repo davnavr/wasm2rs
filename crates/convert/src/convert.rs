@@ -663,21 +663,18 @@ impl Convert<'_> {
             "$($embedder_more:ident)::+) => {\n\n"
         ));
 
+        // TODO: After `$module`, add `$(<$lifetime:lifetime>)?`
+
         o.write_str("#[allow(non_snake_case)]\n"); // Names might be mangled
         o.write_str("#[allow(dead_code)]\n"); // Some functions may not be called
         o.write_str("#[allow(unreachable_code)]\n"); // Some branches may not be taken (e.g. infinite loops detected by rustc)
         o.write_str("#[allow(unreachable_pub)]\n"); // Macro may be invoked within a non-public module.
         o.write_str("$vis mod $module {\n\n");
-        writeln!(
-            o,
-            "use $(::$embedder_start::)? $($embedder_more)::+ as embedder;"
-        );
-        writeln!(o, "use embedder::rt::trap::TrapWith as _;\n");
-
-        // TODO: After `$module`, add `$(<$lifetime:lifetime>)?`
+        o.write_str("use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n");
+        o.write_str("use embedder::rt::trap::TrapWith as _;\n\n");
 
         // TODO: Option to specify #[derive(Debug)] impl
-        writeln!(o, "pub struct Allocated {{");
+        writeln!(o, "pub struct Instance {{");
 
         for global_id in context.instantiate_globals.iter() {
             let global_type = context.types.global_at(global_id.0);
@@ -696,10 +693,6 @@ impl Convert<'_> {
             writeln!(o, ",");
         }
 
-        writeln!(o, "}}\n");
-
-        writeln!(o, "pub struct Instance {{");
-        writeln!(o, "{sp}_inst: embedder::Module<Allocated>,");
         writeln!(o, "}}\n");
 
         writeln!(o, "impl Instance {{");
@@ -747,9 +740,9 @@ impl Convert<'_> {
             write!(o, " {{\n{sp}{sp}");
             match context.global_kind(global_id) {
                 crate::context::GlobalKind::Const => write!(o, "Self::{global_id:#}"),
-                crate::context::GlobalKind::ImmutableField => write!(o, "self._inst.{global_id}"),
+                crate::context::GlobalKind::ImmutableField => write!(o, "self.{global_id}"),
                 crate::context::GlobalKind::MutableField { import: None } => {
-                    write!(o, "&self._inst.{global_id}");
+                    write!(o, "&self.{global_id}");
                 }
                 crate::context::GlobalKind::MutableField {
                     import: Some(import),
@@ -761,10 +754,10 @@ impl Convert<'_> {
         // Write module's `instantiate()` method.
         writeln!(
             o,
-            "\n{sp}pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {{"
+            "\n{sp}pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {{"
         );
 
-        writeln!(o, "{sp}{sp}let allocated = Allocated {{");
+        writeln!(o, "{sp}{sp}let allocated = Self {{");
 
         for global in context.instantiate_globals.iter() {
             write!(o, "{sp}{sp}{sp}{global}: ");
@@ -778,18 +771,16 @@ impl Convert<'_> {
 
         writeln!(o, "{sp}{sp}}};");
 
-        writeln!(o, "{sp}{sp}let mut module = Self {{");
         writeln!(
             o,
-            "{sp}{sp}{sp}_inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated),"
+            "{sp}{sp}let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);"
         );
-        writeln!(o, "{sp}{sp}}};");
 
         let mut got_inst_mut = false;
         let mut make_inst_mut = move |o: &mut crate::write::IoWrite| {
             if !got_inst_mut {
                 got_inst_mut = true;
-                writeln!(o, "{sp}{sp}let mut inst: &mut Allocated = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);");
+                writeln!(o, "{sp}{sp}let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);");
             }
         };
 

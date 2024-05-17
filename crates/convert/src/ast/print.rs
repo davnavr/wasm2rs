@@ -61,8 +61,6 @@ mod paths {
     pub(super) const RT_MEM: &str = "embedder::rt::memory";
 }
 
-const INST: &str = "self._inst";
-
 impl std::fmt::Display for crate::ast::ValType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -487,9 +485,9 @@ impl crate::ast::Expr {
             Self::GetLocal(local) => write!(out, "{local}"),
             Self::GetGlobal(global) => match context.global_kind(*global) {
                 crate::context::GlobalKind::Const => write!(out, "Self::{global:#}"),
-                crate::context::GlobalKind::ImmutableField => write!(out, "{INST}.{global}"),
+                crate::context::GlobalKind::ImmutableField => write!(out, "self.{global}"),
                 crate::context::GlobalKind::MutableField { import: None } => {
-                    write!(out, "{INST}.{global}.get()")
+                    write!(out, "self.{global}.get()")
                 }
                 crate::context::GlobalKind::MutableField {
                     import: Some(import),
@@ -837,7 +835,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     if let Some(import) = self.context.global_import(global) {
                         todo!("set global import {import:?}");
                     } else {
-                        write!(out, "&{INST}.{global}")
+                        write!(out, "&self.{global}")
                     }
 
                     out.write_str(", ");

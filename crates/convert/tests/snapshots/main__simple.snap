@@ -15,29 +15,23 @@ $vis mod $module {
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::trap::TrapWith as _;
 
-pub struct Allocated {
-    _g1: embedder::rt::global::Global<i32>,
-}
-
 pub struct Instance {
-    _inst: embedder::Module<Allocated>,
+    _g1: embedder::rt::global::Global<i32>,
 }
 
 impl Instance {
     const _G0: i32 = 0x400i32;
 
     pub fn r#counter(&self) -> &embedder::rt::global::Global<i32> {
-        &self._inst._g1
+        &self._g1
     }
 
-    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
-        let allocated = Allocated {
+    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
+        let allocated = Self {
             _g1: embedder::rt::global::Global::<_>::ZERO,
         };
-        let mut module = Self {
-            _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated),
-        };
-        let mut inst: &mut Allocated = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);
+        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
+        let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
         *inst._g1.get_mut() = 0i32;
         Ok(module)
     }
@@ -146,7 +140,7 @@ pub fn r#size_of_kibibyte(&self) -> ::core::result::Result<i32, embedder::Trap> 
 }
 
 fn _f9(&self) {
-    embedder::rt::global::Global::set(&self._inst._g1, i32::wrapping_add(self._inst._g1.get(), 1i32));
+    embedder::rt::global::Global::set(&self._g1, i32::wrapping_add(self._g1.get(), 1i32));
 }
 
 pub fn r#increment_counter(&self) -> ::core::result::Result<(), embedder::Trap> {

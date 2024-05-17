@@ -15,21 +15,15 @@ $vis mod $module {
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::trap::TrapWith as _;
 
-pub struct Allocated {
-}
-
 pub struct Instance {
-    _inst: embedder::Module<Allocated>,
 }
 
 impl Instance {
 
-    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
-        let allocated = Allocated {
+    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
+        let allocated = Self {
         };
-        let mut module = Self {
-            _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated),
-        };
+        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
         Ok(module)
     }
 
