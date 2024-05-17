@@ -202,6 +202,8 @@ pub trait Memory<I: Address = u32> {
     // }
 
     /// Returns the size of the linear memory, in terms of the [`PAGE_SIZE`].
+    ///
+    /// This should never exceed [`I::MAX_PAGE_COUNT`](Address::MAX_PAGE_COUNT).
     fn size(&self) -> I;
 
     /// Gets the maximum number of pages that this linear memory can have.

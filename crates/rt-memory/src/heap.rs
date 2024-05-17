@@ -11,6 +11,8 @@ pub struct HeapMemory<I: Address = u32> {
     /// This is guaranteed to always be a multiple of the [`crate::PAGE_SIZE`].
     len: Cell<I>,
     /// The maximum number of pages this linear memory can have.
+    ///
+    /// This is guaranteed to never be greater than [`I::MAX_PAGE_COUNT`](Address::MAX_PAGE_COUNT).
     limit: I,
 }
 
@@ -37,19 +39,13 @@ impl<I: Address> HeapMemory<I> {
 
     /// Allocates an empty linear memory with a maximum number of allowed pages.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if the `limit` is greater than the [`I::MAX_PAGE_COUNT`].
+    /// If the `limit` is greater than the [`I::MAX_PAGE_COUNT`], then it is truncated.
     ///
     /// [`I::MAX_PAGE_COUNT`]: Address::MAX_PAGE_COUNT
-    pub fn with_maximum(limit: I) -> Result<Self, crate::AllocationError<I>> {
-        if limit <= I::MAX_PAGE_COUNT {
-            let mut mem = Self::new();
-            mem.limit = limit;
-            Ok(mem)
-        } else {
-            Err(crate::AllocationError { size: limit })
-        }
+    pub fn with_maximum(limit: I) -> Self {
+        let mut mem = Self::new();
+        mem.limit = limit.min(I::MAX_PAGE_COUNT);
+        mem
     }
 
     /// Allocates a linear memory, with a minimum and maximum number of pages.
@@ -58,12 +54,9 @@ impl<I: Address> HeapMemory<I> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the `minimum` number of pages could not be allocated, or if the
-    /// `maximum` is greater than the [`I::MAX_PAGE_COUNT`].
-    ///
-    /// [`I::MAX_PAGE_COUNT`]: Address::MAX_PAGE_COUNT
+    /// Returns an error if the `minimum` number of pages could not be allocated.
     pub fn with_limits(minimum: I, maximum: I) -> Result<Self, crate::AllocationError<I>> {
-        let mem = Self::with_maximum(maximum)?;
+        let mem = Self::with_maximum(maximum);
         mem.try_grow(minimum)?;
         Ok(mem)
     }
