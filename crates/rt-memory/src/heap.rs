@@ -93,7 +93,7 @@ impl<I: Address> HeapMemory<I> {
 
         debug_assert_ne!(new_size, I::ZERO);
 
-        let is_realloc = old_size == I::ZERO;
+        let is_realloc = old_size != I::ZERO;
         let new_layout = {
             let calculated_size = new_size
                 .to_isize()
