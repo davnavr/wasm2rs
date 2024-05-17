@@ -1,20 +1,22 @@
 alias f := fmt
 alias d := doc
 
-check: fmt
-    cargo clippy
-    # cargo clippy --package wasm2rs-rt --no-default-features --features alloc,merged
-    # cargo clippy --package wasm2rs-rt --no-default-features --features merged
+check: fmt clippy_tools clippy_rt
+
+clippy_tools:
+    # cargo clippy --package wasm2rs-convert
+    # cargo clippy --package wasm2rs-convert --no-default-features
+    # cargo clippy --package wasm2rs-cli --all-features
 
 clippy_rt:
-    cargo clippy -p "wasm2rs-rt*" --no-default-features
-    cargo clippy -p "wasm2rs-rt*"
-    cargo clippy -p "wasm2rs-rt*" --all-features
+    cargo clippy --package "wasm2rs-rt*" --no-default-features
+    cargo clippy --package "wasm2rs-rt*"
+    cargo clippy --package "wasm2rs-rt*" --all-features
 
 fmt *FLAGS='':
     cargo fmt {{FLAGS}}
 
-compiler_test:
+test_compiler:
     cargo run -- convert -i ./tests/compiler/src/simple.wat
     cd ./tests/compiler && cargo test
 
