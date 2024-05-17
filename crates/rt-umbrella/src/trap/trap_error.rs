@@ -192,6 +192,16 @@ impl TrapError {
     }
 }
 
+impl core::cmp::PartialEq for TrapError {
+    fn eq(&self, other: &Self) -> bool {
+        #[cfg(not(feature = "alloc"))]
+        return self.cause == other.cause;
+
+        #[cfg(feature = "alloc")]
+        return self.inner.cause == other.inner.cause; // self.backtrace == other.backtrace
+    }
+}
+
 impl crate::trace::Trace for TrapError {
     // TODO: Implement fn push_wasm_frame
 }
