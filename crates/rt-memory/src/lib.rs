@@ -25,7 +25,7 @@ mod helpers;
 #[cfg(feature = "alloc")]
 mod heap;
 
-pub use address::Address;
+pub use address::{Address, EffectiveAddress};
 pub use empty::EmptyMemory;
 pub use helpers::*;
 
@@ -59,17 +59,12 @@ impl<I: Address> AllocationError<I> {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct AccessError<I: Address = u32> {
     memory: u32,
-    address: I,
-    offset: I,
+    address: EffectiveAddress<I>,
 }
 
 impl<I: Address> AccessError<I> {
-    const fn new(memory: u32, offset: I, address: I) -> Self {
-        Self {
-            memory,
-            offset,
-            address,
-        }
+    const fn new(memory: u32, address: EffectiveAddress<I>) -> Self {
+        Self { memory, address }
     }
 }
 
@@ -79,16 +74,7 @@ impl<I: Address> core::fmt::Display for AccessError<I> {
             f,
             "invalid access of linear memory #{} at address {:#X}",
             self.memory, self.address
-        )?;
-
-        if self.offset > I::ZERO {
-            write!(f, " + {:#X}", self.offset)?;
-
-            if let Some(effective_address) = self.address.checked_add(&self.offset) {
-                write!(f, " = {effective_address:#X}")?;
-            }
-        }
-        Ok(())
+        )
     }
 }
 

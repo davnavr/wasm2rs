@@ -2,7 +2,7 @@
 //!
 //! Calls to these functions are generated as part of the `wasm2rs` translation process.
 
-use crate::{AccessError, Address, BoundsCheck, BoundsCheckError, Memory};
+use crate::{AccessError, Address, BoundsCheck, BoundsCheckError, EffectiveAddress, Memory};
 use wasm2rs_rt_core::{trace::WasmFrame, trap::Trap};
 
 /// This implements the [`memory.size`] instruction.
@@ -27,15 +27,14 @@ pub fn grow<I: Address, M: Memory<I> + ?Sized>(mem: &M, delta: I::Signed) -> I::
 #[inline(never)]
 fn trap_access_error<I, E>(
     memory: u32,
-    offset: I,
-    address: I,
+    address: EffectiveAddress<I>,
     frame: Option<&'static WasmFrame>,
 ) -> E
 where
     I: Address,
     E: Trap<AccessError<I>>,
 {
-    E::trap(AccessError::new(memory, offset, address), frame)
+    E::trap(AccessError::new(memory, address), frame)
 }
 
 /// This implements the [`memory.init`] instruction and [active data segment initialization].
@@ -81,7 +80,7 @@ where
         I::cast_from_signed(length),
         data_segment,
     )
-    .map_err(|BoundsCheckError| trap_access_error(MEMORY, I::ZERO, memory_offset, frame))
+    .map_err(|BoundsCheckError| trap_access_error(MEMORY, memory_offset.into(), frame))
 }
 
 /// This implements the [`memory.copy`] instruction in the typical case where the source and
@@ -109,8 +108,7 @@ where
         .map_err(|BoundsCheckError| {
             trap_access_error(
                 MEMORY,
-                len.saturating_sub(I::ONE),
-                src_addr.max(dst_addr),
+                EffectiveAddress::<I>::with_offset(len, dst_addr),
                 frame,
             )
         })
@@ -146,18 +144,12 @@ where
                 _ => (DST_MEM, dst_addr),
             };
 
-            trap_access_error(memory, len.saturating_sub(I::ONE), address, frame)
+            trap_access_error(
+                memory,
+                EffectiveAddress::<I>::with_offset(len, address),
+                frame,
+            )
         })
-}
-
-/// Calculates an address from adding static offset to a dynamic address operand.
-///
-/// This implements the calculation of the [*effective address*] for WebAssembly memory instructions.
-///
-/// [*effective address*]: https://webassembly.github.io/spec/core/syntax/instructions.html#memory-instructions
-#[inline]
-fn effective_address<I: Address>(offset: I, address: I) -> BoundsCheck<I> {
-    address.checked_add(&offset).ok_or(BoundsCheckError)
 }
 
 /// This implements the [**i*nn*.load8_*sx***] instructions.
@@ -176,14 +168,15 @@ where
     M: Memory<I> + ?Sized,
     E: Trap<AccessError<I>>,
 {
-    fn load<I: Address>(mem: &(impl Memory<I> + ?Sized), offset: I, addr: I) -> BoundsCheck<i8> {
-        mem.i8_load(effective_address(offset, addr)?)
+    fn load<I: Address>(
+        mem: &(impl Memory<I> + ?Sized),
+        address: EffectiveAddress<I>,
+    ) -> BoundsCheck<i8> {
+        mem.i8_load(address.calculate()?)
     }
 
-    let offset = I::cast_from_signed(offset);
-    let addr = I::cast_from_signed(addr);
-    load(mem, offset, addr)
-        .map_err(|BoundsCheckError| trap_access_error(MEMORY, offset, addr, frame))
+    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    load(mem, address).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
 /// This implements the [**i*nn*.load16_*sx***] instructions.
@@ -202,14 +195,15 @@ where
     M: Memory<I> + ?Sized,
     E: Trap<AccessError<I>>,
 {
-    fn load<I: Address>(mem: &(impl Memory<I> + ?Sized), offset: I, addr: I) -> BoundsCheck<i16> {
-        mem.i16_load(effective_address(offset, addr)?)
+    fn load<I: Address>(
+        mem: &(impl Memory<I> + ?Sized),
+        address: EffectiveAddress<I>,
+    ) -> BoundsCheck<i16> {
+        mem.i16_load(address.calculate()?)
     }
 
-    let offset = I::cast_from_signed(offset);
-    let addr = I::cast_from_signed(addr);
-    load(mem, offset, addr)
-        .map_err(|BoundsCheckError| trap_access_error(MEMORY, offset, addr, frame))
+    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    load(mem, address).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
 /// This implements the [`i32.load`] instruction.
@@ -228,14 +222,15 @@ where
     M: Memory<I> + ?Sized,
     E: Trap<AccessError<I>>,
 {
-    fn load<I: Address>(mem: &(impl Memory<I> + ?Sized), offset: I, addr: I) -> BoundsCheck<i32> {
-        mem.i32_load(effective_address(offset, addr)?)
+    fn load<I: Address>(
+        mem: &(impl Memory<I> + ?Sized),
+        address: EffectiveAddress<I>,
+    ) -> BoundsCheck<i32> {
+        mem.i32_load(address.calculate()?)
     }
 
-    let offset = I::cast_from_signed(offset);
-    let addr = I::cast_from_signed(addr);
-    load(mem, offset, addr)
-        .map_err(|BoundsCheckError| trap_access_error(MEMORY, offset, addr, frame))
+    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    load(mem, address).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
 /// This implements the [`i64.load` and **i64.load32_*sx***] instructions.
@@ -254,14 +249,15 @@ where
     M: Memory<I> + ?Sized,
     E: Trap<AccessError<I>>,
 {
-    fn load<I: Address>(mem: &(impl Memory<I> + ?Sized), offset: I, addr: I) -> BoundsCheck<i64> {
-        mem.i64_load(effective_address(offset, addr)?)
+    fn load<I: Address>(
+        mem: &(impl Memory<I> + ?Sized),
+        address: EffectiveAddress<I>,
+    ) -> BoundsCheck<i64> {
+        mem.i64_load(address.calculate()?)
     }
 
-    let offset = I::cast_from_signed(offset);
-    let addr = I::cast_from_signed(addr);
-    load(mem, offset, addr)
-        .map_err(|BoundsCheckError| trap_access_error(MEMORY, offset, addr, frame))
+    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    load(mem, address).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
 /// This implements the [**i*nn*.store8**] instructions.
@@ -283,17 +279,14 @@ where
 {
     fn store<I: Address>(
         mem: &(impl Memory<I> + ?Sized),
-        offset: I,
-        addr: I,
+        address: EffectiveAddress<I>,
         c: i8,
     ) -> BoundsCheck<()> {
-        mem.i8_store(effective_address(offset, addr)?, c)
+        mem.i8_store(address.calculate()?, c)
     }
 
-    let offset = I::cast_from_signed(offset);
-    let addr = I::cast_from_signed(addr);
-    store(mem, offset, addr, c)
-        .map_err(|BoundsCheckError| trap_access_error(MEMORY, offset, addr, frame))
+    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    store(mem, address, c).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
 /// This implements the [**i*nn*.store16**] family of instructions.
@@ -315,17 +308,14 @@ where
 {
     fn store<I: Address>(
         mem: &(impl Memory<I> + ?Sized),
-        offset: I,
-        addr: I,
+        address: EffectiveAddress<I>,
         c: i16,
     ) -> BoundsCheck<()> {
-        mem.i16_store(effective_address(offset, addr)?, c)
+        mem.i16_store(address.calculate()?, c)
     }
 
-    let offset = I::cast_from_signed(offset);
-    let addr = I::cast_from_signed(addr);
-    store(mem, offset, addr, c)
-        .map_err(|BoundsCheckError| trap_access_error(MEMORY, offset, addr, frame))
+    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    store(mem, address, c).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
 /// This implements the [`i32.store` and `i64.store32`] instructions.
@@ -347,17 +337,14 @@ where
 {
     fn store<I: Address>(
         mem: &(impl Memory<I> + ?Sized),
-        offset: I,
-        addr: I,
+        address: EffectiveAddress<I>,
         c: i32,
     ) -> BoundsCheck<()> {
-        mem.i32_store(effective_address(offset, addr)?, c)
+        mem.i32_store(address.calculate()?, c)
     }
 
-    let offset = I::cast_from_signed(offset);
-    let addr = I::cast_from_signed(addr);
-    store(mem, offset, addr, c)
-        .map_err(|BoundsCheckError| trap_access_error(MEMORY, offset, addr, frame))
+    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    store(mem, address, c).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
 
 /// This implements the [`i64.store`] instruction.
@@ -379,15 +366,12 @@ where
 {
     fn store<I: Address>(
         mem: &(impl Memory<I> + ?Sized),
-        offset: I,
-        addr: I,
+        address: EffectiveAddress<I>,
         c: i64,
     ) -> BoundsCheck<()> {
-        mem.i64_store(effective_address(offset, addr)?, c)
+        mem.i64_store(address.calculate()?, c)
     }
 
-    let offset = I::cast_from_signed(offset);
-    let addr = I::cast_from_signed(addr);
-    store(mem, offset, addr, c)
-        .map_err(|BoundsCheckError| trap_access_error(MEMORY, offset, addr, frame))
+    let address = EffectiveAddress::<I>::signed_with_offset(I::cast_from_signed(offset), addr);
+    store(mem, address, c).map_err(|BoundsCheckError| trap_access_error(MEMORY, address, frame))
 }
