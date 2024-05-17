@@ -733,7 +733,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     results.print(
                         out,
                         arena,
-                        results.len() > 1 || (results.len() == 0 && can_unwind),
+                        results.len() > 1 || (results.is_empty() && can_unwind),
                         self.context,
                     );
 

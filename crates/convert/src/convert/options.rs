@@ -94,21 +94,6 @@ impl<'a> crate::Convert<'a> {
         self
     }
 
-    /// Specifies [`Allocations`] to reuse during conversion.
-    ///
-    /// This is useful if multiple WebAssembly modules are being converted with the same
-    /// [`Convert`] options.
-    ///
-    /// If not set, a new [`Allocations`] pool is created for every conversion of one WebAssembly
-    /// module.
-    ///
-    /// [`Allocations`]: crate::Allocations
-    /// [`Convert`]: crate::Convert
-    pub fn allocations(&mut self, allocations: &'a crate::Allocations) -> &mut Self {
-        self.allocations = Some(allocations);
-        self
-    }
-
     /// Sets the function used to write data segment contents to disk.
     ///
     /// For more information, see the documentation for [`DataSegmentWriter`].

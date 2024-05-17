@@ -21,7 +21,6 @@ pub struct Convert<'a> {
     // wasm_features: &'a wasmparser::WasmFeatures,
     stack_overflow_checks: StackOverflowChecks,
     debug_info: DebugInfo,
-    allocations: Option<&'a Allocations>,
 }
 
 impl std::fmt::Debug for Convert<'_> {
@@ -51,7 +50,6 @@ impl Convert<'_> {
             // wasm_features: &Self::DEFAULT_SUPPORTED_FEATURES,
             stack_overflow_checks: Default::default(),
             debug_info: Default::default(),
-            allocations: None,
         }
     }
 }
@@ -386,24 +384,7 @@ fn parse_sections<'wasm>(
     Ok(context)
 }
 
-enum AllocationsRef<'a> {
-    Owned(Box<Allocations>),
-    Borrowed(&'a Allocations),
-}
-
-impl std::ops::Deref for AllocationsRef<'_> {
-    type Target = Allocations;
-
-    fn deref(&self) -> &Allocations {
-        match self {
-            Self::Owned(owned) => owned,
-            Self::Borrowed(borrowed) => borrowed,
-        }
-    }
-}
-
-struct Ast<'wasm, 'options> {
-    allocations: AllocationsRef<'options>,
+struct Ast<'wasm> {
     context: crate::context::Context<'wasm>,
     function_definitions: Vec<code::Definition>,
 }
@@ -458,7 +439,11 @@ impl Convert<'_> {
         };
     }
 
-    fn convert_to_ast<'wasm>(&self, wasm: &'wasm [u8]) -> crate::Result<Ast<'wasm, '_>> {
+    fn convert_to_ast<'wasm>(
+        &self,
+        wasm: &'wasm [u8],
+        allocations: &Allocations,
+    ) -> crate::Result<Ast<'wasm>> {
         use anyhow::Context;
 
         let Module {
@@ -467,11 +452,7 @@ impl Convert<'_> {
             types,
         } = validate_payloads(wasm).context("validation failed")?;
 
-        // TODO: Helper struct to return objects even if an `Err` is returned.
-        let allocations = match self.allocations {
-            Some(existing) => AllocationsRef::Borrowed(existing),
-            None => AllocationsRef::Owned(Box::default()),
-        };
+        // TODO: Helper struct to return objects to `Allocations` even if an `Err` is returned.
 
         let function_count = types.core_function_count() as usize;
         let mut function_attributes = crate::context::FunctionAttributes {
@@ -482,15 +463,14 @@ impl Convert<'_> {
 
         let function_definitions = self.convert_function_definitions(
             &types,
-            &allocations,
+            allocations,
             &mut function_attributes,
             function_bodies,
         )?;
 
-        let context = parse_sections(types, function_attributes, &allocations, sections)?;
+        let context = parse_sections(types, function_attributes, allocations, sections)?;
 
         Ok(Ast {
-            allocations,
             context,
             function_definitions,
         })
@@ -871,8 +851,38 @@ impl Convert<'_> {
         Ok(())
     }
 
+    /// Allows reusing [`Allocations`] between multiple calls to [`convert_from_buffer()`]. This is
+    /// useful if multiple WebAssembly modules are being converted.
+    ///
+    /// [`convert_from_buffer()`]: Self::convert_from_buffer
+    pub fn convert_from_buffer_with_allocations(
+        &self,
+        wasm: &[u8],
+        output: &mut dyn std::io::Write,
+        allocations: &Allocations,
+    ) -> crate::Result<()> {
+        use anyhow::Context;
+
+        let Ast {
+            context,
+            function_definitions,
+        } = self
+            .convert_to_ast(wasm, allocations)
+            .context("could not construct AST of WebAssembly module")?;
+
+        self.print_ast(allocations, &context, function_definitions, output)
+            .context("could not print Rust source code")?;
+
+        context.finish(allocations);
+
+        Ok(())
+    }
+
     /// Converts an in-memory WebAssembly binary module, and [`Write`]s the resulting Rust source
     /// code to the given output.
+    ///
+    /// To reuse [`Allocations`], use the [`convert_from_buffer_with_allocations()`] method
+    /// instead.
     ///
     /// # Errors
     ///
@@ -880,26 +890,13 @@ impl Convert<'_> {
     /// [could not be validated], or if an error occured while writing to the `output`.
     ///
     /// [`Write`]: std::io::Write
+    /// [`convert_from_buffer_with_allocations()`]: Convert::convert_from_buffer_with_allocations()
     /// [could not be validated]: https://webassembly.github.io/spec/core/valid/index.html
     pub fn convert_from_buffer(
         &self,
         wasm: &[u8],
         output: &mut dyn std::io::Write,
     ) -> crate::Result<()> {
-        use anyhow::Context;
-
-        let Ast {
-            allocations,
-            context,
-            function_definitions,
-        } = self
-            .convert_to_ast(wasm)
-            .context("could not construct AST of WebAssembly module")?;
-
-        self.print_ast(&allocations, &context, function_definitions, output)
-            .context("could not print Rust source code")?;
-
-        context.finish(&allocations);
-        Ok(())
+        Self::convert_from_buffer_with_allocations(self, wasm, output, &Allocations::default())
     }
 }
