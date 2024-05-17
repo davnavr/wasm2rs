@@ -36,16 +36,18 @@ package = "wasm2rs-rt-stack"
 path = "../rt-stack"
 default-features = false
 
+[dependencies.rt-math]
+package = "wasm2rs-rt-math"
+path = "../rt-math"
+default-features = false
+
+# Optional dependencies
+
 [dependencies.rt-func-ref]
 package = "wasm2rs-rt-func-ref"
 path = "../rt-func-ref"
 default-features = false
 optional = true
-
-[dependencies.rt-math]
-package = "wasm2rs-rt-math"
-path = "../rt-math"
-default-features = false
 
 [dependencies.rt-memory]
 package = "wasm2rs-rt-memory"

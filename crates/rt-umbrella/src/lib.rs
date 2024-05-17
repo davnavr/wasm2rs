@@ -113,7 +113,7 @@ extern crate std;
 extern crate alloc;
 
 pub use rt_math as math;
-pub use wasm2rs_rt_core::{global, symbol, trace, trap};
+pub use wasm2rs_rt_core::{global, symbol, trace};
 
 #[cfg(feature = "memory")]
 pub use rt_memory as memory;
@@ -128,3 +128,4 @@ pub use rt_stack as stack;
 
 pub mod embedder;
 pub mod store;
+pub mod trap;

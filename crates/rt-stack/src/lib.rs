@@ -10,12 +10,15 @@
 #![deny(clippy::alloc_instead_of_core)]
 #![deny(clippy::std_instead_of_core)]
 
+#[cfg(feature = "std")]
+extern crate std;
+
 use wasm2rs_rt_core::trap::Trap;
 
 /// Error type used if a stack overflow was detected.
 ///
 /// See the documentation for the [`check_for_overflow()`] function for more information.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub struct StackOverflowError;
 
@@ -24,6 +27,9 @@ impl core::fmt::Display for StackOverflowError {
         f.write_str("call stack exhausted")
     }
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for StackOverflowError {}
 
 /// Checks if there is enough space on the stack for approximately `amount` bytes worth of
 /// variables.
@@ -61,6 +67,7 @@ where
     #[cfg(not(feature = "enabled"))]
     return {
         let _ = amount;
+        let _ = frame;
         Ok(())
     };
 

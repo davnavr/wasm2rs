@@ -55,6 +55,23 @@ impl<I: Address> AllocationError<I> {
     }
 }
 
+impl<I: Address> core::fmt::Display for AllocationError<I> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "couldn't allocate {} pages", self.size)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<I: Address> std::error::Error for AllocationError<I> {}
+
+impl From<AllocationError<u32>> for AllocationError<u64> {
+    fn from(error: AllocationError<u32>) -> Self {
+        Self {
+            size: error.size.into(),
+        }
+    }
+}
+
 /// Error type used when an attempt to read or write from a linear [`Memory`] fails.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct AccessError<I: Address = u32> {
@@ -75,6 +92,18 @@ impl<I: Address> core::fmt::Display for AccessError<I> {
             "invalid access of linear memory #{} at address {:#X}",
             self.memory, self.address
         )
+    }
+}
+
+#[cfg(feature = "std")]
+impl<I: Address> std::error::Error for AccessError<I> {}
+
+impl From<AccessError<u32>> for AccessError<u64> {
+    fn from(error: AccessError<u32>) -> Self {
+        Self {
+            memory: error.memory,
+            address: error.address.into(),
+        }
     }
 }
 

@@ -10,7 +10,7 @@
 pub mod self_contained {
     pub use crate as rt;
 
-    //pub type Trap = crate::trap::TrapValue; // TODO: Need to make trap a module
+    pub type Trap = crate::trap::TrapError;
 
     pub type Imports = ();
 

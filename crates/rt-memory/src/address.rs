@@ -152,6 +152,12 @@ impl From<EffectiveAddress<u32>> for u64 {
     }
 }
 
+impl From<EffectiveAddress<u32>> for EffectiveAddress<u64> {
+    fn from(address: EffectiveAddress<u32>) -> Self {
+        Self::from(u64::from(address))
+    }
+}
+
 impl<I: Address> core::cmp::PartialEq<I> for EffectiveAddress<I> {
     fn eq(&self, other: &I) -> bool {
         !self.high_bit && self.low_bits == *other
