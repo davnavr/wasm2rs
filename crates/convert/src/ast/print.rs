@@ -178,17 +178,6 @@ fn print_call_expr(
     }
 }
 
-fn print_memory_offset(out: &mut dyn crate::write::Write, offset: u64, memory64: bool) {
-    write!(out, "{offset:#X}");
-
-    // Ensure the Rust compiler won't complain about out-of-range literals.
-    if !memory64 && offset > (i32::MAX as u64) {
-        out.write_str("u32 as i32");
-    } else if memory64 && offset > (i64::MAX as u64) {
-        out.write_str("u64 as i64");
-    }
-}
-
 impl crate::ast::Expr {
     pub(crate) fn print(
         &self,
@@ -555,9 +544,7 @@ impl crate::ast::Expr {
                 let memory64 = context.types.memory_at(memory.0).memory64;
                 write!(out, "_load::<{}, ", memory.0);
                 out.write_str(if memory64 { "u64" } else { "u32" });
-                write!(out, ", _, _>(&self.{memory}, ");
-                print_memory_offset(out, *offset, memory64);
-                out.write_str(", ");
+                write!(out, ", _, _>(&self.{memory}, {offset}, ");
                 address.print(out, arena, false, context);
 
                 out.write_str(", None"); // TODO: WASM frame info for memory loads.
@@ -998,9 +985,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     write!(out, "_store::<{}, ", memory.0);
                     let memory64 = self.context.types.memory_at(memory.0).memory64;
                     out.write_str(if memory64 { "u64" } else { "u32" });
-                    write!(out, ", _, _>(&self.{memory}, ");
-                    print_memory_offset(out, offset, memory64);
-                    out.write_str(", ");
+                    write!(out, ", _, _>(&self.{memory}, {offset}, ");
                     address.print(out, arena, false, self.context);
                     out.write_str(", ");
 
