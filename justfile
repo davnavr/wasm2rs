@@ -16,10 +16,10 @@ clippy_rt:
 fmt *FLAGS='':
     cargo fmt {{FLAGS}}
 
-test_compiler: clippy_rt
+test_compiler cargo='cargo': clippy_rt
     cargo run -- convert -i ./tests/compiler/src/simple.wat
     cargo run -- convert -i ./tests/compiler/src/memory.wat
-    cd ./tests/compiler && cargo test
+    cd ./tests/compiler && {{cargo}} test
 
 # Generate documentation; requires Rust nightly.
 doc *FLAGS='--all-features':
