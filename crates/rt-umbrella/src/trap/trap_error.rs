@@ -41,17 +41,14 @@ pub enum TrapCause {
     },
     //UnalignedAtomicOperation
     /// Instantiating a module failed because linear memory could not be allocated. This
-    /// corresponds to a [`memory::AllocationError`].
+    /// corresponds to a [`store::AllocateMemoryError`].
     ///
-    /// [`memory::AllocationError`]: crate::memory::AllocationError
+    /// [`store::AllocateMemoryError`]: crate::store::AllocateMemoryError
     #[non_exhaustive]
     MemoryAllocationFailure {
-        /// The index of the memory that could not be allocated.
-        #[cfg(all(feature = "alloc", feature = "memory"))]
-        memory: u32,
         #[allow(missing_docs)]
         #[cfg(all(feature = "alloc", feature = "memory"))]
-        error: crate::memory::AllocationError,
+        error: crate::store::AllocateMemoryError<u64>,
     },
     /// Instantiating a module failed because a linear memory did not have matching limits.
     #[non_exhaustive]
@@ -106,9 +103,7 @@ impl core::fmt::Display for TrapCause {
             #[cfg(not(all(feature = "alloc", feature = "memory")))]
             Self::MemoryBoundsCheck {} => f.write_str("memory access was out of bounds"),
             #[cfg(all(feature = "alloc", feature = "memory"))]
-            Self::MemoryAllocationFailure { memory, error } => {
-                write!(f, "memory #{memory} {error}")
-            }
+            Self::MemoryAllocationFailure { error } => core::fmt::Display::fmt(error, f),
             #[cfg(not(all(feature = "alloc", feature = "memory")))]
             Self::MemoryAllocationFailure {} => f.write_str("memory allocation failure"),
             Self::MemoryLimitsMismatch => f.write_str("incorrect memory limits"),
@@ -141,7 +136,7 @@ impl std::error::Error for TrapCause {
             #[cfg(all(feature = "alloc", feature = "memory"))]
             Self::MemoryBoundsCheck { access } => Some(access),
             #[cfg(all(feature = "alloc", feature = "memory"))]
-            Self::MemoryAllocationFailure { memory: _, error } => Some(error),
+            Self::MemoryAllocationFailure { error } => Some(error),
             #[cfg(all(feature = "alloc", feature = "func-ref"))]
             Self::IndirectCallSignatureMismatch { mismatch } => Some(mismatch),
             Self::CallStackExhausted { error } => Some(error),
@@ -267,17 +262,21 @@ where
 }
 
 #[cfg(feature = "memory")]
-impl<I> Trap<crate::memory::AllocationError<I>> for TrapError
+impl<I> Trap<crate::store::AllocateMemoryError<I>> for TrapError
 where
     I: crate::memory::Address,
-    crate::memory::AllocationError<I>: Into<crate::memory::AllocationError<u64>>,
+    crate::store::AllocateMemoryError<I>: Into<crate::store::AllocateMemoryError<u64>>,
 {
     fn trap(
-        cause: crate::memory::AllocationError<I>,
+        cause: crate::store::AllocateMemoryError<I>,
         frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
     ) -> Self {
-        let _ = (cause, frame);
-        todo!("need to store memory in AllocationError")
+        Self::new(
+            TrapCause::MemoryAllocationFailure {
+                error: cause.into(),
+            },
+            frame,
+        )
     }
 }
 
