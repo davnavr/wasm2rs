@@ -645,11 +645,16 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
         for (n, stmt) in statements.iter().copied().enumerate() {
             let is_last = n == statements.len() - 1;
 
+            // Special handling of indentations for `return`s.
             if !matches!(
                 stmt,
                 Statement::BlockEnd { .. }
                     | Statement::Else { .. }
                     | Statement::BlockEndUnreachable { .. }
+                    | Statement::Branch {
+                        target: crate::ast::BranchTarget::Return,
+                        ..
+                    }
             ) {
                 self.write_indentation(out, indent_level);
             }
@@ -694,17 +699,25 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     values: results,
                     condition,
                 } => {
+                    let can_unwind = self
+                        .context
+                        .function_attributes
+                        .unwind_kind(function)
+                        .can_unwind();
+
+                    let has_return =
+                        condition.is_some() || can_unwind || !results.is_empty() || !is_last;
+
+                    if has_return {
+                        self.write_indentation(out, indent_level);
+                    }
+
                     if let Some(condition) = condition {
                         out.write_str("if ");
                         condition.print_bool(out, arena, self.context);
                         out.write_str(" { ");
                     }
 
-                    let can_unwind = self
-                        .context
-                        .function_attributes
-                        .unwind_kind(function)
-                        .can_unwind();
                     if !is_last {
                         out.write_str("return");
 
@@ -717,7 +730,12 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                         out.write_str("Ok(");
                     }
 
-                    results.print(out, arena, results.len() != 1, self.context);
+                    results.print(
+                        out,
+                        arena,
+                        results.len() > 1 || (results.len() == 0 && can_unwind),
+                        self.context,
+                    );
 
                     if can_unwind {
                         out.write_str(")");
@@ -727,6 +745,10 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                         out.write_str("; }");
                     } else if !is_last {
                         out.write_str(";");
+                    }
+
+                    if has_return {
+                        out.write_str("\n");
                     }
                 }
                 Statement::Branch {
@@ -1032,7 +1054,16 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                 }
             }
 
-            out.write_str("\n");
+            // Special handling for newlines for `return`s.
+            if !matches!(
+                stmt,
+                Statement::Branch {
+                    target: crate::ast::BranchTarget::Return,
+                    ..
+                }
+            ) {
+                out.write_str("\n");
+            }
         }
     }
 

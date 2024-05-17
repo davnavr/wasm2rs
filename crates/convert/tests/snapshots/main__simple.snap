@@ -87,7 +87,6 @@ pub fn r#life(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Trap
 }
 
 fn _f5() {
-    ()
 }
 
 pub fn r#do_nothing(&self) -> ::core::result::Result<(), embedder::Trap> {
@@ -148,7 +147,6 @@ pub fn r#size_of_kibibyte(&self) -> ::core::result::Result<i32, embedder::Trap> 
 
 fn _f9(&self) {
     embedder::rt::global::Global::set(&self._inst._g1, i32::wrapping_add(self._inst._g1.get(), 1i32));
-    ()
 }
 
 pub fn r#increment_counter(&self) -> ::core::result::Result<(), embedder::Trap> {
