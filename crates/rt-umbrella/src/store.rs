@@ -49,6 +49,7 @@ impl<T> AllocateModule<T> for AllocateModuleRc {
 /// Trait used for [allocating WebAssembly linear memories].
 ///
 /// [allocating WebAssembly linear memories]: https://webassembly.github.io/spec/core/exec/modules.html#memories
+#[cfg(feature = "memory")]
 pub trait AllocateMemory<I: crate::memory::Address = u32> {
     /// The linear memory instance.
     type Memory: crate::memory::Memory<I>;
@@ -65,12 +66,12 @@ pub trait AllocateMemory<I: crate::memory::Address = u32> {
 ///
 /// [`HeapMemory::<I>::with_limits()`]: crate::memory::HeapMemory::with_limits();
 #[derive(Clone, Copy, Default)]
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", feature = "memory"))]
 pub struct AllocateHeapMemory<I: crate::memory::Address = u32> {
     _marker: core::marker::PhantomData<I>,
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", feature = "memory"))]
 impl<I: crate::memory::Address> AllocateMemory<I> for AllocateHeapMemory<I> {
     type Memory = crate::memory::HeapMemory<I>;
 
@@ -83,7 +84,7 @@ impl<I: crate::memory::Address> AllocateMemory<I> for AllocateHeapMemory<I> {
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", feature = "memory"))]
 impl<I: crate::memory::Address> core::fmt::Debug for AllocateHeapMemory<I> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str("AllocateHeapMemory")
