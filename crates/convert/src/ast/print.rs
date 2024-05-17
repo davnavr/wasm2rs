@@ -55,9 +55,9 @@ impl Default for Indentation {
 
 /// Rust paths to embedder or runtime support code, typically implemented in `wasm2rs-rt`.
 mod paths {
+    //pub(super) const TRAP: &str = "embedder::Trap";
     pub(super) const RT_MATH: &str = "embedder::rt::math";
-    pub(super) const RT_TRAP: &str = "embedder::rt::trap";
-    pub(super) const RT_TRAP_CODE: &str = "embedder::rt::trap::TrapCode";
+    pub(super) const RT_TRAP: &str = "embedder::rt::trap::Trap";
     pub(super) const RT_MEM: &str = "embedder::rt::memory";
 }
 
@@ -1015,16 +1015,20 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
 
                     out.write_str(")?;");
                 }
-                Statement::Unreachable { function, offset } => {
+                Statement::Unreachable {
+                    function: _,
+                    offset: _,
+                } => {
+                    out.write_str("return ::core::result::Result::Err(");
+
                     write!(
                         out,
-                        "return ::core::result::Err({}::Trap::with_code(\
-                            {}::Unreachable, \
-                            todo!(\"how to encode {function} @ {offset:#X}\"\
-                        )));",
-                        paths::RT_TRAP,
-                        paths::RT_TRAP_CODE,
+                        "{}::trap(embedder::rt::trap::UnreachableError",
+                        paths::RT_TRAP
                     );
+
+                    out.write_str(", None"); // TODO: Include frame info for `unreachable` traps.
+                    out.write_str("));");
                 }
             }
 
