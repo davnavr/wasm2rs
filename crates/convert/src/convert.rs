@@ -232,8 +232,9 @@ fn parse_sections<'wasm>(
     allocations: &crate::Allocations,
     sections: Sections<'wasm>,
 ) -> crate::Result<crate::context::Context<'wasm>> {
-    let total_global_count = types.global_count() as usize;
     let total_function_count = types.core_function_count() as usize;
+    let total_memory_count = types.memory_count() as usize;
+    let total_global_count = types.global_count() as usize;
     let mut context = crate::context::Context {
         types,
         function_attributes,
@@ -241,14 +242,18 @@ fn parse_sections<'wasm>(
         // These will be filled in later.
         imported_modules: Default::default(),
         func_import_modules: Default::default(),
+        memory_import_modules: Default::default(),
         global_import_modules: Default::default(),
         func_import_names: Default::default(),
+        memory_import_names: Default::default(),
         global_import_names: Default::default(),
         function_export_names: Default::default(),
-        global_export_names: Default::default(),
-        global_exports: Default::default(),
+        global_export_names: std::collections::HashMap::new(),
+        memory_export_names: std::collections::HashMap::new(),
+        memory_exports: Vec::<crate::ast::MemoryId>::new(),
+        global_exports: Vec::<crate::ast::GlobalId>::new(),
         global_initializers: allocations.take_ast_arena(),
-        instantiate_globals: Vec::new(),
+        instantiate_globals: Vec::<crate::ast::GlobalId>::new(),
         defined_globals: std::collections::HashMap::new(),
         constant_globals: Vec::with_capacity(total_global_count / 2),
     };
@@ -266,15 +271,22 @@ fn parse_sections<'wasm>(
         let mut imported_modules = Vec::with_capacity((import_section.count() as usize).min(2));
 
         let func_import_count = total_function_count - (sections.code_count as usize);
+        let memory_import_count =
+            total_memory_count - (get_section_count(&sections.memories) as usize);
         let global_import_count =
             total_global_count - (get_section_count(&sections.globals) as usize);
+
         let mut func_import_modules = Vec::with_capacity(func_import_count);
+        let mut memory_import_modules = Vec::with_capacity(memory_import_count);
         let mut global_import_modules = Vec::with_capacity(global_import_count);
         let mut func_import_names = Vec::with_capacity(func_import_count);
+        let mut memory_import_names = Vec::with_capacity(memory_import_count);
         let mut global_import_names = Vec::with_capacity(global_import_count);
 
-        context.instantiate_globals.reserve(global_import_count);
+        // Non-mutable global imports are stored as a field.
+        context.instantiate_globals.reserve(global_import_count / 2);
 
+        let mut memory_idx = crate::ast::MemoryId(0);
         let mut global_idx = crate::ast::GlobalId(0);
 
         for result in import_section.into_iter_with_offsets() {
@@ -303,6 +315,11 @@ fn parse_sections<'wasm>(
                     func_import_names.push(import.name);
                     func_import_modules.push(module_idx);
                 }
+                TypeRef::Memory(_) => {
+                    memory_import_names.push(import.name);
+                    memory_import_modules.push(module_idx);
+                    memory_idx.0 += 1;
+                }
                 TypeRef::Global(global_type) => {
                     global_import_names.push(import.name);
                     global_import_modules.push(module_idx);
@@ -311,6 +328,7 @@ fn parse_sections<'wasm>(
                     }
                     global_idx.0 += 1;
                 }
+                TypeRef::Tag(_) => anyhow::bail!("tag imports are not yet supported"),
                 bad => anyhow::bail!("TODO: Unsupported import {bad:?} @ {import_offset:#X}"),
             }
         }
@@ -320,10 +338,28 @@ fn parse_sections<'wasm>(
         // Don't need to store the capacity of these `Vec`s.
         context.imported_modules = imported_modules.into_boxed_slice();
         context.func_import_modules = func_import_modules.into_boxed_slice();
+        context.memory_import_modules = memory_import_modules.into_boxed_slice();
         context.global_import_modules = global_import_modules.into_boxed_slice();
+
         context.func_import_names = func_import_names.into_boxed_slice();
+        context.memory_import_names = memory_import_names.into_boxed_slice();
         context.global_import_names = global_import_names.into_boxed_slice();
+
+        debug_assert_eq!(
+            context.func_import_modules.len(),
+            context.func_import_names.len()
+        );
+        debug_assert_eq!(
+            context.memory_import_modules.len(),
+            context.memory_import_names.len()
+        );
+        debug_assert_eq!(
+            context.global_import_modules.len(),
+            context.global_import_names.len()
+        );
     }
+
+    // Don't need to parse `sections.memories`, `types.memory_at()` provides its contents.
 
     if let Some(global_section) = sections.globals {
         let ids = 0u32..global_section.count();
@@ -366,15 +402,25 @@ fn parse_sections<'wasm>(
                     let func_idx = crate::ast::FuncId(export.index);
                     context.function_export_names.insert(func_idx, export.name);
                 }
+                ExternalKind::Memory => {
+                    let mem_idx = crate::ast::MemoryId(export.index);
+                    context.memory_exports.push(mem_idx);
+                    context.memory_export_names.insert(mem_idx, export.name);
+                }
                 ExternalKind::Global => {
                     let global_idx = crate::ast::GlobalId(export.index);
                     context.global_exports.push(global_idx);
                     context.global_export_names.insert(global_idx, export.name);
                 }
+                ExternalKind::Tag => anyhow::bail!("tag exports are not yet supported"),
                 bad => anyhow::bail!("TODO: Unsupported export {bad:?} @ {export_offset:#X}"),
             }
         }
 
+        debug_assert_eq!(
+            context.memory_exports.len(),
+            context.memory_export_names.len()
+        );
         debug_assert_eq!(
             context.global_exports.len(),
             context.global_export_names.len()
@@ -476,6 +522,7 @@ impl Convert<'_> {
         })
     }
 
+    // TODO: Move this to `print.rs`
     fn print_ast(
         &self,
         allocations: &Allocations,
@@ -674,7 +721,15 @@ impl Convert<'_> {
         o.write_str("use embedder::rt::trap::TrapWith as _;\n\n");
 
         // TODO: Option to specify #[derive(Debug)] impl
-        writeln!(o, "pub struct Instance {{");
+        writeln!(o, "pub struct Instance {{\n{sp}imports: embedder::Imports,");
+
+        let defined_memories = ((context.global_import_names.len() as u32)
+            ..context.types.memory_count())
+            .map(crate::ast::MemoryId);
+
+        for memory_id in defined_memories.clone() {
+            writeln!(o, "{sp}{memory_id}: embedder::Memory{},", memory_id.0);
+        }
 
         for global_id in context.instantiate_globals.iter() {
             let global_type = context.types.global_at(global_id.0);
@@ -697,6 +752,7 @@ impl Convert<'_> {
 
         writeln!(o, "impl Instance {{");
 
+        // Write constant globals.
         for global in context.constant_globals.iter() {
             match context.global_initializers.get(global.initializer) {
                 crate::ast::Expr::Literal(literal) => writeln!(
@@ -710,6 +766,33 @@ impl Convert<'_> {
                     global.id
                 ),
             }
+        }
+
+        // Write exported memories.
+        for memory_id in context.memory_exports.iter().copied() {
+            let export = *context
+                .memory_export_names
+                .get(&memory_id)
+                .expect("memory export did not have a name");
+
+            write!(
+                o,
+                "\n{sp}pub fn {}(&self) -> &embedder::Memory{} {{\n{sp}{sp}",
+                crate::ident::SafeIdent::from(export),
+                memory_id.0
+            );
+
+            match context.memory_import(memory_id) {
+                None => write!(o, "&self.{memory_id}"),
+                Some(import) => write!(
+                    o,
+                    "self.imports.{}().{}()",
+                    crate::ident::SafeIdent::from(*import.module),
+                    crate::ident::SafeIdent::from(*import.name)
+                ),
+            }
+
+            writeln!(o, "\n{sp}}}\n");
         }
 
         // Write exported globals.
@@ -758,6 +841,7 @@ impl Convert<'_> {
         );
 
         writeln!(o, "{sp}{sp}let allocated = Self {{");
+        writeln!(o, "{sp}{sp}{sp}imports: store.imports,");
 
         for global in context.instantiate_globals.iter() {
             write!(o, "{sp}{sp}{sp}{global}: ");
@@ -767,6 +851,22 @@ impl Convert<'_> {
                 o.write_str("Default::default()");
             }
             o.write_str(",\n");
+        }
+
+        // Allocate the linear memories.
+        for memory_id in defined_memories {
+            let memory_type = context.types.memory_at(memory_id.0);
+            writeln!(
+                o,
+                "{sp}{sp}{sp}{memory_id}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, {}, {}, None)?,",
+                memory_id.0,
+                memory_id.0,
+                memory_type.initial,
+                match memory_type.maximum {
+                    Some(maximum) => maximum,
+                    None if memory_type.memory64 => u64::MAX,
+                    None => u32::MAX.into(),
+                });
         }
 
         writeln!(o, "{sp}{sp}}};");
@@ -788,6 +888,8 @@ impl Convert<'_> {
             make_inst_mut(&mut o);
         }
 
+        // Initialize the globals to their initial values.
+        // This has to occur after `inst` is created in case there is self-referential stuff.
         for global in context.instantiate_globals.iter().copied() {
             write!(o, "{sp}{sp}*inst.{global}");
 

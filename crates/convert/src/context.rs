@@ -1,6 +1,6 @@
 //! Types describing a WebAssembly module and the mapping of WebAssembly constructs to Rust.
 
-use crate::ast::{FuncId, GlobalId};
+use crate::ast::{FuncId, GlobalId, MemoryId};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum CallKind {
@@ -138,17 +138,27 @@ pub(crate) struct Context<'wasm> {
     pub(crate) imported_modules: Box<[&'wasm str]>,
     /// Specifies the module each imported function originated from.
     pub(crate) func_import_modules: Box<[ImportedModule]>,
+    /// Specifies the module each imported memory originated from.
+    pub(crate) memory_import_modules: Box<[ImportedModule]>,
     /// Specifies the module each imported global originated from.
     pub(crate) global_import_modules: Box<[ImportedModule]>,
     /// Specifies the name of each WebAssembly function import.
     pub(crate) func_import_names: Box<[&'wasm str]>,
+    /// Specifies the name of each WebAssembly memory import.
+    pub(crate) memory_import_names: Box<[&'wasm str]>,
     /// Specifies the name of each WebAssembly global import.
     pub(crate) global_import_names: Box<[&'wasm str]>,
     /// Lookup table for each exported WebAssembly function.
     pub(crate) function_export_names: std::collections::HashMap<FuncId, &'wasm str>,
+    /// Lookup table for each exported WebAssembly memory.
+    pub(crate) memory_export_names: std::collections::HashMap<MemoryId, &'wasm str>,
     /// Lookup table for each exported WebAssembly global.
     pub(crate) global_export_names: std::collections::HashMap<GlobalId, &'wasm str>,
-    /// Specifies which globals are exported.
+    /// Specifies which WebAssembly memories are exported.
+    ///
+    /// These are in the order they were specified in the WebAssembly export section.
+    pub(crate) memory_exports: Vec<MemoryId>,
+    /// Specifies which WebAssembly globals are exported.
     ///
     /// These are in the order they were specified in the WebAssembly export section.
     pub(crate) global_exports: Vec<GlobalId>,
@@ -192,21 +202,39 @@ impl<'wasm> Context<'wasm> {
         }
     }
 
-    pub(crate) fn global_import(&self, g: GlobalId) -> Option<Import<'_, 'wasm>> {
-        let index = g.0 as usize;
-        self.global_import_names.get(index).map(|name| {
-            assert_eq!(
-                self.global_import_modules.len(),
-                self.global_import_names.len()
-            );
+    // TODO: fn table_name, memory_name, global_name,
+
+    fn import_lookup<'ctx>(
+        &'ctx self,
+        index: usize,
+        modules: &'ctx Box<[ImportedModule]>,
+        names: &'ctx Box<[&'wasm str]>,
+    ) -> Option<Import<'ctx, 'wasm>> {
+        names.get(index).map(|name| {
+            assert_eq!(modules.len(), names.len());
+
             Import {
-                module: &self.imported_modules[usize::from(self.global_import_modules[index].0)],
+                module: &self.imported_modules[usize::from(modules[index].0)],
                 name,
             }
         })
     }
 
-    // TODO: fn global_name
+    pub(crate) fn memory_import(&self, m: MemoryId) -> Option<Import<'_, 'wasm>> {
+        self.import_lookup(
+            m.0 as usize,
+            &self.memory_import_modules,
+            &self.memory_import_names,
+        )
+    }
+
+    pub(crate) fn global_import(&self, g: GlobalId) -> Option<Import<'_, 'wasm>> {
+        self.import_lookup(
+            g.0 as usize,
+            &self.global_import_modules,
+            &self.global_import_names,
+        )
+    }
 
     pub(crate) fn global_kind(&self, g: GlobalId) -> GlobalKind {
         if self.types.global_at(g.0).mutable {

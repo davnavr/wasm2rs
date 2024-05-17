@@ -16,6 +16,7 @@ use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::trap::TrapWith as _;
 
 pub struct Instance {
+    imports: embedder::Imports,
     _g1: embedder::rt::global::Global<i32>,
 }
 
@@ -28,6 +29,7 @@ impl Instance {
 
     pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
         let allocated = Self {
+            imports: store.imports,
             _g1: embedder::rt::global::Global::<_>::ZERO,
         };
         let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);

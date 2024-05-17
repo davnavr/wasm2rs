@@ -16,12 +16,21 @@ use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::trap::TrapWith as _;
 
 pub struct Instance {
+    imports: embedder::Imports,
+    _m: embedder::Memory0,
 }
 
 impl Instance {
 
+    pub fn r#mem(&self) -> &embedder::Memory0 {
+        &self._m
+    }
+
+
     pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
         let allocated = Self {
+            imports: store.imports,
+            _m: embedder::rt::store::AllocateMemory::allocate(store.memory0, 0, 1, 4294967295, None)?,
         };
         let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
         Ok(module)
