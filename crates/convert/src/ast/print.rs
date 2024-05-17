@@ -154,6 +154,10 @@ fn print_call_common<F>(
     write!(out, "{}(", context.function_name(callee));
     arguments(out);
     out.write_str(")");
+
+    if context.function_attributes.unwind_kind(callee).can_unwind() {
+        out.write_str("?");
+    }
 }
 
 fn print_call_expr(
@@ -172,10 +176,6 @@ fn print_call_expr(
             arg.print(out, arena, false, context);
         }
     });
-
-    if context.function_attributes.unwind_kind(callee).can_unwind() {
-        out.write_str("?");
-    }
 }
 
 impl crate::ast::Expr {
@@ -1044,6 +1044,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
         arguments: u32,
     ) {
         self.write_indentation(out, indent_level);
+        out.write_str("Ok(");
         print_call_common(out, function, self.context, |out| {
             for i in 0u32..arguments {
                 if i > 0 {
@@ -1053,6 +1054,6 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                 write!(out, "{}", crate::ast::LocalId(i));
             }
         });
-        out.write_str("\n");
+        out.write_str(")\n");
     }
 }

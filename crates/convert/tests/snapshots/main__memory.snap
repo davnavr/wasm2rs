@@ -29,20 +29,20 @@ impl Instance {
         let mut module = Self {
             _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated),
         };
-        module
+        Ok(module)
     }
 
 pub fn r#write_my_int(&self) -> ::core::result::Result<(), embedder::Trap> {
-    embedder::rt::memory::i32_store::<0, u32, _, _>(&self._m, 0x0, 0x1F4i32, 0x41i32, None)?;
+    embedder::rt::memory::i32_store::<0, u32, _, _>(&self._m, 0, 0x1F4i32, 0x41i32, None)?;
     Ok(())
 }
 
 pub fn r#read_my_int(&self) -> ::core::result::Result<i32, embedder::Trap> {
-    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0x0, 0x1F4i32, None)?)
+    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0, 0x1F4i32, None)?)
 }
 
 pub fn r#out_of_bounds_read(&self) -> ::core::result::Result<i32, embedder::Trap> {
-    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0x0, 0x00010000i32, None)?)
+    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0, 0x00010000i32, None)?)
 }
 
 } // impl Instance

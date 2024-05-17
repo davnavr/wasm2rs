@@ -523,7 +523,7 @@ impl Convert<'_> {
 
         fn print_param_types(out: &mut Writer, signature: &wasmparser::FuncType) {
             print_result_type(out, signature.params(), |out, i| {
-                write!(out, "{}: ", crate::ast::LocalId(i))
+                write!(out, "mut {}: ", crate::ast::LocalId(i))
             })
         }
 
@@ -628,12 +628,8 @@ impl Convert<'_> {
                     }
 
                     print_param_types(&mut out, signature);
-                    out.write_str(")");
-                    if has_return_types {
-                        out.write_str(" -> ");
-
-                        print_return_types(&mut out, signature, unwind_kind)
-                    }
+                    out.write_str(") -> ");
+                    print_return_types(&mut out, signature, crate::context::UnwindKind::Maybe);
 
                     out.write_str(" {\n");
 

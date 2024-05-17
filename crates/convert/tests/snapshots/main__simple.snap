@@ -31,48 +31,48 @@ impl Instance {
 
     pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
         let allocated = Allocated {
-            _g1: rt::global::Global::<_>::ZERO,
+            _g1: embedder::rt::global::Global::<_>::ZERO,
         };
         let mut module = Self {
             _inst: embedder::rt::store::AllocateModule::allocate(store.instance, allocated),
         };
         let mut inst: &mut Allocated = embedder::rt::store::ModuleAllocation::get_mut(&mut module._inst);
-        inst._g1.get_mut() = 0i32;
-        module
+        *inst._g1.get_mut() = 0i32;
+        Ok(module)
     }
 
-fn _f0(_l0: i32) -> i32 {
+fn _f0(mut _l0: i32) -> i32 {
     i32::wrapping_add(_l0, 5i32)
 }
 
-pub fn r#add_five(&self, _l0: i32) -> i32 {
-    Self::_f0(_l0)
+pub fn r#add_five(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
+    Ok(Self::_f0(_l0))
 }
 
-pub fn r#add_fifteen(&self, _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
+pub fn r#add_fifteen(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
     Ok(Self::_f0(Self::_f0(Self::_f0(_l0))))
 }
 
-fn _f2(_l0: i32) -> i32 {
+fn _f2(mut _l0: i32) -> i32 {
     let (_t0, _t1) = '_b0: {
         (_l0, _l0)
     }; // '_b0
     i32::wrapping_add(_t0, _t1)
 }
 
-pub fn r#block_me_up(&self, _l0: i32) -> i32 {
-    Self::_f2(_l0)
+pub fn r#block_me_up(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
+    Ok(Self::_f2(_l0))
 }
 
 fn _f3() -> ::core::result::Result<i32 /* ! */, embedder::Trap> {
-    return ::core::result::Err(embedder::rt::trap::Trap::with_code(embedder::rt::trap::TrapCode::Unreachable, todo!("how to encode _f3 @ 0x1")));
+    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, None));
 }
 
-pub fn r#unreachable_instruction(&self) -> ::core::result::Result<i32 /* ! */, embedder::Trap> {
-    Self::_f3()
+pub fn r#unreachable_instruction(&self) -> ::core::result::Result<i32, embedder::Trap> {
+    Ok(Self::_f3()?)
 }
 
-fn _f4(_l0: i32) -> i32 {
+fn _f4(mut _l0: i32) -> i32 {
     let _t0 = '_b0: { if _l0 == 0x2Ai32 {
         0x42424242i32
     } else {
@@ -81,19 +81,19 @@ fn _f4(_l0: i32) -> i32 {
     _t0
 }
 
-pub fn r#life(&self, _l0: i32) -> i32 {
-    Self::_f4(_l0)
+pub fn r#life(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
+    Ok(Self::_f4(_l0))
 }
 
 fn _f5() {
     ()
 }
 
-pub fn r#do_nothing(&self) {
-    Self::_f5()
+pub fn r#do_nothing(&self) -> ::core::result::Result<(), embedder::Trap> {
+    Ok(Self::_f5())
 }
 
-fn _f6(_l0: i32) -> i64 {
+fn _f6(mut _l0: i32) -> i64 {
     let mut _l1 = 0i64;
     '_b0: { if _l0 == 0 {
         return 1i64;
@@ -112,11 +112,11 @@ fn _f6(_l0: i32) -> i64 {
     _t0
 }
 
-pub fn r#loop_factorial_unsigned(&self, _l0: i32) -> i64 {
-    Self::_f6(_l0)
+pub fn r#loop_factorial_unsigned(&self, mut _l0: i32) -> ::core::result::Result<i64, embedder::Trap> {
+    Ok(Self::_f6(_l0))
 }
 
-fn _f7(_l0: i32) -> ::core::result::Result<(), embedder::Trap> {
+fn _f7(mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
     let _t0 = 0x000000000031A08Di64;
     let _t1 = 0x26CCi32;
     let _t2 = 0xCDFi64;
@@ -130,19 +130,19 @@ fn _f7(_l0: i32) -> ::core::result::Result<(), embedder::Trap> {
             continue '_b1;
         } // '_b1
     } // '_b0
-    return ::core::result::Err(embedder::rt::trap::Trap::with_code(embedder::rt::trap::TrapCode::Unreachable, todo!("how to encode _f7 @ 0x21")));
+    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, None));
 }
 
-pub fn r#halt_on_even(&self, _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
-    Self::_f7(_l0)
+pub fn r#halt_on_even(&self, mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
+    Ok(Self::_f7(_l0)?)
 }
 
 fn _f8() -> i32 {
     Self::_G0
 }
 
-pub fn r#size_of_kibibyte(&self) -> i32 {
-    Self::_f8()
+pub fn r#size_of_kibibyte(&self) -> ::core::result::Result<i32, embedder::Trap> {
+    Ok(Self::_f8())
 }
 
 fn _f9(&self) {
@@ -150,8 +150,8 @@ fn _f9(&self) {
     ()
 }
 
-pub fn r#increment_counter(&self) {
-    self._f9()
+pub fn r#increment_counter(&self) -> ::core::result::Result<(), embedder::Trap> {
+    Ok(self._f9())
 }
 
 fn _f10() -> (i32, i64, f32) {
@@ -169,16 +169,16 @@ fn _f11(&self) -> ::core::result::Result<(), embedder::Trap> {
     Ok(())
 }
 
-fn _f12(_l0: i32) -> ::core::result::Result<(), embedder::Trap> {
+fn _f12(mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
     '_b0: {
         if _l0 == 3i32 { break '_b0;}
         return Ok(());
     } // '_b0
-    return ::core::result::Err(embedder::rt::trap::Trap::with_code(embedder::rt::trap::TrapCode::Unreachable, todo!("how to encode _f12 @ 0xC")));
+    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, None));
 }
 
-pub fn r#trap_on_three(&self, _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
-    Self::_f12(_l0)
+pub fn r#trap_on_three(&self, mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
+    Ok(Self::_f12(_l0)?)
 }
 
 } // impl Instance
