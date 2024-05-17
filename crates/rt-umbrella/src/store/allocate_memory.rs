@@ -64,7 +64,6 @@ pub trait AllocateMemory<I: crate::memory::Address = u32> {
         memory: u32,
         minimum: I,
         maximum: I,
-        frame: Option<&'static crate::trace::WasmFrame>,
     ) -> Result<Self::Memory, E>;
 }
 
@@ -86,10 +85,9 @@ impl<I: crate::memory::Address> AllocateMemory<I> for AllocateHeapMemory<I> {
         memory: u32,
         minimum: I,
         maximum: I,
-        frame: Option<&'static crate::trace::WasmFrame>,
     ) -> Result<Self::Memory, E> {
         crate::memory::HeapMemory::<I>::with_limits(minimum, maximum)
-            .map_err(|error| E::trap(AllocateMemoryError::new(memory, error), frame))
+            .map_err(|error| E::trap(AllocateMemoryError::new(memory, error), None))
     }
 }
 
