@@ -1051,11 +1051,14 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     write!(out, "_store::<{}, ", memory.0);
                     let memory64 = self.context.types.memory_at(memory.0).memory64;
                     out.write_str(if memory64 { "u64" } else { "u32" });
-                    write!(
-                        out,
-                        ", _, _>(&self.{}, {offset}, ",
-                        self.context.memory_ident(memory)
-                    );
+                    out.write_str(", _, _>(");
+                    let memory_ident = self.context.memory_ident(memory);
+
+                    if matches!(memory_ident, crate::context::MemoryIdent::Id(_)) {
+                        out.write_str("&");
+                    }
+
+                    write!(out, "self.{memory_ident}, {offset}, ",);
                     address.print(out, arena, false, self.context);
                     out.write_str(", ");
 
