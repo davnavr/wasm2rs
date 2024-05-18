@@ -21,6 +21,8 @@ pub struct Instance {
 }
 
 impl Instance {
+    const _DATA_0: &[u8] = b"\x01\x02\x03\x04";
+
 
     pub fn r#mem(&self) -> &embedder::Memory0 {
         &self._m

@@ -1,7 +1,5 @@
 //! Contains the core code for converting WebAssembly to Rust.
 
-use anyhow::Context;
-
 mod allocations;
 mod code;
 mod constant;
@@ -256,6 +254,7 @@ fn parse_sections<'wasm>(
         instantiate_globals: Vec::<crate::ast::GlobalId>::new(),
         defined_globals: std::collections::HashMap::new(),
         constant_globals: Vec::with_capacity(total_global_count / 2),
+        data_segment_contents: Default::default(),
     };
 
     debug_assert_eq!(
@@ -266,6 +265,8 @@ fn parse_sections<'wasm>(
         total_function_count,
         context.function_attributes.unwind_kinds.len()
     );
+
+    // Since validator already parsed these sections, maybe it should be fine to `unwrap()`.
 
     if let Some(import_section) = sections.imports {
         let mut imported_modules = Vec::with_capacity((import_section.count() as usize).min(2));
@@ -299,6 +300,8 @@ fn parse_sections<'wasm>(
             {
                 crate::context::ImportedModule(existing as u16)
             } else {
+                use anyhow::Context;
+
                 let idx = u16::try_from(imported_modules.len()).with_context(|| {
                     format!("cannot import from more than 65535 modules @ {import_offset:#X}")
                 })?;
@@ -362,6 +365,8 @@ fn parse_sections<'wasm>(
     // Don't need to parse `sections.memories`, `types.memory_at()` provides its contents.
 
     if let Some(global_section) = sections.globals {
+        use anyhow::Context;
+
         let ids = 0u32..global_section.count();
         for (result, global_idx) in global_section.into_iter_with_offsets().zip(ids) {
             let (global_offset, global) = result?;
@@ -425,6 +430,26 @@ fn parse_sections<'wasm>(
             context.global_exports.len(),
             context.global_export_names.len()
         );
+    }
+
+    // element sec
+
+    if let Some(data_section) = sections.data {
+        let mut data_segment_contents = Vec::with_capacity(data_section.count() as usize);
+
+        // This assumes most data segments are active.
+        // context.active_data_segments.reserve(data_segment_contents.capacity());
+
+        for result in data_section.into_iter_with_offsets() {
+            let (data_segment_offset, data_segment) = result?;
+
+            let data_id = crate::ast::DataId(data_segment_contents.len() as u32);
+            data_segment_contents.push(data_segment.data);
+
+            //match data_segment.kind {}
+        }
+
+        context.data_segment_contents = data_segment_contents.into_boxed_slice();
     }
 
     Ok(context)
@@ -520,6 +545,16 @@ impl Convert<'_> {
             context,
             function_definitions,
         })
+    }
+
+    fn call_data_segment_writer(
+        &self,
+        data: &[u8],
+        index: crate::ast::DataId,
+    ) -> crate::Result<Option<String>> {
+        use anyhow::Context;
+        (self.data_segment_writer)(index.0, data)
+            .with_context(|| format!("could not write contents of {index}"))
     }
 
     // TODO: Move this to `print.rs`
@@ -766,6 +801,39 @@ impl Convert<'_> {
                     global.id
                 ),
             }
+        }
+
+        // Element segments cannot be writen as a constant, since FuncRef requires an already
+        // instantiated module.
+
+        // Write the data segments contents.
+        for (data, data_id) in context
+            .data_segment_contents
+            .iter()
+            .zip((0u32..=u32::MAX).map(crate::ast::DataId))
+        {
+            write!(o, "{sp}const {data_id}: &[u8] = ");
+
+            /// If the `data.len() <=` this, then a literal byte string is generated.
+            const PREFER_LITERAL_LENGTH: usize = 64;
+
+            fn write_byte_string(out: &mut dyn crate::write::Write, data: &[u8]) {
+                out.write_str("b\"");
+                for b in data {
+                    let _ = write!(out, "{}", std::ascii::escape_default(*b));
+                }
+                out.write_str("\"");
+            }
+
+            if data.len() <= PREFER_LITERAL_LENGTH {
+                write_byte_string(&mut o, data);
+            } else if let Some(path) = self.call_data_segment_writer(data, data_id)? {
+                write!(o, "::core::include_bytes!({});", path.escape_default());
+            } else {
+                write_byte_string(&mut o, data);
+            }
+
+            o.write_str(";\n\n");
         }
 
         // Write exported memories.

@@ -164,7 +164,7 @@ pub(crate) struct Context<'wasm> {
     pub(crate) global_exports: Vec<GlobalId>,
     pub(crate) function_attributes: FunctionAttributes,
     /// Stores the initializer expression for each global defined by the WebAssembly module.
-    pub(crate) global_initializers: crate::ast::Arena,
+    pub(crate) global_initializers: crate::ast::Arena, // TODO: Rename to constant_expressions
     /// Specifies the WebAssembly globals that correspond to a Rust field. These require
     /// assignment of their initial value within the generated `instantiate()` function.
     ///
@@ -177,6 +177,9 @@ pub(crate) struct Context<'wasm> {
     ///
     /// These are stored in ascending order.
     pub(crate) constant_globals: Vec<DefinedGlobal>,
+    //pub(crate) active_data_segments: Vec<>,
+    /// Specifies the contents of each WebAssembly data segment.
+    pub(crate) data_segment_contents: Box<[&'wasm [u8]]>,
     /// Corresponds to the [**start**] component of the WebAssembly module.
     ///
     /// [**start**]: https://webassembly.github.io/spec/core/syntax/modules.html#start-function
