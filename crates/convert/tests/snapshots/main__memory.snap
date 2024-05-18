@@ -21,7 +21,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    const _DATA_0: &[u8] = b"\x01\x02\x03\x04";
+    const _DATA_0: &'static [u8] = b"\x01\x02\x03\x04";
 
 
     pub fn r#mem(&self) -> &embedder::Memory0 {
@@ -35,6 +35,8 @@ impl Instance {
             _m: embedder::rt::store::AllocateMemory::allocate(store.memory0, 0, 1, 4294967295)?,
         };
         let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
+        let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
+        embedder::rt::memory::init::<0, _, _, embedder::Trap>(&inst._m, 0x4D2i32, 0, 4, Self::_DATA_0, None)?;
         Ok(module)
     }
 

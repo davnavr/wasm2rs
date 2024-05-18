@@ -230,11 +230,14 @@ fn parse_sections<'wasm>(
     allocations: &crate::Allocations,
     sections: Sections<'wasm>,
 ) -> crate::Result<crate::context::Context<'wasm>> {
+    use anyhow::Context as _;
+
     let total_function_count = types.core_function_count() as usize;
     let total_memory_count = types.memory_count() as usize;
     let total_global_count = types.global_count() as usize;
     let mut context = crate::context::Context {
         types,
+        constant_expressions: allocations.take_ast_arena(),
         function_attributes,
         start_function: sections.start_function,
         // These will be filled in later.
@@ -250,11 +253,11 @@ fn parse_sections<'wasm>(
         memory_export_names: std::collections::HashMap::new(),
         memory_exports: Vec::<crate::ast::MemoryId>::new(),
         global_exports: Vec::<crate::ast::GlobalId>::new(),
-        global_initializers: allocations.take_ast_arena(),
         instantiate_globals: Vec::<crate::ast::GlobalId>::new(),
         defined_globals: std::collections::HashMap::new(),
         constant_globals: Vec::with_capacity(total_global_count / 2),
         data_segment_contents: Default::default(),
+        active_data_segments: Default::default(),
     };
 
     debug_assert_eq!(
@@ -365,21 +368,19 @@ fn parse_sections<'wasm>(
     // Don't need to parse `sections.memories`, `types.memory_at()` provides its contents.
 
     if let Some(global_section) = sections.globals {
-        use anyhow::Context;
-
         let ids = 0u32..global_section.count();
         for (result, global_idx) in global_section.into_iter_with_offsets().zip(ids) {
             let (global_offset, global) = result?;
             let id = crate::ast::GlobalId(global_idx);
             let initializer = crate::convert::constant::create_ast(
                 &global.init_expr,
-                &mut context.global_initializers,
+                &mut context.constant_expressions,
             )
             .with_context(|| {
                 format!("invalid initializer expression for {id} @ {global_offset:#X}")
             })?;
 
-            match context.global_initializers.get(initializer) {
+            match context.constant_expressions.get(initializer) {
                 crate::ast::Expr::Literal(_) if !global.ty.mutable => context
                     .constant_globals
                     .push(crate::context::DefinedGlobal { id, initializer }),
@@ -438,7 +439,9 @@ fn parse_sections<'wasm>(
         let mut data_segment_contents = Vec::with_capacity(data_section.count() as usize);
 
         // This assumes most data segments are active.
-        // context.active_data_segments.reserve(data_segment_contents.capacity());
+        context
+            .active_data_segments
+            .reserve(data_segment_contents.capacity() / 2);
 
         for result in data_section.into_iter_with_offsets() {
             let (data_segment_offset, data_segment) = result?;
@@ -446,7 +449,31 @@ fn parse_sections<'wasm>(
             let data_id = crate::ast::DataId(data_segment_contents.len() as u32);
             data_segment_contents.push(data_segment.data);
 
-            //match data_segment.kind {}
+            match data_segment.kind {
+                wasmparser::DataKind::Active {
+                    memory_index,
+                    offset_expr,
+                } => {
+                    let offset = crate::convert::constant::create_ast(
+                        &offset_expr,
+                        &mut context.constant_expressions,
+                    )
+                    .with_context(|| {
+                        format!(
+                            "invalid offset expression for {data_id} @ {data_segment_offset:#X}"
+                        )
+                    })?;
+
+                    context
+                        .active_data_segments
+                        .push(crate::context::ActiveDataSegment {
+                            memory: crate::ast::MemoryId(memory_index),
+                            data: data_id,
+                            offset,
+                        });
+                }
+                wasmparser::DataKind::Passive => (),
+            }
         }
 
         context.data_segment_contents = data_segment_contents.into_boxed_slice();
@@ -789,7 +816,7 @@ impl Convert<'_> {
 
         // Write constant globals.
         for global in context.constant_globals.iter() {
-            match context.global_initializers.get(global.initializer) {
+            match context.constant_expressions.get(global.initializer) {
                 crate::ast::Expr::Literal(literal) => writeln!(
                     o,
                     "{sp}const {:#}: {} = {literal};",
@@ -812,7 +839,7 @@ impl Convert<'_> {
             .iter()
             .zip((0u32..=u32::MAX).map(crate::ast::DataId))
         {
-            write!(o, "{sp}const {data_id}: &[u8] = ");
+            write!(o, "{sp}const {data_id}: &'static [u8] = ");
 
             /// If the `data.len() <=` this, then a literal byte string is generated.
             const PREFER_LITERAL_LENGTH: usize = 64;
@@ -921,6 +948,8 @@ impl Convert<'_> {
             o.write_str(",\n");
         }
 
+        // TODO: Initialize tables
+
         // Allocate the linear memories.
         for memory_id in defined_memories {
             let memory_type = context.types.memory_at(memory_id.0);
@@ -952,11 +981,11 @@ impl Convert<'_> {
             }
         };
 
+        // Initialize the globals to their initial values.
         if !context.instantiate_globals.is_empty() {
             make_inst_mut(&mut o);
         }
 
-        // Initialize the globals to their initial values.
         // This has to occur after `inst` is created in case there is self-referential stuff.
         for global in context.instantiate_globals.iter().copied() {
             write!(o, "{sp}{sp}*inst.{global}");
@@ -975,16 +1004,41 @@ impl Convert<'_> {
                     .get(&global)
                     .expect("missing initializer expression for defined global");
 
-                init.print(&mut o, &context.global_initializers, false, context);
+                init.print(&mut o, &context.constant_expressions, false, context);
             }
 
             o.write_str(";\n");
         }
 
-        // TODO: Initialize tables
-        // TODO: Initialize memories
         // TODO: Copy element segments.
-        // TODO: Copy data segments.
+
+        // Copy active data segments.
+        if !context.active_data_segments.is_empty() {
+            make_inst_mut(&mut o);
+        }
+
+        for data_segment in context.active_data_segments.iter() {
+            // TODO: Fix, data segment initialization for imported memories is wrong.
+            // TODO: Helper that takes &mut [u8] of linear memory could be used for initializing
+            // data segments.
+            write!(
+                o,
+                "{sp}{sp}embedder::rt::memory::init::<{}, _, _, embedder::Trap>(&inst.{}, ",
+                data_segment.memory.0, data_segment.memory
+            );
+
+            data_segment
+                .offset
+                .print(&mut o, &context.constant_expressions, false, context);
+
+            let data_length = context.data_segment_contents[data_segment.data.0 as usize].len();
+
+            writeln!(
+                o,
+                ", 0, {data_length}, Self::{}, None)?;",
+                data_segment.data
+            );
+        }
 
         if let Some(start_function) = context.start_function {
             writeln!(o, "{sp}{sp}// TODO: call {start_function}");

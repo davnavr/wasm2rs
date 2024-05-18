@@ -129,11 +129,24 @@ pub(crate) enum GlobalKind<'ctx, 'wasm> {
     },
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ActiveDataSegment {
+    pub(crate) data: crate::ast::DataId,
+    pub(crate) memory: MemoryId,
+    /// Evaluates to an address specifying where into the linear memory the data segment's
+    /// contents are copied.
+    pub(crate) offset: crate::ast::ExprId,
+}
+
 /// Stores all information relating to a WebAssembly module and how it's components are accessed
 /// when translated to Rust.
 #[must_use = "call .finish()"]
 pub(crate) struct Context<'wasm> {
     pub(crate) types: wasmparser::types::Types,
+    /// Stores any constant expressions used within the WebAssembly module. These include:
+    /// - The initializer expression for each defined global.
+    /// - The offset for active data segments.
+    pub(crate) constant_expressions: crate::ast::Arena,
     /// Contains the name of each [`ImportedModule`].
     pub(crate) imported_modules: Box<[&'wasm str]>,
     /// Specifies the module each imported function originated from.
@@ -163,8 +176,6 @@ pub(crate) struct Context<'wasm> {
     /// These are in the order they were specified in the WebAssembly export section.
     pub(crate) global_exports: Vec<GlobalId>,
     pub(crate) function_attributes: FunctionAttributes,
-    /// Stores the initializer expression for each global defined by the WebAssembly module.
-    pub(crate) global_initializers: crate::ast::Arena, // TODO: Rename to constant_expressions
     /// Specifies the WebAssembly globals that correspond to a Rust field. These require
     /// assignment of their initial value within the generated `instantiate()` function.
     ///
@@ -177,9 +188,12 @@ pub(crate) struct Context<'wasm> {
     ///
     /// These are stored in ascending order.
     pub(crate) constant_globals: Vec<DefinedGlobal>,
-    //pub(crate) active_data_segments: Vec<>,
     /// Specifies the contents of each WebAssembly data segment.
     pub(crate) data_segment_contents: Box<[&'wasm [u8]]>,
+    /// Specifies the WebAssembly module's active data segments.
+    ///
+    /// These are stored in ascending *dataidx* order.
+    pub(crate) active_data_segments: Vec<ActiveDataSegment>,
     /// Corresponds to the [**start**] component of the WebAssembly module.
     ///
     /// [**start**]: https://webassembly.github.io/spec/core/syntax/modules.html#start-function
@@ -256,6 +270,6 @@ impl<'wasm> Context<'wasm> {
     }
 
     pub(crate) fn finish(self, allocations: &crate::Allocations) {
-        allocations.return_ast_arena(self.global_initializers);
+        allocations.return_ast_arena(self.constant_expressions);
     }
 }
