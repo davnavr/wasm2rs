@@ -16,7 +16,7 @@ use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::trap::TrapWith as _;
 
 pub struct Instance {
-    imports: embedder::Imports,
+    pub imports: embedder::Imports,
     _g1: embedder::rt::global::Global<i32>,
 }
 

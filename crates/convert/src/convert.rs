@@ -783,7 +783,7 @@ impl Convert<'_> {
         o.write_str("use embedder::rt::trap::TrapWith as _;\n\n");
 
         // TODO: Option to specify #[derive(Debug)] impl
-        writeln!(o, "pub struct Instance {{\n{sp}imports: embedder::Imports,");
+        writeln!(o, "pub struct Instance {{\n{sp}pub imports: embedder::Imports,");
 
         let defined_memories = ((context.memory_import_names.len() as u32)
             ..context.types.memory_count())
