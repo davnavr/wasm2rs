@@ -503,8 +503,6 @@ impl crate::ast::Expr {
             } => {
                 use crate::ast::{I32StorageSize, I64StorageSize, LoadKind};
 
-                // TODO: Check if memory is imported.
-
                 match kind {
                     LoadKind::F32 => out.write_str("f32::from_bits("),
                     LoadKind::F64 => out.write_str("f64::from_bits("),
@@ -542,11 +540,14 @@ impl crate::ast::Expr {
                 let memory64 = context.types.memory_at(memory.0).memory64;
                 write!(out, "_load::<{}, ", memory.0);
                 out.write_str(if memory64 { "u64" } else { "u32" });
-                write!(
-                    out,
-                    ", _, _>(&self.{}, {offset}, ",
-                    context.memory_ident(*memory)
-                );
+                out.write_str(", _, _>(");
+                let memory_ident = context.memory_ident(*memory);
+
+                if matches!(memory_ident, crate::context::MemoryIdent::Id(_)) {
+                    out.write_str("&");
+                }
+
+                write!(out, "self.{memory_ident}, {offset}, ");
                 address.print(out, arena, false, context);
 
                 out.write_str(", None"); // TODO: WASM frame info for memory loads.
@@ -558,7 +559,6 @@ impl crate::ast::Expr {
                 }
             }
             Self::MemorySize(memory) => {
-                // TODO: Check if memory is imported.
                 write!(
                     out,
                     "{}::size(&self.{})",
@@ -567,7 +567,6 @@ impl crate::ast::Expr {
                 );
             }
             Self::MemoryGrow { memory, delta } => {
-                // TODO: Check if memory is imported.
                 write!(
                     out,
                     "{}::grow(&self.{}, ",
