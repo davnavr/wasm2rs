@@ -27,4 +27,5 @@ snapshots! {
 "#;
     simple(512) = include_str!("simple.wat");
     memory(256) = include_str!("memory.wat");
+    imports(256) = include_str!("imports.wat");
 }
