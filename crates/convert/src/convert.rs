@@ -508,6 +508,14 @@ struct Ast<'wasm> {
     function_definitions: Vec<code::Definition>,
 }
 
+/// Provides access to information collected by a WebAssembly module during conversion to Rust.
+///
+/// See also the [`Convert::convert_from_buffer_with_intermediate()`] method.
+#[derive(Clone, Copy, Debug)]
+pub struct Intermediate<'conv, 'wasm> {
+    context: &'conv crate::context::Context<'wasm>,
+}
+
 impl Convert<'_> {
     fn convert_function_definitions<'wasm, 'types>(
         &self,
@@ -1131,6 +1139,41 @@ impl Convert<'_> {
         Ok(())
     }
 
+    /// Allows access to information collected about the WebAssembly module during conversion.
+    ///
+    /// If this information is not needed, use [`convert_from_buffer_with_allocations()`] instead.
+    ///
+    /// [`convert_from_buffer_with_allocations()`]: Convert::convert_from_buffer_with_allocations()
+    pub fn convert_from_buffer_with_intermediate<'wasm, O, F>(
+        &self,
+        wasm: &'wasm [u8],
+        allocations: &Allocations,
+        intermediate: F,
+    ) -> crate::Result<O>
+    where
+        F: FnOnce(Intermediate<'_, 'wasm>) -> crate::Result<O>,
+        O: std::io::Write,
+    {
+        use anyhow::Context;
+
+        let Ast {
+            context,
+            function_definitions,
+        } = self
+            .convert_to_ast(wasm, allocations)
+            .context("could not construct AST of WebAssembly module")?;
+
+        let mut output = intermediate(Intermediate { context: &context })
+            .context("could not get output writere")?;
+
+        self.print_ast(allocations, &context, function_definitions, &mut output)
+            .context("could not print Rust source code")?;
+
+        context.finish(allocations);
+
+        Ok(output)
+    }
+
     /// Allows reusing [`Allocations`] between multiple calls to [`convert_from_buffer()`]. This is
     /// useful if multiple WebAssembly modules are being converted.
     ///
@@ -1141,20 +1184,7 @@ impl Convert<'_> {
         output: &mut dyn std::io::Write,
         allocations: &Allocations,
     ) -> crate::Result<()> {
-        use anyhow::Context;
-
-        let Ast {
-            context,
-            function_definitions,
-        } = self
-            .convert_to_ast(wasm, allocations)
-            .context("could not construct AST of WebAssembly module")?;
-
-        self.print_ast(allocations, &context, function_definitions, output)
-            .context("could not print Rust source code")?;
-
-        context.finish(allocations);
-
+        self.convert_from_buffer_with_intermediate(wasm, allocations, |_| Ok(output))?;
         Ok(())
     }
 
@@ -1178,5 +1208,39 @@ impl Convert<'_> {
         output: &mut dyn std::io::Write,
     ) -> crate::Result<()> {
         Self::convert_from_buffer_with_allocations(self, wasm, output, &Allocations::default())
+    }
+}
+
+impl<'conv, 'wasm> Intermediate<'conv, 'wasm> {
+    /// Provides access to type information about the WebAssembly module.
+    pub fn types(&self) -> &'conv wasmparser::types::Types {
+        &self.context.types
+    }
+
+    /// Returns `true` if the module has imports of any kind.
+    pub fn has_imports(&self) -> bool {
+        self.context.has_imports()
+    }
+
+    // pub fn function_imports_indices(&self) -> impl ExactSizeIterator<Item = (crate::ast::FuncId, &'conv crate::ident::BoxedIdent<'wasm>)> + 'conv {
+    //     self.context.func_import_names
+    // }
+
+    /// Returns an [`Iterator`] over the function exports in *arbitrary* order, yielding their
+    /// names and types.
+    pub fn function_export_types(
+        &self,
+    ) -> impl ExactSizeIterator<
+        Item = (
+            &'conv crate::ident::BoxedIdent<'wasm>,
+            &'conv wasmparser::FuncType,
+        ),
+    > + 'conv {
+        self.context.function_export_names.iter().map(|(id, name)| {
+            (
+                name,
+                self.context.types[self.context.types.core_function_at(id.0)].unwrap_func(),
+            )
+        })
     }
 }

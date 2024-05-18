@@ -24,4 +24,6 @@ mod write;
 pub use anyhow::{Error, Result};
 
 pub use ast::Indentation;
-pub use convert::{Allocations, Convert, DataSegmentWriter, DebugInfo, StackOverflowChecks};
+pub use convert::{
+    Allocations, Convert, DataSegmentWriter, DebugInfo, Intermediate, StackOverflowChecks,
+};

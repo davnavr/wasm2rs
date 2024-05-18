@@ -240,6 +240,12 @@ pub(crate) struct Context<'wasm> {
 }
 
 impl<'wasm> Context<'wasm> {
+    pub(crate) fn has_imports(&self) -> bool {
+        !self.func_import_names.is_empty()
+            && !self.memory_import_names.is_empty()
+            && !self.global_import_names.is_empty()
+    }
+
     pub(crate) fn function_signature(&self, f: FuncId) -> &wasmparser::FuncType {
         self.types[self.types.core_function_at(f.0)].unwrap_func()
     }
@@ -331,5 +337,22 @@ impl<'wasm> Context<'wasm> {
 
     pub(crate) fn finish(self, allocations: &crate::Allocations) {
         allocations.return_ast_arena(self.constant_expressions);
+    }
+}
+
+impl std::fmt::Debug for Context<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Context")
+            .field("import_modules", &self.imported_modules)
+            .field("function_import_names", &self.func_import_names)
+            .field("memory_import_names", &self.memory_import_names)
+            .field("global_import_names", &self.global_import_names)
+            .field("function_export_names", &self.function_export_names)
+            .field("memory_export_names", &self.memory_export_names)
+            .field("global_export_names", &self.global_export_names)
+            .field("memory_exports", &self.memory_exports)
+            .field("global_exports", &self.global_exports)
+            .field("start_function", &self.start_function)
+            .finish_non_exhaustive()
     }
 }
