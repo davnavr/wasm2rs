@@ -114,6 +114,27 @@ impl std::fmt::Display for FunctionName<'_> {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum MemoryIdent<'ctx, 'wasm> {
+    Id(MemoryId),
+    Import(Import<'ctx, 'wasm>),
+}
+
+impl std::fmt::Display for MemoryIdent<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Id(MemoryId(0)) => f.write_str("_m"), // Main memory is given a shorter name.
+            Self::Id(MemoryId(id)) => write!(f, "_mem_{id}"),
+            Self::Import(import) => write!(
+                f,
+                "imports.{}().{}()",
+                crate::ident::SafeIdent::from(*import.module),
+                crate::ident::SafeIdent::from(*import.name)
+            ),
+        }
+    }
+}
+
 pub(crate) struct DefinedGlobal {
     pub(crate) id: GlobalId,
     pub(crate) initializer: crate::ast::ExprId,
@@ -219,7 +240,13 @@ impl<'wasm> Context<'wasm> {
         }
     }
 
-    // TODO: fn table_name, memory_name,
+    pub(crate) fn memory_ident(&self, m: MemoryId) -> MemoryIdent<'_, 'wasm> {
+        self.memory_import(m)
+            .map(MemoryIdent::Import)
+            .unwrap_or_else(|| MemoryIdent::Id(m))
+    }
+
+    // TODO: fn table_ident, global_ident
 
     fn import_lookup<'ctx>(
         &'ctx self,

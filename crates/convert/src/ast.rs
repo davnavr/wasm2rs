@@ -26,17 +26,6 @@ impl std::fmt::Display for FuncId {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct MemoryId(pub(crate) u32);
 
-impl std::fmt::Display for MemoryId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0 == 0 {
-            // Main memory is given a shorter name.
-            f.write_str("_m")
-        } else {
-            write!(f, "_mem{}", self.0)
-        }
-    }
-}
-
 /// Represents a WebAssembly [*globalidx*], an index to a global variable.
 ///
 /// [*globalidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices

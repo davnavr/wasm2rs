@@ -790,7 +790,12 @@ impl Convert<'_> {
             .map(crate::ast::MemoryId);
 
         for memory_id in defined_memories.clone() {
-            writeln!(o, "{sp}{memory_id}: embedder::Memory{},", memory_id.0);
+            writeln!(
+                o,
+                "{sp}{}: embedder::Memory{},",
+                crate::context::MemoryIdent::Id(memory_id),
+                memory_id.0
+            );
         }
 
         for global_id in context.instantiate_globals.iter() {
@@ -877,17 +882,13 @@ impl Convert<'_> {
                 memory_id.0
             );
 
-            match context.memory_import(memory_id) {
-                None => write!(o, "&self.{memory_id}"),
-                Some(import) => write!(
-                    o,
-                    "self.imports.{}().{}()",
-                    crate::ident::SafeIdent::from(*import.module),
-                    crate::ident::SafeIdent::from(*import.name)
-                ),
+            let identifier = context.memory_ident(memory_id);
+
+            if matches!(identifier, crate::context::MemoryIdent::Id(_)) {
+                o.write_str("&");
             }
 
-            writeln!(o, "\n{sp}}}\n");
+            writeln!(o, "self.{identifier}\n{sp}}}\n");
         }
 
         // Write exported globals.
@@ -955,7 +956,8 @@ impl Convert<'_> {
             let memory_type = context.types.memory_at(memory_id.0);
             writeln!(
                 o,
-                "{sp}{sp}{sp}{memory_id}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, {}, {})?,",
+                "{sp}{sp}{sp}{}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, {}, {})?,",
+                crate::context::MemoryIdent::Id(memory_id),
                 memory_id.0,
                 memory_id.0,
                 memory_type.initial,
@@ -1029,7 +1031,8 @@ impl Convert<'_> {
             write!(
                 o,
                 "{sp}{sp}embedder::rt::memory::init::<{}, _, _, embedder::Trap>(&inst.{}, ",
-                data_segment.memory.0, data_segment.memory
+                data_segment.memory.0,
+                context.memory_ident(data_segment.memory)
             );
 
             data_segment

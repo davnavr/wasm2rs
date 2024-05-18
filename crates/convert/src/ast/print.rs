@@ -542,7 +542,11 @@ impl crate::ast::Expr {
                 let memory64 = context.types.memory_at(memory.0).memory64;
                 write!(out, "_load::<{}, ", memory.0);
                 out.write_str(if memory64 { "u64" } else { "u32" });
-                write!(out, ", _, _>(&self.{memory}, {offset}, ");
+                write!(
+                    out,
+                    ", _, _>(&self.{}, {offset}, ",
+                    context.memory_ident(*memory)
+                );
                 address.print(out, arena, false, context);
 
                 out.write_str(", None"); // TODO: WASM frame info for memory loads.
@@ -555,11 +559,21 @@ impl crate::ast::Expr {
             }
             Self::MemorySize(memory) => {
                 // TODO: Check if memory is imported.
-                write!(out, "{}::size(&self.{memory})", paths::RT_MEM);
+                write!(
+                    out,
+                    "{}::size(&self.{})",
+                    paths::RT_MEM,
+                    context.memory_ident(*memory)
+                );
             }
             Self::MemoryGrow { memory, delta } => {
                 // TODO: Check if memory is imported.
-                write!(out, "{}::grow(&self.{memory}, ", paths::RT_MEM);
+                write!(
+                    out,
+                    "{}::grow(&self.{}, ",
+                    paths::RT_MEM,
+                    context.memory_ident(*memory)
+                );
                 delta.print(out, arena, nested, context);
                 out.write_str(")");
             }
@@ -1037,7 +1051,11 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     write!(out, "_store::<{}, ", memory.0);
                     let memory64 = self.context.types.memory_at(memory.0).memory64;
                     out.write_str(if memory64 { "u64" } else { "u32" });
-                    write!(out, ", _, _>(&self.{memory}, {offset}, ");
+                    write!(
+                        out,
+                        ", _, _>(&self.{}, {offset}, ",
+                        self.context.memory_ident(memory)
+                    );
                     address.print(out, arena, false, self.context);
                     out.write_str(", ");
 
