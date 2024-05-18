@@ -564,6 +564,15 @@ impl crate::ast::Expr {
                 out.write_str(")");
             }
             Self::Call { callee, arguments } => {
+                debug_assert_eq!(
+                    context.types[context.types.core_function_at(callee.0)]
+                        .unwrap_func()
+                        .results()
+                        .len(),
+                    1,
+                    "use Statement::Call instead"
+                );
+
                 print_call_expr(out, *callee, *arguments, arena, context)
             }
         }
@@ -689,24 +698,25 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                     callee,
                     arguments,
                     results,
-                    result_count,
                 } => {
-                    out.write_str("let ");
+                    if let Some((results, result_count)) = results {
+                        out.write_str("let ");
 
-                    if result_count.get() > 1 {
-                        out.write_str("(");
-                    }
-
-                    for i in 0..result_count.get() {
-                        if i > 0 {
-                            out.write_str(", ");
+                        if result_count.get() > 1 {
+                            out.write_str("(");
                         }
 
-                        write!(out, "{}", crate::ast::TempId(results.0 + i));
-                    }
+                        for i in 0..result_count.get() {
+                            if i > 0 {
+                                out.write_str(", ");
+                            }
 
-                    if result_count.get() > 1 {
-                        out.write_str(")");
+                            write!(out, "{}", crate::ast::TempId(results.0 + i));
+                        }
+
+                        if result_count.get() > 1 {
+                            out.write_str(")");
+                        }
                     }
 
                     out.write_str(" = ");

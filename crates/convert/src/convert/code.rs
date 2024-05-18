@@ -404,17 +404,22 @@ fn convert_impl(
                 builder.can_trap();
                 builder.needs_self();
 
-                if result_count <= 1 {
+                if result_count == 1 {
                     builder.push_wasm_operand(crate::ast::Expr::Call { callee, arguments })?;
                 } else {
                     // Multiple results are translated into Rust tuples, which need to be destructured.
-                    let results = crate::ast::TempId(builder.wasm_operand_stack().len() as u32);
+                    let results =
+                        std::num::NonZeroU32::new(result_count as u32).map(|result_count| {
+                            (
+                                crate::ast::TempId(builder.wasm_operand_stack().len() as u32),
+                                result_count,
+                            )
+                        });
 
                     builder.emit_statement(crate::ast::Statement::Call {
                         callee,
                         arguments,
                         results,
-                        result_count: std::num::NonZeroU32::new(result_count as u32).unwrap(),
                     })?;
 
                     builder.push_block_results(result_count)?;
@@ -638,16 +643,19 @@ fn convert_impl(
             _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
         }
 
-        if !operators.eof() {
+        if !operators.eof() && cfg!(debug_assertions) {
             // Ensure that the two operand stacks stay in sync
-            debug_assert_eq!(
-                validator.operand_stack_height() as usize,
-                builder.wasm_operand_stack().len(),
-                "expected operand stack {:?} after {op:?} \
-                (top of validator's stack was {:?}), at {op_offset:#X}",
-                builder.wasm_operand_stack(),
-                validator.get_operand_type(0),
-            );
+            let validator_height = validator.operand_stack_height() as usize;
+            let builder_height = builder.wasm_operand_stack().len();
+            if validator_height != builder_height {
+                anyhow::bail!(
+                    "expected {validator_height} items on stack, but got {builder_height} \
+                    items ({:?}) after {op:?} (top of validator's stack was {:?})\
+                    , at {op_offset:#X}",
+                    builder.wasm_operand_stack(),
+                    validator.get_operand_type(0),
+                );
+            }
         }
     }
 

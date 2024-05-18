@@ -387,6 +387,8 @@ pub(crate) enum Expr {
         /// The number of additional pages to allocate.
         delta: ExprId,
     },
+    /// Represents a call to a function that takes any number of arguments, and returns exactly one
+    /// value.
     Call {
         callee: FuncId,
         arguments: ExprListId,
@@ -436,8 +438,7 @@ pub(crate) enum Statement {
     Call {
         callee: FuncId,
         arguments: ExprListId,
-        results: TempId,
-        result_count: std::num::NonZeroU32,
+        results: Option<(TempId, std::num::NonZeroU32)>,
     },
     /// Corresponds to the [`unreachable`] instruction, which always produces a trap.
     ///
