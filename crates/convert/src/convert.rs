@@ -554,7 +554,7 @@ impl Convert<'_> {
 
         let function_count = types.core_function_count() as usize;
         let mut function_attributes = crate::context::FunctionAttributes {
-            call_kinds: vec![crate::context::CallKind::Function; function_count].into_boxed_slice(),
+            call_kinds: vec![crate::context::CallKind::Method; function_count].into_boxed_slice(),
             unwind_kinds: vec![crate::context::UnwindKind::Maybe; function_count]
                 .into_boxed_slice(),
         };
@@ -1060,7 +1060,11 @@ impl Convert<'_> {
         }
 
         if let Some(start_function) = context.start_function {
-            writeln!(o, "{sp}{sp}// TODO: call {start_function}");
+            writeln!(
+                o,
+                "{sp}{sp}// TODO: call start function #{}",
+                start_function.0
+            );
         }
 
         writeln!(o, "{sp}{sp}Ok(module)");

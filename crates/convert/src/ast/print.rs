@@ -149,7 +149,7 @@ fn print_call_common<F>(
         CallKind::Method => out.write_str("self."),
     }
 
-    write!(out, "{}(", context.function_name(callee));
+    write!(out, "{}(", context.function_ident(callee));
     arguments(out);
     out.write_str(")");
 }

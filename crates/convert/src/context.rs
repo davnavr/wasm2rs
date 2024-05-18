@@ -85,15 +85,25 @@ pub(crate) struct Import<'ctx, 'wasm> {
     pub(crate) name: &'ctx &'wasm str,
 }
 
-/// Describes the identifier used to refer to the Rust function corresponding to a WebAssembly
-/// function.
+impl std::fmt::Display for Import<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "imports.{}().{}",
+            crate::ident::SafeIdent::from(*self.module),
+            crate::ident::SafeIdent::from(*self.name)
+        )
+    }
+}
+
+/// Describes the identifier used to refer to the Rust function corresponding to the *defined*
+/// WebAssembly function.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum FunctionName<'wasm> {
     /// The function's WebAssembly export name is used.
     Export(&'wasm str),
     /// An identifier based on the [**funcidx**](FuncId) is used.
     Id(FuncId),
-    //Import
 }
 
 impl FunctionName<'_> {
@@ -109,7 +119,22 @@ impl std::fmt::Display for FunctionName<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Export(name) => std::fmt::Display::fmt(&crate::ident::SafeIdent::from(*name), f),
-            Self::Id(idx) => std::fmt::Display::fmt(idx, f),
+            Self::Id(FuncId(idx)) => write!(f, "_f{idx}"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum FunctionIdent<'ctx, 'wasm> {
+    Name(FunctionName<'wasm>),
+    Import(Import<'ctx, 'wasm>),
+}
+
+impl std::fmt::Display for FunctionIdent<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Name(name) => std::fmt::Display::fmt(name, f),
+            Self::Import(import) => std::fmt::Display::fmt(import, f),
         }
     }
 }
@@ -125,12 +150,7 @@ impl std::fmt::Display for MemoryIdent<'_, '_> {
         match self {
             Self::Id(MemoryId(0)) => f.write_str("_m"), // Main memory is given a shorter name.
             Self::Id(MemoryId(id)) => write!(f, "_mem_{id}"),
-            Self::Import(import) => write!(
-                f,
-                "imports.{}().{}()",
-                crate::ident::SafeIdent::from(*import.module),
-                crate::ident::SafeIdent::from(*import.name)
-            ),
+            Self::Import(import) => write!(f, "{import}()"),
         }
     }
 }
@@ -230,7 +250,7 @@ impl<'wasm> Context<'wasm> {
         self.func_import_names.len()
     }
 
-    /// Gets the name of the function to use when it is being invoked.
+    /// Gets the name of the function to use when it is defined.
     pub(crate) fn function_name(&self, f: FuncId) -> FunctionName<'wasm> {
         match self.function_export_names.get(&f).copied() {
             Some(name) if self.function_attributes.can_use_export_name(f) => {
@@ -238,6 +258,13 @@ impl<'wasm> Context<'wasm> {
             }
             Some(_) | None => FunctionName::Id(f),
         }
+    }
+
+    /// Gets the name of the function to use when it is called.
+    pub(crate) fn function_ident(&self, f: FuncId) -> FunctionIdent<'_, 'wasm> {
+        self.function_import(f)
+            .map(FunctionIdent::Import)
+            .unwrap_or_else(|| FunctionIdent::Name(self.function_name(f)))
     }
 
     pub(crate) fn memory_ident(&self, m: MemoryId) -> MemoryIdent<'_, 'wasm> {
@@ -262,6 +289,14 @@ impl<'wasm> Context<'wasm> {
                 name,
             }
         })
+    }
+
+    pub(crate) fn function_import(&self, f: FuncId) -> Option<Import<'_, 'wasm>> {
+        self.import_lookup(
+            f.0 as usize,
+            &self.func_import_modules,
+            &self.func_import_names,
+        )
     }
 
     pub(crate) fn memory_import(&self, m: MemoryId) -> Option<Import<'_, 'wasm>> {

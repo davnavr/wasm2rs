@@ -14,12 +14,6 @@ pub(crate) use print::Print;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct FuncId(pub(crate) u32);
 
-impl std::fmt::Display for FuncId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "_f{}", self.0)
-    }
-}
-
 /// Represents a WebAssembly [*memidx*], an index to a linear memory.
 ///
 /// [*memidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
