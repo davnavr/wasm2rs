@@ -422,6 +422,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm2rs-convert-wast"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "wasm2rs-convert",
+]
+
+[[package]]
 name = "wasm2rs-rt"
 version = "0.1.0"
 dependencies = [

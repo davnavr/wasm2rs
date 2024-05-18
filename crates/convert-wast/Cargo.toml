@@ -1,0 +1,10 @@
+[package]
+name = "wasm2rs-convert-wast"
+description = "Library for converting WebAssembly specification tests to Rust unit tests"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+wasm2rs-convert = { path = "../convert" }
