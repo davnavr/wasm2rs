@@ -783,7 +783,10 @@ impl Convert<'_> {
         o.write_str("use embedder::rt::trap::TrapWith as _;\n\n");
 
         // TODO: Option to specify #[derive(Debug)] impl
-        writeln!(o, "pub struct Instance {{\n{sp}pub imports: embedder::Imports,");
+        writeln!(
+            o,
+            "pub struct Instance {{\n{sp}pub imports: embedder::Imports,"
+        );
 
         let defined_memories = ((context.memory_import_names.len() as u32)
             ..context.types.memory_count())
@@ -990,9 +993,17 @@ impl Convert<'_> {
 
         // This has to occur after `inst` is created in case there is self-referential stuff.
         for global in context.instantiate_globals.iter().copied() {
-            write!(o, "{sp}{sp}*inst.{global}");
+            write!(o, "{sp}{sp}");
 
-            if context.types.global_at(global.0).mutable {
+            let is_mutable = context.types.global_at(global.0).mutable;
+
+            if is_mutable {
+                o.write_str("*");
+            }
+
+            write!(o, "inst.{global}");
+
+            if is_mutable {
                 o.write_str(".get_mut()");
             }
 
