@@ -272,7 +272,9 @@ fn parse_sections<'wasm>(
     // Since validator already parsed these sections, maybe it should be fine to `unwrap()`.
 
     if let Some(import_section) = sections.imports {
-        let mut imported_modules = Vec::with_capacity((import_section.count() as usize).min(2));
+        context
+            .imported_modules
+            .reserve((import_section.count() as usize).min(2));
 
         let func_import_count = total_function_count - (sections.code_count as usize);
         let memory_import_count =
@@ -293,41 +295,62 @@ fn parse_sections<'wasm>(
         let mut memory_idx = crate::ast::MemoryId(0);
         let mut global_idx = crate::ast::GlobalId(0);
 
+        let mut import_module_buffer = String::new();
         for result in import_section.into_iter_with_offsets() {
             use wasmparser::TypeRef;
 
             let (import_offset, import) = result?;
-            let module_idx = if let Some(existing) = imported_modules
+
+            // Fill the buffer with the name of the module so it can be used in comparisons.
+            {
+                use std::fmt::Write as _;
+
+                import_module_buffer.clear();
+                import_module_buffer.reserve(import.module.len());
+                let _ = write!(
+                    &mut import_module_buffer,
+                    "{}",
+                    crate::ident::SafeIdent::from(import.module)
+                );
+            }
+
+            let module_idx = if let Some(existing) = context
+                .imported_modules
                 .iter()
-                .position(|name| *name == import.module)
+                .position(|name| name.as_str() == import_module_buffer.as_str())
             {
                 crate::context::ImportedModule(existing as u16)
             } else {
                 use anyhow::Context;
 
-                let idx = u16::try_from(imported_modules.len()).with_context(|| {
+                let idx = u16::try_from(context.imported_modules.len()).with_context(|| {
                     format!("cannot import from more than 65535 modules @ {import_offset:#X}")
                 })?;
 
-                imported_modules.push(import.module);
+                context
+                    .imported_modules
+                    .push(crate::ident::BoxedIdent::from_str_unchecked(
+                        import_module_buffer.clone(),
+                    ));
                 crate::context::ImportedModule(idx)
             };
 
+            let safe_import_name = crate::ident::BoxedIdent::from_str_safe(import.name);
             match import.ty {
                 TypeRef::Func(_) => {
                     // TODO: set call kind for imported functions
                     // call_kinds.push(crate::context::CallKind::WithEmbedder);
 
-                    func_import_names.push(import.name);
+                    func_import_names.push(safe_import_name);
                     func_import_modules.push(module_idx);
                 }
                 TypeRef::Memory(_) => {
-                    memory_import_names.push(import.name);
+                    memory_import_names.push(safe_import_name);
                     memory_import_modules.push(module_idx);
                     memory_idx.0 += 1;
                 }
                 TypeRef::Global(global_type) => {
-                    global_import_names.push(import.name);
+                    global_import_names.push(safe_import_name);
                     global_import_modules.push(module_idx);
                     if !global_type.mutable {
                         context.instantiate_globals.push(global_idx);
@@ -339,10 +362,7 @@ fn parse_sections<'wasm>(
             }
         }
 
-        imported_modules.resize(imported_modules.capacity(), "THIS IS A BUG");
-
         // Don't need to store the capacity of these `Vec`s.
-        context.imported_modules = imported_modules.into_boxed_slice();
         context.func_import_modules = func_import_modules.into_boxed_slice();
         context.memory_import_modules = memory_import_modules.into_boxed_slice();
         context.global_import_modules = global_import_modules.into_boxed_slice();
@@ -403,20 +423,21 @@ fn parse_sections<'wasm>(
             use wasmparser::ExternalKind;
 
             let (export_offset, export) = result?;
+            let export_name = crate::ident::BoxedIdent::from_str_safe(&export.name);
             match export.kind {
                 ExternalKind::Func => {
                     let func_idx = crate::ast::FuncId(export.index);
-                    context.function_export_names.insert(func_idx, export.name);
+                    context.function_export_names.insert(func_idx, export_name);
                 }
                 ExternalKind::Memory => {
                     let mem_idx = crate::ast::MemoryId(export.index);
                     context.memory_exports.push(mem_idx);
-                    context.memory_export_names.insert(mem_idx, export.name);
+                    context.memory_export_names.insert(mem_idx, export_name);
                 }
                 ExternalKind::Global => {
                     let global_idx = crate::ast::GlobalId(export.index);
                     context.global_exports.push(global_idx);
-                    context.global_export_names.insert(global_idx, export.name);
+                    context.global_export_names.insert(global_idx, export_name);
                 }
                 ExternalKind::Tag => anyhow::bail!("tag exports are not yet supported"),
                 bad => anyhow::bail!("TODO: Unsupported export {bad:?} @ {export_offset:#X}"),
@@ -706,11 +727,7 @@ impl Convert<'_> {
             // possible omission of the `&self` parameter in the original function.
             match context.function_export_names.get(&func_id) {
                 Some(export) if matches!(function_name, crate::context::FunctionName::Id(_)) => {
-                    write!(
-                        out,
-                        "\npub fn {}(&self",
-                        crate::ident::SafeIdent::from(*export)
-                    );
+                    write!(out, "\npub fn {export}(&self",);
 
                     if !has_parameters {
                         out.write_str(", ");
@@ -873,15 +890,14 @@ impl Convert<'_> {
 
         // Write exported memories.
         for memory_id in context.memory_exports.iter().copied() {
-            let export = *context
+            let export = context
                 .memory_export_names
                 .get(&memory_id)
                 .expect("memory export did not have a name");
 
             write!(
                 o,
-                "\n{sp}pub fn {}(&self) -> &embedder::Memory{} {{\n{sp}{sp}",
-                crate::ident::SafeIdent::from(export),
+                "\n{sp}pub fn {export}(&self) -> &embedder::Memory{} {{\n{sp}{sp}",
                 memory_id.0
             );
 
@@ -896,16 +912,12 @@ impl Convert<'_> {
 
         // Write exported globals.
         for global_id in context.global_exports.iter().copied() {
-            let export = *context
+            let export = context
                 .global_export_names
                 .get(&global_id)
                 .expect("global export did not have a name");
 
-            write!(
-                o,
-                "\n{sp}pub fn {}(&self) -> ",
-                crate::ident::SafeIdent::from(export)
-            );
+            write!(o, "\n{sp}pub fn {export}(&self) -> ");
 
             let global_type = context.types.global_at(global_id.0);
 
@@ -1045,12 +1057,7 @@ impl Convert<'_> {
             o.write_str(" = ");
 
             if let Some(import) = context.global_import(global) {
-                write!(
-                    o,
-                    "inst.imports.{}().{}()",
-                    crate::ident::SafeIdent::from(*import.module),
-                    crate::ident::SafeIdent::from(*import.name)
-                );
+                write!(o, "inst.imports.{}().{}()", import.module, import.name);
             } else {
                 let init = context
                     .defined_globals

@@ -1,10 +1,12 @@
 //! Contains types representing Rust identifiers.
 
 mod any_ident;
+mod boxed_ident;
 mod mangled_ident;
 mod safe_ident;
 
 pub use any_ident::AnyIdent;
+pub use boxed_ident::BoxedIdent;
 pub use mangled_ident::MangledIdent;
 pub use safe_ident::SafeIdent;
 
@@ -18,6 +20,11 @@ pub struct Ident<'a> {
 }
 
 impl<'a> Ident<'a> {
+    pub(crate) const ESCAPE: &'static str = "r#";
+
+    /// Identifier for the default name for the generated Rust macro.
+    pub const DEFAULT_MACRO_NAME: Self = Self::unescaped("wasm");
+
     /// Creates a new identifier. If the `name` is a [keyword], then it is [escaped].
     ///
     /// # Errors
@@ -81,15 +88,10 @@ impl<'a> Ident<'a> {
     }
 }
 
-impl Ident<'static> {
-    /// Identifier for the default name for the generated Rust macro.
-    pub const DEFAULT_MACRO_NAME: Self = Self::unescaped("wasm");
-}
-
 impl std::fmt::Display for Ident<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.escaped {
-            f.write_str("r#")?;
+            f.write_str(Self::ESCAPE)?;
         }
 
         f.write_str(self.name)

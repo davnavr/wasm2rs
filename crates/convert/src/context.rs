@@ -81,33 +81,28 @@ pub(crate) struct ImportedModule(pub(crate) u16);
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Import<'ctx, 'wasm> {
-    pub(crate) module: &'ctx &'wasm str,
-    pub(crate) name: &'ctx &'wasm str,
+    pub(crate) module: &'ctx crate::ident::BoxedIdent<'wasm>,
+    pub(crate) name: &'ctx crate::ident::BoxedIdent<'wasm>,
 }
 
 impl std::fmt::Display for Import<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "imports.{}().{}",
-            crate::ident::SafeIdent::from(*self.module),
-            crate::ident::SafeIdent::from(*self.name)
-        )
+        write!(f, "imports.{}().{}", self.module, self.name,)
     }
 }
 
 /// Describes the identifier used to refer to the Rust function corresponding to the *defined*
 /// WebAssembly function.
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum FunctionName<'wasm> {
+pub(crate) enum FunctionName<'ctx, 'wasm> {
     /// The function's WebAssembly export name is used.
-    Export(&'wasm str),
+    Export(&'ctx crate::ident::BoxedIdent<'wasm>),
     /// An identifier based on the [**funcidx**](FuncId) is used.
     Id(FuncId),
 }
 
-impl FunctionName<'_> {
-    pub(crate) const fn visibility(&self) -> &str {
+impl FunctionName<'_, '_> {
+    pub(crate) const fn visibility(&self) -> &'static str {
         match self {
             Self::Export(_) => "pub ",
             Self::Id(_) => "",
@@ -115,10 +110,10 @@ impl FunctionName<'_> {
     }
 }
 
-impl std::fmt::Display for FunctionName<'_> {
+impl std::fmt::Display for FunctionName<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Export(name) => std::fmt::Display::fmt(&crate::ident::SafeIdent::from(*name), f),
+            Self::Export(name) => std::fmt::Display::fmt(*name, f),
             Self::Id(FuncId(idx)) => write!(f, "_f{idx}"),
         }
     }
@@ -126,7 +121,7 @@ impl std::fmt::Display for FunctionName<'_> {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum FunctionIdent<'ctx, 'wasm> {
-    Name(FunctionName<'wasm>),
+    Name(FunctionName<'ctx, 'wasm>),
     Import(Import<'ctx, 'wasm>),
 }
 
@@ -189,7 +184,7 @@ pub(crate) struct Context<'wasm> {
     /// - The offset for active data segments.
     pub(crate) constant_expressions: crate::ast::Arena,
     /// Contains the name of each [`ImportedModule`].
-    pub(crate) imported_modules: Box<[&'wasm str]>,
+    pub(crate) imported_modules: Vec<crate::ident::BoxedIdent<'wasm>>,
     /// Specifies the module each imported function originated from.
     pub(crate) func_import_modules: Box<[ImportedModule]>,
     /// Specifies the module each imported memory originated from.
@@ -197,17 +192,20 @@ pub(crate) struct Context<'wasm> {
     /// Specifies the module each imported global originated from.
     pub(crate) global_import_modules: Box<[ImportedModule]>,
     /// Specifies the name of each WebAssembly function import.
-    pub(crate) func_import_names: Box<[&'wasm str]>,
+    pub(crate) func_import_names: Box<[crate::ident::BoxedIdent<'wasm>]>,
     /// Specifies the name of each WebAssembly memory import.
-    pub(crate) memory_import_names: Box<[&'wasm str]>,
+    pub(crate) memory_import_names: Box<[crate::ident::BoxedIdent<'wasm>]>,
     /// Specifies the name of each WebAssembly global import.
-    pub(crate) global_import_names: Box<[&'wasm str]>,
+    pub(crate) global_import_names: Box<[crate::ident::BoxedIdent<'wasm>]>,
     /// Lookup table for each exported WebAssembly function.
-    pub(crate) function_export_names: std::collections::HashMap<FuncId, &'wasm str>,
+    pub(crate) function_export_names:
+        std::collections::HashMap<FuncId, crate::ident::BoxedIdent<'wasm>>,
     /// Lookup table for each exported WebAssembly memory.
-    pub(crate) memory_export_names: std::collections::HashMap<MemoryId, &'wasm str>,
+    pub(crate) memory_export_names:
+        std::collections::HashMap<MemoryId, crate::ident::BoxedIdent<'wasm>>,
     /// Lookup table for each exported WebAssembly global.
-    pub(crate) global_export_names: std::collections::HashMap<GlobalId, &'wasm str>,
+    pub(crate) global_export_names:
+        std::collections::HashMap<GlobalId, crate::ident::BoxedIdent<'wasm>>,
     /// Specifies which WebAssembly memories are exported.
     ///
     /// These are in the order they were specified in the WebAssembly export section.
@@ -251,8 +249,8 @@ impl<'wasm> Context<'wasm> {
     }
 
     /// Gets the name of the function to use when it is defined.
-    pub(crate) fn function_name(&self, f: FuncId) -> FunctionName<'wasm> {
-        match self.function_export_names.get(&f).copied() {
+    pub(crate) fn function_name(&self, f: FuncId) -> FunctionName<'_, 'wasm> {
+        match self.function_export_names.get(&f) {
             Some(name) if self.function_attributes.can_use_export_name(f) => {
                 FunctionName::Export(name)
             }
@@ -279,7 +277,7 @@ impl<'wasm> Context<'wasm> {
         &'ctx self,
         index: usize,
         modules: &'ctx Box<[ImportedModule]>,
-        names: &'ctx Box<[&'wasm str]>,
+        names: &'ctx Box<[crate::ident::BoxedIdent<'wasm>]>,
     ) -> Option<Import<'ctx, 'wasm>> {
         names.get(index).map(|name| {
             assert_eq!(modules.len(), names.len());
