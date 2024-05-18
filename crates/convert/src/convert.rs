@@ -785,7 +785,7 @@ impl Convert<'_> {
         // TODO: Option to specify #[derive(Debug)] impl
         writeln!(o, "pub struct Instance {{\n{sp}imports: embedder::Imports,");
 
-        let defined_memories = ((context.global_import_names.len() as u32)
+        let defined_memories = ((context.memory_import_names.len() as u32)
             ..context.types.memory_count())
             .map(crate::ast::MemoryId);
 
