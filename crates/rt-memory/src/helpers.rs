@@ -5,6 +5,55 @@
 use crate::{AccessError, Address, BoundsCheck, BoundsCheckError, EffectiveAddress, Memory};
 use wasm2rs_rt_core::{trace::WasmFrame, trap::Trap};
 
+/// Checks that the given [`Memory`] has the correct `minimum` and `maximum` number of pages.
+/// This implements the [matching of memories] to their expected *limits* during WebAssembly
+/// [module instantiation].
+///
+/// # Errors
+///
+/// Returns a [`Trap`] if:
+/// - The [`size()`] of the [`Memory`] is less than the `minimum`.
+/// - The [`maximum()`] pages the [`Memory`] can have is greater than the `maximum`.
+///
+/// [matching of memories]: https://webassembly.github.io/spec/core/valid/types.html#memories
+/// [module instantiation]: https://webassembly.github.io/spec/core/exec/modules.html#instantiation
+/// [`size()`]: Memory::size()
+/// [`maximum()`]: Memory::maximum()
+pub fn check_limits<I, E, M>(mem: &M, index: u32, minimum: I, maximum: I) -> Result<(), E>
+where
+    I: Address,
+    E: Trap<crate::LimitsMismatchError<I>>,
+    M: Memory<I> + ?Sized,
+{
+    let actual_minimum = mem.size();
+    if mem.size() < minimum {
+        return Err(E::trap(
+            crate::LimitsMismatchError {
+                memory: index,
+                actual: actual_minimum,
+                expected: minimum,
+                kind: crate::error::LimitsMismatchKind::Minimum,
+            },
+            None,
+        ));
+    }
+
+    let actual_maximum = mem.maximum();
+    if actual_maximum > maximum {
+        return Err(E::trap(
+            crate::LimitsMismatchError {
+                memory: index,
+                actual: actual_maximum,
+                expected: maximum,
+                kind: crate::error::LimitsMismatchKind::Maximum,
+            },
+            None,
+        ));
+    }
+
+    Ok(())
+}
+
 /// This implements the [`memory.size`] instruction.
 ///
 /// For more information, see the documentation for the [`Memory::size()`] method.

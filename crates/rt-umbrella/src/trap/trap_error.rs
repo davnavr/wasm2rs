@@ -50,9 +50,16 @@ pub enum TrapCause {
         #[cfg(all(feature = "alloc", feature = "memory"))]
         error: crate::store::AllocateMemoryError<u64>,
     },
-    /// Instantiating a module failed because a linear memory did not have matching limits.
+    /// Instantiating a module failed because a linear memory did not have matching limits. This
+    /// corresponds to a [`memory::LimitsMismatchError`].
+    ///
+    /// [`memory::LimitsMismatchError`]: crate::memory::LimitsMismatchError
     #[non_exhaustive]
-    MemoryLimitsMismatch,
+    MemoryLimitsMismatch {
+        #[allow(missing_docs)]
+        #[cfg(all(feature = "alloc", feature = "memory"))]
+        error: crate::memory::LimitsMismatchError<u64>,
+    },
     /// A function reference did not have the correct signature. This corresponds to a
     /// [`func_ref::SignatureMismatchError`], typically originating from a
     /// [`func_ref::FuncRefCastError::SignatureMismatch`].
@@ -106,7 +113,10 @@ impl core::fmt::Display for TrapCause {
             Self::MemoryAllocationFailure { error } => core::fmt::Display::fmt(error, f),
             #[cfg(not(all(feature = "alloc", feature = "memory")))]
             Self::MemoryAllocationFailure {} => f.write_str("memory allocation failure"),
-            Self::MemoryLimitsMismatch => f.write_str("incorrect memory limits"),
+            #[cfg(all(feature = "alloc", feature = "memory"))]
+            Self::MemoryLimitsMismatch { error } => core::fmt::Display::fmt(error, f),
+            #[cfg(not(all(feature = "alloc", feature = "memory")))]
+            Self::MemoryLimitsMismatch {} => f.write_str("incorrect memory limits"),
             #[cfg(all(feature = "alloc", feature = "func-ref"))]
             Self::IndirectCallSignatureMismatch { mismatch } => {
                 write!(f, "function reference {mismatch}")
@@ -283,6 +293,25 @@ where
     ) -> Self {
         Self::new(
             TrapCause::MemoryAllocationFailure {
+                error: cause.into(),
+            },
+            frame,
+        )
+    }
+}
+
+#[cfg(feature = "memory")]
+impl<I> Trap<crate::memory::LimitsMismatchError<I>> for TrapError
+where
+    I: crate::memory::Address,
+    crate::memory::LimitsMismatchError<I>: Into<crate::memory::LimitsMismatchError<u64>>,
+{
+    fn trap(
+        cause: crate::memory::LimitsMismatchError<I>,
+        frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
+    ) -> Self {
+        Self::new(
+            TrapCause::MemoryLimitsMismatch {
                 error: cause.into(),
             },
             frame,

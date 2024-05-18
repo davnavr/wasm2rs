@@ -20,6 +20,7 @@ extern crate alloc;
 
 mod address;
 mod empty;
+mod error;
 mod helpers;
 
 #[cfg(feature = "alloc")]
@@ -27,6 +28,7 @@ mod heap;
 
 pub use address::{Address, EffectiveAddress};
 pub use empty::EmptyMemory;
+pub use error::{AccessError, AllocationError, BoundsCheckError, LimitsMismatchError};
 pub use helpers::*;
 
 #[cfg(feature = "alloc")]
@@ -36,89 +38,6 @@ pub use heap::HeapMemory;
 ///
 /// [page]: https://webassembly.github.io/spec/core/exec/runtime.html#page-size
 pub const PAGE_SIZE: u32 = 65536;
-
-/// Error type used when the minimum required number of [pages] for a linear memory could not be
-/// allocated.
-///
-/// [pages]: PAGE_SIZE
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct AllocationError<I: Address = u32> {
-    size: I,
-}
-
-impl<I: Address> AllocationError<I> {
-    /// The minimum number of [pages] that was requested.
-    ///
-    /// [pages]: PAGE_SIZE
-    pub fn size(&self) -> I {
-        self.size
-    }
-}
-
-impl<I: Address> core::fmt::Display for AllocationError<I> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "couldn't allocate {} pages", self.size)
-    }
-}
-
-#[cfg(feature = "std")]
-impl<I: Address> std::error::Error for AllocationError<I> {}
-
-impl From<AllocationError<u32>> for AllocationError<u64> {
-    fn from(error: AllocationError<u32>) -> Self {
-        Self {
-            size: error.size.into(),
-        }
-    }
-}
-
-/// Error type used when an attempt to read or write from a linear [`Memory`] fails.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct AccessError<I: Address = u32> {
-    memory: u32,
-    address: EffectiveAddress<I>,
-}
-
-impl<I: Address> AccessError<I> {
-    const fn new(memory: u32, address: EffectiveAddress<I>) -> Self {
-        Self { memory, address }
-    }
-}
-
-impl<I: Address> core::fmt::Display for AccessError<I> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "invalid access of linear memory #{} at address {:#X}",
-            self.memory, self.address
-        )
-    }
-}
-
-#[cfg(feature = "std")]
-impl<I: Address> std::error::Error for AccessError<I> {}
-
-impl From<AccessError<u32>> for AccessError<u64> {
-    fn from(error: AccessError<u32>) -> Self {
-        Self {
-            memory: error.memory,
-            address: error.address.into(),
-        }
-    }
-}
-
-/// Error type used when an address was out of bounds.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct BoundsCheckError;
-
-impl core::fmt::Display for BoundsCheckError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("out-of-bounds address")
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for BoundsCheckError {}
 
 /// Result type used for functions that need to indicate if an address is out of bounds.
 pub type BoundsCheck<T> = core::result::Result<T, BoundsCheckError>;
