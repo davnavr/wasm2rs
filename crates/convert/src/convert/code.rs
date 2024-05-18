@@ -444,13 +444,14 @@ fn convert_impl(
             }
             //Operator::LocalTee
             Operator::GlobalGet { global_index } => {
+                builder.needs_self(); // TODO: If global is const, don't need `self`.
                 builder.push_wasm_operand(crate::ast::Expr::GetGlobal(crate::ast::GlobalId(
                     global_index,
                 )))?;
             }
             Operator::GlobalSet { global_index } => {
                 let value = builder.pop_wasm_operand();
-                builder.needs_self();
+                builder.needs_self(); // TODO: If global is const, don't need `self`.
                 builder.emit_statement(crate::ast::Statement::SetGlobal {
                     global: crate::ast::GlobalId(global_index),
                     value,
