@@ -952,23 +952,39 @@ impl Convert<'_> {
             o.write_str(",\n");
         }
 
-        // TODO: Initialize tables
+        // Technically speaking the limits of the imported memories and tables should be checked before
+        // linear memories are "allocated".
+
+        fn print_memory_limits(
+            out: &mut dyn crate::write::Write,
+            memory_type: &wasmparser::MemoryType,
+        ) {
+            write!(out, "{}, ", memory_type.initial);
+            match memory_type.maximum {
+                Some(maximum) => write!(out, "{maximum}"),
+                None if memory_type.memory64 => write!(
+                    out,
+                    "<u64 as embedder::rt::memory::Address>::MAX_PAGE_COUNT"
+                ),
+                None => write!(
+                    out,
+                    "<u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT"
+                ),
+            }
+        }
 
         // Allocate the linear memories.
         for memory_id in defined_memories {
             let memory_type = context.types.memory_at(memory_id.0);
-            writeln!(
+            write!(
                 o,
-                "{sp}{sp}{sp}{}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, {}, {})?,",
+                "{sp}{sp}{sp}{}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, ",
                 crate::context::MemoryIdent::Id(memory_id),
                 memory_id.0,
-                memory_id.0,
-                memory_type.initial,
-                match memory_type.maximum {
-                    Some(maximum) => maximum,
-                    None if memory_type.memory64 => u64::MAX,
-                    None => u32::MAX.into(),
-                });
+                memory_id.0);
+
+            print_memory_limits(&mut o, &memory_type);
+            o.write_str(")?,\n");
         }
 
         writeln!(o, "{sp}{sp}}};");
@@ -977,6 +993,25 @@ impl Convert<'_> {
             o,
             "{sp}{sp}let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);"
         );
+
+        // TODO: Check table import limits.
+
+        // Check imported linear memory limits.
+        for memory_id in
+            (0u32..(context.memory_import_names.len() as u32)).map(crate::ast::MemoryId)
+        {
+            let import = context.memory_import(memory_id).expect("memory import");
+            let memory_type = context.types.memory_at(memory_id.0);
+            write!(
+                o,
+                "{sp}{sp}embedder::rt::memory::check_limits(module.{}, {}, ",
+                crate::context::MemoryIdent::Import(import),
+                memory_id.0,
+            );
+
+            print_memory_limits(&mut o, &memory_type);
+            o.write_str(")?;\n");
+        }
 
         let mut got_inst_mut = false;
         let mut make_inst_mut = move |o: &mut crate::write::IoWrite| {

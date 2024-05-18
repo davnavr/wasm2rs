@@ -32,7 +32,7 @@ impl Instance {
     pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
         let allocated = Self {
             imports: store.imports,
-            _m: embedder::rt::store::AllocateMemory::allocate(store.memory0, 0, 1, 4294967295)?,
+            _m: embedder::rt::store::AllocateMemory::allocate(store.memory0, 0, 1, <u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT)?,
         };
         let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
         let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);

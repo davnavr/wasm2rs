@@ -28,6 +28,7 @@ impl Instance {
             _g0: Default::default(),
         };
         let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
+        embedder::rt::memory::check_limits(module.imports.r#tests().r#memory(), 0, 1, <u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT)?;
         let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
         inst._g0 = inst.imports.r#tests().FORTY();
         Ok(module)
