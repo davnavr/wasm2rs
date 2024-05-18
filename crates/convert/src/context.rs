@@ -219,7 +219,7 @@ impl<'wasm> Context<'wasm> {
         }
     }
 
-    // TODO: fn table_name, memory_name, global_name,
+    // TODO: fn table_name, memory_name,
 
     fn import_lookup<'ctx>(
         &'ctx self,

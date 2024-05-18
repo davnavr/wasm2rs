@@ -997,7 +997,12 @@ impl Convert<'_> {
             o.write_str(" = ");
 
             if let Some(import) = context.global_import(global) {
-                anyhow::bail!("initialize global import {import:?}");
+                write!(
+                    o,
+                    "inst.imports.{}().{}()",
+                    crate::ident::SafeIdent::from(*import.module),
+                    crate::ident::SafeIdent::from(*import.name)
+                );
             } else {
                 let init = context
                     .defined_globals

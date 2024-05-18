@@ -717,9 +717,10 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                         if result_count.get() > 1 {
                             out.write_str(")");
                         }
+
+                        out.write_str(" = ");
                     }
 
-                    out.write_str(" = ");
                     print_call_expr(out, callee, arguments, arena, self.context);
                     out.write_str(";");
                 }
