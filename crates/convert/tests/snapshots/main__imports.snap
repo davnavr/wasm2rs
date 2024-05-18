@@ -28,9 +28,9 @@ impl Instance {
             _g0: Default::default(),
         };
         let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
-        embedder::rt::memory::check_limits(module.imports.r#tests().r#memory(), 0, 1, <u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT)?;
+        embedder::rt::memory::check_limits(module.imports.tests().memory(), 0, 1, <u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT)?;
         let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
-        inst._g0 = inst.imports.r#tests().FORTY();
+        inst._g0 = inst.imports.tests().FORTY();
         Ok(module)
     }
 
@@ -38,17 +38,17 @@ fn _f1(&self) -> i32 {
     i32::wrapping_add(self._g0, 2i32)
 }
 
-pub fn r#funny_life_number(&self) -> ::core::result::Result<i32, embedder::Trap> {
+pub fn funny_life_number(&self) -> ::core::result::Result<i32, embedder::Trap> {
     Ok(self._f1())
 }
 
-pub fn r#two_equals_two(&self) -> ::core::result::Result<(), embedder::Trap> {
-    self.imports.r#tests().r#assert_equal(2i32, 2i32)?;
+pub fn two_equals_two(&self) -> ::core::result::Result<(), embedder::Trap> {
+    self.imports.tests().assert_equal(2i32, 2i32)?;
     Ok(())
 }
 
 pub fn write_5_to_5000(&self) -> ::core::result::Result<(), embedder::Trap> {
-    embedder::rt::memory::i32_store::<0, u32, _, _>(self.imports.r#tests().r#memory(), 0, 0x1388i32, 5i32, None)?;
+    embedder::rt::memory::i32_store::<0, u32, _, _>(self.imports.tests().memory(), 0, 0x1388i32, 5i32, None)?;
     Ok(())
 }
 

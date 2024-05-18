@@ -18,37 +18,46 @@ pub struct Ident<'a> {
 }
 
 impl<'a> Ident<'a> {
-    /// Creates a new identifier.
+    /// Creates a new identifier. If the `name` is a [keyword], then it is [escaped].
     ///
     /// # Errors
     ///
-    /// Returns `None` if the `name` is not a valid identifier, or is a keyword.
+    /// Returns [`None`] if the `name` is not a valid [Rust identifier].
+    ///
+    /// [keyword]: https://doc.rust-lang.org/reference/keywords.html
+    /// [escaped]: Ident::is_escaped()
+    /// [Rust identifier]: https://doc.rust-lang.org/reference/identifiers.html
     pub fn new(name: &'a str) -> Option<Self> {
-        if matches!(name, "" | "_") {
-            return None;
-        }
+        use unicode_xid::UnicodeXID;
 
-        if !name.is_ascii() {
-            // TODO: Handling of exotic identifiers is not yet implemented.
-            None
-        } else {
-            let mut chars = name.chars();
-            let start = chars.next().unwrap(); // Won't panic, empty case handled above.
-            let escaped = if start.is_ascii_uppercase() || start == '_' {
-                false
-            } else if start.is_ascii_lowercase() {
-                // Assumes any identifier that consists only of ASCII lowercase is a keyword.
-                // If it is just a single character, then it definitely isn't a keyword though.
-                name.len() > 1 && !name.contains(|c: char| c.is_ascii_digit())
-            } else {
-                // Invalid start of identifier
-                return None;
-            };
-
-            if chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                Some(Self { name, escaped })
-            } else {
-                None
+        match name {
+            "" | "_" => None,
+            // Strict keywords
+            "as" | "break" | "const" | "continue" | "crate" | "else"
+            | "enum" | "extern" | "false" | "fn" | "for" | "if" | "impl"
+            | "in" | "let" | "loop" | "match" | "mod" | "move" | "mut" | "pub"
+            | "ref" | "return" | "self" | "Self" | "static" | "struct" | "super"
+            | "trait" | "true" | "type" | "unsafe" | "use" | "where" | "while"
+            | "async" | "await" | "dyn"
+            // Reserved keywords
+            | "abstract" | "become" | "box" | "do" | "final" | "macro" | "override"
+            | "priv" | "typeof" | "unsized" | "virtual" | "yield" | "try"
+            // Weak keywords, conservatively escaped
+            | "macro_rules" | "union" => Some(Self {
+                name,
+                escaped: true,
+            }),
+            _ => {
+                let mut chars = name.chars();
+                let start = chars.next().unwrap();
+                if (start == '_' || start.is_xid_start()) && chars.all(UnicodeXID::is_xid_continue) {
+                    Some(Self {
+                        name,
+                        escaped: false,
+                    })
+                } else {
+                    None
+                }
             }
         }
     }

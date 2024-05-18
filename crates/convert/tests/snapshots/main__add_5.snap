@@ -33,7 +33,7 @@ fn _f0(mut _l0: i32) -> i32 {
     i32::wrapping_add(_l0, 5i32)
 }
 
-pub fn r#add_five(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
+pub fn add_five(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
     Ok(Self::_f0(_l0))
 }
 
