@@ -25,7 +25,7 @@ insta = "1.38.0"
 num-traits = { version = "0.2.18", default-features = false }
 rayon = "1.10.0"
 wasm2rs-rt-core = { path = "crates/rt-core", default-features = false }
-wasmparser = "=0.208.1"
+wasmparser = { version = "=0.208.1", default-features = false, features = ["std", "validate"] }
 wat = "1.208.1"
 wast = "=208.0.1"
 
