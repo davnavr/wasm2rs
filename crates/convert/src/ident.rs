@@ -22,8 +22,8 @@ pub struct Ident<'a> {
 impl<'a> Ident<'a> {
     pub(crate) const ESCAPE: &'static str = "r#";
 
-    /// Identifier for the default name for the generated Rust macro.
-    pub const DEFAULT_MACRO_NAME: Self = Self::unescaped("wasm");
+    /// Identifier for the name of the generated Rust macro.
+    pub const MACRO_NAME: Self = Self::unescaped("wasm");
 
     /// Creates a new identifier. If the `name` is a [keyword], then it is [escaped].
     ///

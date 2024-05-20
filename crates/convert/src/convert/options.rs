@@ -85,15 +85,6 @@ impl<'a> crate::Convert<'a> {
         self
     }
 
-    /// Sets the name of the Rust macro that is generated to contain all of the converted code.
-    pub fn generated_macro_name<N>(&mut self, name: N) -> &mut Self
-    where
-        N: Into<crate::ident::SafeIdent<'a>>,
-    {
-        self.generated_macro_name = name.into();
-        self
-    }
-
     /// Sets the function used to write data segment contents to disk.
     ///
     /// For more information, see the documentation for [`DataSegmentWriter`].
