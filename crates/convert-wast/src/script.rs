@@ -124,19 +124,13 @@ pub(crate) fn convert<'path>(
                 );
 
                 if has_imports {
-                    running_errors.push(Error::with_path(
-                        &script_path,
+                    running_errors.push(Error::with_position_into_text(
+                        script_path,
                         "module imports are not yet supported",
                         None,
+                        wat.span(),
+                        script_text,
                     ));
-
-                    // running_errors.push(Error::with_position_into_text(
-                    //     script_path,
-                    //     "module imports are not yet supported",
-                    //     None,
-                    //     wat.span(),
-                    //     script_text,
-                    // ));
                 }
             }
             WastDirective::AssertMalformed {

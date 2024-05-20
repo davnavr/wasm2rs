@@ -126,17 +126,19 @@ pub fn convert_to_output<'input>(
 
             std::mem::drop(input_read);
 
-            let output_write = output
-                .create_script_file(&test_file.input)
-                .map_err(|cause| {
-                    Error::with_path_and_cause(
-                        &test_file.input,
-                        "could not create output file",
-                        cause,
-                    )
-                })?;
+            let mut output_write =
+                output
+                    .create_script_file(&test_file.input)
+                    .map_err(|cause| {
+                        Error::with_path_and_cause(
+                            &test_file.input,
+                            "could not create output file",
+                            cause,
+                        )
+                    })?;
 
             script::convert(
+                &mut output_write.file,
                 &test_file.options,
                 &conversion_allocations,
                 &test_file.input,

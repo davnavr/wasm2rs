@@ -74,28 +74,26 @@ struct Module<'a> {
 
 fn validate_payloads(wasm: &[u8]) -> crate::Result<Module<'_>> {
     /// The set of WebAssembly features that are supported by default.
-    const SUPPORTED_FEATURES: wasmparser::WasmFeatures = wasmparser::WasmFeatures {
-        mutable_global: true,
-        saturating_float_to_int: true,
-        sign_extension: true,
-        reference_types: false,
-        multi_value: true,
-        bulk_memory: true,
-        simd: false,
-        relaxed_simd: false,
-        threads: false,
-        tail_call: false,
-        floats: true,
-        multi_memory: true,
-        exceptions: false,
-        memory64: false,
-        extended_const: false,
-        component_model: false,
-        function_references: false,
-        memory_control: false,
-        gc: false,
-        component_model_values: false,
-        component_model_nested_names: false,
+    const SUPPORTED_FEATURES: wasmparser::WasmFeatures = {
+        macro_rules! features {
+            ($($name:ident),*) => {{
+                let features = wasmparser::WasmFeatures::empty();
+                $(
+                    let features = features.union(wasmparser::WasmFeatures::$name);
+                )*
+                features
+            }};
+        }
+
+        features! {
+            MUTABLE_GLOBAL,
+            SATURATING_FLOAT_TO_INT,
+            SIGN_EXTENSION,
+            MULTI_VALUE,
+            BULK_MEMORY,
+            FLOATS,
+            MULTI_MEMORY
+        }
     };
 
     let mut validator = wasmparser::Validator::new_with_features(SUPPORTED_FEATURES);
@@ -183,12 +181,16 @@ fn validate_payloads(wasm: &[u8]) -> crate::Result<Module<'_>> {
                 return Ok(module);
             }
             // Component model is not yet supported
-            Payload::ModuleSection { parser: _, range } => validator.module_section(&range)?,
+            Payload::ModuleSection {
+                parser: _,
+                unchecked_range,
+            } => validator.module_section(&unchecked_range)?,
             Payload::InstanceSection(section) => validator.instance_section(&section)?,
             Payload::CoreTypeSection(section) => validator.core_type_section(&section)?,
-            Payload::ComponentSection { parser: _, range } => {
-                validator.component_section(&range)?
-            }
+            Payload::ComponentSection {
+                parser: _,
+                unchecked_range,
+            } => validator.component_section(&unchecked_range)?,
             Payload::ComponentInstanceSection(section) => {
                 validator.component_instance_section(&section)?
             }
