@@ -18,7 +18,14 @@ mod ast;
 mod context;
 mod convert;
 mod pool;
+
+#[cfg(not(feature = "zzz-internal-api"))]
+#[allow(unreachable_pub)]
 mod write;
+
+#[cfg(feature = "zzz-internal-api")]
+#[doc(hidden)]
+pub mod write;
 
 #[doc(no_inline)]
 pub use anyhow::{Error, Result};

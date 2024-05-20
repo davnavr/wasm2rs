@@ -6,5 +6,8 @@ edition.workspace = true
 repository.workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
-wasm2rs-convert = { path = "../convert" }
+crossbeam-queue = { workspace = true }
+rayon = { workspace = true }
+wasm2rs-convert = { path = "../convert", features = ["rayon", "zzz-internal-api"] }
+wast = { workspace = true }
+wasmparser = { workspace = true }

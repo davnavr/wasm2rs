@@ -8,6 +8,7 @@ repository.workspace = true
 [features]
 default = ["rayon"]
 rayon = ["dep:rayon", "crossbeam-queue"]
+zzz-internal-api = []
 
 [dependencies]
 anyhow = { workspace = true }
@@ -15,7 +16,7 @@ bytes = "1.5.0"
 crossbeam-queue = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 unicode-xid = "0.2.4"
-wasmparser = "0.201.0"
+wasmparser = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
