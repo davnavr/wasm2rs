@@ -459,6 +459,7 @@ dependencies = [
 name = "wasm2rs-convert-wast"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "crossbeam-queue",
  "rayon",
  "wasm2rs-convert",

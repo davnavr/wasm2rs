@@ -165,31 +165,6 @@ enum ActionResult {
     Trap(TrapReason),
 }
 
-enum StatementKind<'wasm> {
-    /// Emits a Rust function call, storing the return values into a variable named
-    /// [`Statement::RESULT_VARIABLE`].
-    InvokeFunction {
-        /// Name of the exported function to call.
-        name: &'wasm str,
-        arguments: Arguments,
-        /// If `Some`, indicates that the result is checked with an assertion.
-        /// If `None`, then the function is called, but the return value is ignored.
-        result: Option<ActionResult>,
-    },
-}
-
-pub struct Statement<'wasm> {
-    kind: StatementKind<'wasm>,
-    /// Refers to the location in the original `.wast` file that this [`Statement`] was
-    /// generated from.
-    span: wast::token::Span,
-}
-
-impl Statement<'_> {
-    /// Name of the variable used to store the results of executing a [`Statement`].
-    pub const RESULT_VARIABLE: &'static str = "_result";
-}
-
 pub struct Module<'wasm> {
     number: usize,
     id: Option<&'wasm str>,
