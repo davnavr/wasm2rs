@@ -18,6 +18,24 @@
 extern crate std;
 
 pub mod global;
+pub mod limit;
 pub mod symbol;
 pub mod trace;
 pub mod trap;
+
+/// Error type used when an linear memory address or table index was out of bounds.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[allow(clippy::exhaustive_structs)]
+pub struct BoundsCheckError;
+
+impl core::fmt::Display for BoundsCheckError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("out-of-bounds index")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for BoundsCheckError {}
+
+/// Result type used for functions that need to indicate if an address or index is out of bounds.
+pub type BoundsCheck<T> = core::result::Result<T, BoundsCheckError>;

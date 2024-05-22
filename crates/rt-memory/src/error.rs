@@ -72,23 +72,30 @@ impl From<AccessError<u32>> for AccessError<u64> {
     }
 }
 
-/// Error type used when an address was out of bounds.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct BoundsCheckError;
-
-impl core::fmt::Display for BoundsCheckError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("out-of-bounds address")
-    }
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum LimitsMismatchKind<I: Address> {
+    Invalid { minimum: I, maximum: I },
+    Minimum { actual: I, expected: I },
+    Maximum { actual: I, expected: I },
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for BoundsCheckError {}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum LimitsMismatchKind {
-    Minimum,
-    Maximum,
+impl From<LimitsMismatchKind<u32>> for LimitsMismatchKind<u64> {
+    fn from(kind: LimitsMismatchKind<u32>) -> Self {
+        match kind {
+            LimitsMismatchKind::Invalid { minimum, maximum } => Self::Invalid {
+                minimum: minimum.into(),
+                maximum: maximum.into(),
+            },
+            LimitsMismatchKind::Minimum { actual, expected } => Self::Minimum {
+                actual: actual.into(),
+                expected: expected.into(),
+            },
+            LimitsMismatchKind::Maximum { actual, expected } => Self::Maximum {
+                actual: actual.into(),
+                expected: expected.into(),
+            },
+        }
+    }
 }
 
 /// Error type used when a linear [`Memory`]'s limits do not [match]. For more information, see the
@@ -100,23 +107,28 @@ pub(crate) enum LimitsMismatchKind {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct LimitsMismatchError<I: Address = u32> {
     pub(crate) memory: u32,
-    pub(crate) actual: I,
-    pub(crate) expected: I,
-    pub(crate) kind: LimitsMismatchKind,
+    pub(crate) kind: LimitsMismatchKind<I>,
 }
 
 impl<I: Address> core::fmt::Display for LimitsMismatchError<I> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "expected memory #{} to have {} pages ",
-            self.memory, self.expected
-        )?;
-        f.write_str(match self.kind {
-            LimitsMismatchKind::Minimum => "minimum",
-            LimitsMismatchKind::Maximum => "maximum",
-        })?;
-        write!(f, ", but got {}", self.actual)
+        match self.kind {
+            LimitsMismatchKind::Invalid { minimum, maximum } => write!(
+                f,
+                "memory #{} has {minimum} pages minimum, exceeding its maximum of {maximum}",
+                self.memory
+            ),
+            LimitsMismatchKind::Minimum { actual, expected } => write!(
+                f,
+                "expected {expected} pages minimum for memory #{}, but got {actual}",
+                self.memory
+            ),
+            LimitsMismatchKind::Maximum { actual, expected } => write!(
+                f,
+                "expected {expected} pages maximum for memory #{}, but got {actual}",
+                self.memory
+            ),
+        }
     }
 }
 
@@ -127,9 +139,7 @@ impl From<LimitsMismatchError<u32>> for LimitsMismatchError<u64> {
     fn from(error: LimitsMismatchError<u32>) -> Self {
         Self {
             memory: error.memory,
-            kind: error.kind,
-            actual: error.actual.into(),
-            expected: error.expected.into(),
+            kind: error.kind.into(),
         }
     }
 }

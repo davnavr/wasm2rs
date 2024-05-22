@@ -18,6 +18,9 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+#[doc(no_inline)]
+pub use wasm2rs_rt_core::{BoundsCheck, BoundsCheckError};
+
 /// Trait for common operations shared by [`Table`]s of all element types.
 pub trait AnyTable {
     /// Returns the current number of elements in the table.

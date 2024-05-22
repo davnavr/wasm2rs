@@ -26,32 +26,33 @@ where
     M: Memory<I> + ?Sized,
 {
     let actual_minimum = mem.size();
-    if mem.size() < minimum {
-        return Err(E::trap(
-            crate::LimitsMismatchError {
-                memory: index,
-                actual: actual_minimum,
-                expected: minimum,
-                kind: crate::error::LimitsMismatchKind::Minimum,
-            },
-            None,
-        ));
-    }
-
     let actual_maximum = mem.maximum();
-    if actual_maximum > maximum {
-        return Err(E::trap(
+
+    wasm2rs_rt_core::limit::check(actual_minimum, actual_maximum, minimum, maximum).map_err(|err| {
+        use crate::error::LimitsMismatchKind;
+        use wasm2rs_rt_core::limit::LimitsCheckError;
+
+        E::trap(
             crate::LimitsMismatchError {
                 memory: index,
-                actual: actual_maximum,
-                expected: maximum,
-                kind: crate::error::LimitsMismatchKind::Maximum,
+                kind: match err {
+                    LimitsCheckError::Invalid => crate::error::LimitsMismatchKind::Invalid {
+                        minimum: actual_minimum,
+                        maximum: actual_maximum,
+                    },
+                    LimitsCheckError::MinimumTooSmall => LimitsMismatchKind::Minimum {
+                        actual: actual_minimum,
+                        expected: minimum,
+                    },
+                    LimitsCheckError::MaximumTooLarge => LimitsMismatchKind::Maximum {
+                        actual: actual_maximum,
+                        expected: maximum,
+                    },
+                },
             },
             None,
-        ));
-    }
-
-    Ok(())
+        )
+    })
 }
 
 /// This implements the [`memory.size`] instruction.

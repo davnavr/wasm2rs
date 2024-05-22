@@ -28,8 +28,10 @@ mod heap;
 
 pub use address::{Address, EffectiveAddress};
 pub use empty::EmptyMemory;
-pub use error::{AccessError, AllocationError, BoundsCheckError, LimitsMismatchError};
+pub use error::{AccessError, AllocationError, LimitsMismatchError};
 pub use helpers::*;
+#[doc(no_inline)]
+pub use wasm2rs_rt_core::{BoundsCheck, BoundsCheckError};
 
 #[cfg(feature = "alloc")]
 pub use heap::HeapMemory;
@@ -38,9 +40,6 @@ pub use heap::HeapMemory;
 ///
 /// [page]: https://webassembly.github.io/spec/core/exec/runtime.html#page-size
 pub const PAGE_SIZE: u32 = 65536;
-
-/// Result type used for functions that need to indicate if an address is out of bounds.
-pub type BoundsCheck<T> = core::result::Result<T, BoundsCheckError>;
 
 macro_rules! unaligned_integer_accesses {
     {
