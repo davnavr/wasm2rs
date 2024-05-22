@@ -212,6 +212,21 @@ impl TrapError {
         #[cfg(feature = "alloc")]
         &self.inner.cause
     }
+
+    /// Checks that if the trap occurred due to the specified `reason`. The exact strings used
+    /// correspond to those used in the [WebAssembly test suite].
+    ///
+    /// [WebAssembly test suite]: https://github.com/WebAssembly/testsuite
+    pub fn matches_spec_failure(&self, reason: &str) -> bool {
+        match self.cause() {
+            TrapCause::Unreachable { .. } => reason == "unreachable",
+            TrapCause::IntegerDivisionByZero { .. } => reason == "integer divide by zero",
+            TrapCause::IntegerOverflow { .. } => reason == "integer overflow",
+            TrapCause::ConversionToInteger { .. } => reason == "invalid conversion to integer",
+            TrapCause::MemoryBoundsCheck { .. } => reason == "out of bounds memory access",
+            _ => false,
+        }
+    }
 }
 
 impl core::cmp::PartialEq for TrapError {

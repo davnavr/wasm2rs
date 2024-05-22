@@ -244,7 +244,7 @@ pub(crate) fn convert(
 
                 writeln!(
                     out,
-                    "    assert!(result.matches_spec_message(\"{}\"), \"incorrect trap in {}:{}:{}\");",
+                    "    assert!(result.matches_spec_failure(\"{}\"), \"incorrect trap in {}:{}:{}\");",
                     message.escape_default(),
                     script_path.display(),
                     line.saturating_add(1),
