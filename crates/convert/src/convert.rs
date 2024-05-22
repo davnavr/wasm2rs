@@ -801,7 +801,8 @@ impl Convert<'_> {
         o.write_str("#[allow(non_snake_case)]\n"); // Names might be mangled
         o.write_str("#[allow(dead_code)]\n"); // Some functions may not be called
         o.write_str("#[allow(unreachable_code)]\n"); // Some branches may not be taken (e.g. infinite loops detected by rustc)
-        o.write_str("#[allow(unreachable_pub)]\n"); // Macro may be invoked within a non-public module.
+        o.write_str("#[allow(unreachable_pub)]\n"); // Macro may be invoked within a non-public module
+        o.write_str("#[allow(unused_mut)]\n"); // Variables may be marked mut
         o.write_str("$vis mod $module {\n\n");
         o.write_str("use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n");
         o.write_str("use embedder::rt::trap::TrapWith as _;\n\n");

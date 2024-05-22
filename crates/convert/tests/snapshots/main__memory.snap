@@ -10,6 +10,7 @@ macro_rules! wasm {
 #[allow(dead_code)]
 #[allow(unreachable_code)]
 #[allow(unreachable_pub)]
+#[allow(unused_mut)]
 $vis mod $module {
 
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
