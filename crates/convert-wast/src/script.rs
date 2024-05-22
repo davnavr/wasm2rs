@@ -86,7 +86,7 @@ pub(crate) fn convert(
 
     let mut out = wasm2rs_convert::write::IoWrite::new(write);
     writeln!(out, "// Generated from {script_path:?}\n");
-    writeln!(out, "#[test]\nfn execute() {{\n");
+    writeln!(out, "#[test]\nfn execute() {{");
 
     for directive in script.directives.into_iter() {
         use wast::WastDirective;
@@ -143,13 +143,15 @@ pub(crate) fn convert(
                 );
 
                 let (line, col) = wat_span.linecol_in(script_text);
-                writeln!(
+                write!(
                     out,
-                    "        module::Instance::instantiate(Default::default()).expect(\"successful module instantiation for {}:{}:{}\")\n\n}}\n",
+                    "        module::Instance::instantiate(Default::default()).expect(\"successful module instantiation for {}:{}:{}\")",
                     script_path.display(),
                     line.saturating_add(1),
                     col.saturating_add(1),
                 );
+
+                out.write_str("\n    };\n");
             }
             WastDirective::AssertMalformed { span, .. } => {
                 // The maintainers of `wasmparser` already run specification tests.
@@ -158,7 +160,7 @@ pub(crate) fn convert(
                 let (line, col) = span.linecol_in(script_text);
                 writeln!(
                     out,
-                    "\n    // Skipped `assert_malformed` in {}:{}:{}\n",
+                    "\n    // Skipped `assert_malformed` in {}:{}:{}",
                     script_path.display(),
                     line.saturating_add(1),
                     col.saturating_add(1),
@@ -168,7 +170,7 @@ pub(crate) fn convert(
                 let (line, col) = span.linecol_in(script_text);
                 writeln!(
                     out,
-                    "\n    // Skipped `assert_invalid` in {}:{}:{}\n",
+                    "\n    // Skipped `assert_invalid` in {}:{}:{}",
                     script_path.display(),
                     line.saturating_add(1),
                     col.saturating_add(1),
@@ -190,7 +192,7 @@ pub(crate) fn convert(
             } => {
                 write!(
                     out,
-                    "    let result = current.{}(",
+                    "\n    let result = current.{}(",
                     wasm2rs_convert::ident::SafeIdent::from(name)
                 );
 
@@ -227,16 +229,19 @@ pub(crate) fn convert(
                     }
                 }
 
-                out.write_str(")\n");
-                write!(
-                    out,
-                    "    assert!(matches!(result, Err(err) if err.matches_spec_message({}))",
-                    message.escape_default()
-                );
                 let (line, col) = assert_span.linecol_in(script_text);
                 writeln!(
                     out,
-                    ", \"expected trap, got {{:?}} in {}:{}:{}\", result);",
+                    ").unwrap_err(\"expected trap in {}:{}:{}\");",
+                    script_path.display(),
+                    line.saturating_add(1),
+                    col.saturating_add(1)
+                );
+
+                writeln!(
+                    out,
+                    "    assert!(result.matches_spec_message(\"{}\"), \"incorrect trap in {}:{}:{}\");",
+                    message.escape_default(),
                     script_path.display(),
                     line.saturating_add(1),
                     col.saturating_add(1)
@@ -255,7 +260,7 @@ pub(crate) fn convert(
             } => {
                 write!(
                     out,
-                    "    let result = current.{}(",
+                    "\n    let result = current.{}(",
                     wasm2rs_convert::ident::SafeIdent::from(name)
                 );
 
@@ -323,6 +328,14 @@ pub(crate) fn convert(
                             return Err(anyhow::Error::new(err));
                         }
                     }
+
+                    writeln!(
+                        out,
+                        ", \"invalid result in {}:{}:{}\");",
+                        script_path.display(),
+                        line.saturating_add(1),
+                        col.saturating_add(1)
+                    );
                 }
             }
             unsupported => {
@@ -336,7 +349,7 @@ pub(crate) fn convert(
         }
     }
 
-    writeln!(out, "\n}}");
+    writeln!(out, "}}");
 
     out.flush();
     out.into_inner()

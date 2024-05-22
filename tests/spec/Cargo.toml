@@ -1,6 +1,6 @@
 [package]
 name = "wasm2rs-spec-tests"
-edition.workspace = true
+edition = "2021"
 publish = false
 
 [lib]
@@ -8,8 +8,4 @@ doctest = false
 doc = false
 
 [dependencies]
-wasm2rs-rt = { workspace = true }
-
-[build-dependencies]
-anyhow = { workspace = true }
-wasm2rs-spectest = { path = "../../crates/spectest/" }
+wasm2rs-rt = { path = "../../crates/rt-umbrella" }

@@ -15,7 +15,9 @@ exclude = [
     "crates/rt-old",
     "crates/spectest",
 
-    "tests/compiler"
+    # TODO: Move to include these in the workspace
+    "tests/compiler",
+    "tests/spec"
 ]
 
 [workspace.dependencies]

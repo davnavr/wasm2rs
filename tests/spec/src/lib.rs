@@ -6,4 +6,5 @@
 
 pub mod nan;
 
-include!(concat!(env!("OUT_DIR"), "/all.rs"));
+#[path = "generated/include.wasm2.rs"]
+mod tests;

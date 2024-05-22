@@ -1,0 +1,3 @@
+*/*.wasm2.rs
+*.wast.rs
+include.wasm2.rs

@@ -22,6 +22,13 @@ test_compiler cargo='cargo': clippy_rt
     cargo run -- convert -i ./tests/compiler/src/imports.wat
     cd ./tests/compiler && {{cargo}} test
 
+test_spec:
+    cargo run --features test-utils -- \
+        test \
+        -i ./tests/spec/testsuite/i64.wast \
+        --output-directory ./tests/spec/src/generated/
+    cd ./tests/spec && cargo test
+
 # Generate documentation; requires Rust nightly.
 doc *FLAGS='--all-features':
     RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc {{FLAGS}}

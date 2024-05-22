@@ -115,6 +115,8 @@ impl<'a> Output<'a> for DirectoryOutput<'_> {
             path.push(format!("module_{sequence}"));
         }
 
+        path.set_extension("wasm2.rs");
+
         {
             let mut convert_output =
                 std::fs::File::create(&path).context("unable to create output file")?;
@@ -128,7 +130,7 @@ impl<'a> Output<'a> for DirectoryOutput<'_> {
                 .context("conversion failed")?;
         }
 
-        Ok(path.into())
+        Ok(std::path::PathBuf::from(path.strip_prefix(self.root_directory).unwrap()).into())
     }
 
     fn create_script_file(&self, script: &std::path::Path) -> anyhow::Result<PathWriter<'a>> {
@@ -258,7 +260,12 @@ pub fn convert_to_output<'input, 'output>(
 
         for (i, path) in successes.iter().enumerate() {
             // Would relative paths work better here?
-            writeln!(out, "#[path = {path:?}]");
+            let module_path = path
+                .canonicalize()
+                .with_context(|| format!("could not canonicalize {path:?}"))
+                .map_err(|err| vec![err])?;
+
+            writeln!(out, "#[path = {module_path:?}]");
             if let Some(stem) = path.file_stem() {
                 let module_name = stem.to_string_lossy();
                 writeln!(
