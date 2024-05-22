@@ -266,19 +266,16 @@ pub fn convert_to_output<'input, 'output>(
                 .map_err(|err| vec![err])?;
 
             writeln!(out, "#[path = {module_path:?}]");
-            if let Some(stem) = path.file_stem() {
+            let input_path = inputs[i].input.as_ref();
+            if let Some(stem) = input_path.file_stem() {
                 let module_name = stem.to_string_lossy();
                 writeln!(
                     out,
-                    "mod {};",
+                    "#[allow(non_snake_case)]\nmod {};",
                     wasm2rs_convert::ident::SafeIdent::from(module_name.as_ref())
                 );
             } else {
-                writeln!(
-                    out,
-                    "mod test_{i}; // Translated from {:?}",
-                    inputs[i].input
-                );
+                writeln!(out, "mod test_{i}; // Translated from {input_path:?}",);
             }
         }
 
