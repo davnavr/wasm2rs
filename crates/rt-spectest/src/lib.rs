@@ -10,6 +10,8 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(clippy::exhaustive_enums)]
 
+mod host_ref;
 mod imports;
 
+pub use host_ref::HostRef;
 pub use imports::SpecTestImports;
