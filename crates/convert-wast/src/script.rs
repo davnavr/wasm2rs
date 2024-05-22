@@ -211,8 +211,12 @@ pub(crate) fn convert(
                         wast::WastArg::Core(core_arg) => match core_arg {
                             WastArgCore::I32(n) => write!(out, "{n}i32"),
                             WastArgCore::I64(n) => write!(out, "{n}i64"),
-                            WastArgCore::F32(z) => write!(out, "{:#010X}f32", z.bits),
-                            WastArgCore::F64(z) => write!(out, "{:#018X}f64", z.bits),
+                            WastArgCore::F32(z) => {
+                                write!(out, "f32::from_bits({:#010X}u32)", z.bits)
+                            }
+                            WastArgCore::F64(z) => {
+                                write!(out, "f64::from_bits({:#018X}u64)", z.bits)
+                            }
                             WastArgCore::RefExtern(_)
                             | WastArgCore::RefHost(_)
                             | WastArgCore::RefNull(_) => out.write_str(
@@ -279,8 +283,12 @@ pub(crate) fn convert(
                         wast::WastArg::Core(core_arg) => match core_arg {
                             WastArgCore::I32(n) => write!(out, "{n}i32"),
                             WastArgCore::I64(n) => write!(out, "{n}i64"),
-                            WastArgCore::F32(z) => write!(out, "{:#010X}f32", z.bits),
-                            WastArgCore::F64(z) => write!(out, "{:#018X}f64", z.bits),
+                            WastArgCore::F32(z) => {
+                                write!(out, "f32::from_bits({:#010X}u32)", z.bits)
+                            }
+                            WastArgCore::F64(z) => {
+                                write!(out, "f64::from_bits({:#018X}u64)", z.bits)
+                            }
                             WastArgCore::RefExtern(_)
                             | WastArgCore::RefHost(_)
                             | WastArgCore::RefNull(_) => out.write_str(
