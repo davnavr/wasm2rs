@@ -554,8 +554,10 @@ impl crate::ast::Expr {
 
                 out.write_str(")?");
 
-                if matches!(kind, LoadKind::F32 | LoadKind::F64) {
-                    out.write_str(")");
+                match kind {
+                    LoadKind::F32 => out.write_str("as u32)"),
+                    LoadKind::F64 => out.write_str("as u64)"),
+                    _ => (),
                 }
             }
             Self::MemorySize(memory) => {
