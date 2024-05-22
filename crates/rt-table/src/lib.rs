@@ -184,6 +184,35 @@ pub trait Table<E: TableElement>: AnyTable {
     fn clone_within(&self, dst_idx: u32, src_idx: u32, len: u32) -> BoundsCheck<()> {
         default_clone_from_conservative(self, self, dst_idx, src_idx, len)
     }
+
+    /// Copies elements (calling [`E::clone()`]) from the table starting at the specified index,
+    /// returning a boxed slice containing them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the range of indices `idx..(idx + len)` is not in bounds.
+    ///
+    /// [`E::clone()`]: Clone::clone()
+    #[cfg(feature = "alloc")]
+    fn to_boxed_slice(&self, idx: u32, len: u32) -> BoundsCheck<alloc::boxed::Box<[E]>> {
+        let truncated_len = usize::try_from(len).unwrap_or(usize::MAX);
+
+        #[allow(clippy::cast_possible_truncation)]
+        let acutal_len = truncated_len as u32;
+
+        // Duplicated code from `clone_from_slice()`, go there for more details.
+        if u64::from(idx) + u64::from(acutal_len) > u64::from(self.size()) {
+            Err(BoundsCheckError)
+        } else {
+            let mut elements = alloc::vec::Vec::with_capacity(truncated_len);
+
+            for i in idx..(idx + acutal_len) {
+                elements.push(self.get(i)?);
+            }
+
+            Ok(elements.into_boxed_slice())
+        }
+    }
 }
 
 const _OBJECT_SAFETY: core::marker::PhantomData<&dyn Table<()>> = core::marker::PhantomData;
