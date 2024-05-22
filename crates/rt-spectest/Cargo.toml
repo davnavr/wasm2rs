@@ -1,0 +1,9 @@
+[package]
+name = "wasm2rs-rt-spectest"
+description = "Runtime support for WASM spec tests translated by wasm2rs"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[dependencies.wasm2rs-rt]
+path = "../rt-umbrella"

@@ -517,6 +517,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm2rs-rt-spectest"
+version = "0.1.0"
+dependencies = [
+ "wasm2rs-rt",
+]
+
+[[package]]
 name = "wasm2rs-rt-stack"
 version = "0.1.0"
 dependencies = [

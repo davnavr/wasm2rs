@@ -1,6 +1,6 @@
 use crate::trap::Trap;
 
-/// Indicates why a trap occured.
+/// Indicates why a [`Trap`] occured.
 ///
 /// Used with the [`TrapError`] struct.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -105,6 +105,13 @@ pub enum TrapCause {
         #[allow(missing_docs)]
         error: crate::stack::StackOverflowError,
     },
+    // /// A custom cause for a trap.
+    // ///
+    // /// This can be used to produce your own [`TrapError`]s, typically when WebAssembly code calls
+    // /// imports you provide either directly or through a [`FuncRef`].
+    // ///
+    // /// [`FuncRef`]: crate::func_ref::FuncRef
+    // Other,
 }
 
 // impl From<crate::math::DivisionByZeroError> for TrapCause
