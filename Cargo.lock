@@ -532,6 +532,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm2rs-rt-table"
+version = "0.1.0"
+dependencies = [
+ "wasm2rs-rt-core",
+]
+
+[[package]]
 name = "wasmparser"
 version = "0.208.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

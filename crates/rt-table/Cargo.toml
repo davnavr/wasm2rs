@@ -1,0 +1,14 @@
+[package]
+name = "wasm2rs-rt-table"
+description = "Runtime support for tables in wasm2rs"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+
+[dependencies]
+wasm2rs-rt-core = { workspace = true }
