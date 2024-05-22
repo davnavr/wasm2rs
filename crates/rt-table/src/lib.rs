@@ -24,6 +24,10 @@ pub use wasm2rs_rt_core::{
     BoundsCheck, BoundsCheckError,
 };
 
+mod empty;
+
+pub use empty::EmptyTable;
+
 /// Constant value returned by [`AnyTable::grow()`] used to indicate failure.
 pub const GROW_FAILED: u32 = -1i32 as u32;
 
@@ -35,23 +39,15 @@ pub trait AnyTable {
     fn size(&self) -> u32;
 
     /// Gets the maximum number of elements the table can contain.
-    fn maximum(&self) -> u32 {
-        u32::MAX
-    }
+    fn maximum(&self) -> u32;
 
     /// Increases the size of the table by the specified number of elements, and returns the old
     /// number of elements.
     ///
-    /// The default implementation of this method simply calls [`AnyTable::size`] if `delta` is
-    /// `0`, and returns [`GROW_FAILED`] otherwise.
-    ///
     /// # Errors
     ///
     /// If the size of the table could not be increased, then [`GROW_FAILED`] is returned.
-    fn grow(&self, delta: u32) -> u32 {
-        let _ = delta;
-        GROW_FAILED
-    }
+    fn grow(&self, delta: u32) -> u32;
 }
 
 /// Assumes that the `src` and `dst` are actually the same tables.
@@ -154,7 +150,7 @@ pub trait Table<E: TableElement>: AnyTable {
     ///
     /// # Errors
     ///
-    /// Returns an error if the range of indices `idx..(idx + src.size())` is not in bounds.
+    /// Returns an error if the range of indices `idx..(idx + dst.size())` is not in bounds.
     ///
     /// [`E::clone()`]: Clone::clone()
     fn clone_into_slice(&self, idx: u32, dst: &mut [E]) -> BoundsCheck<()> {
