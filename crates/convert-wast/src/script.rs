@@ -131,16 +131,20 @@ pub(crate) fn convert(
                 module_count += 1;
 
                 writeln!(out, "    let current = {{");
+                out.write_str("        mod module {\n");
                 writeln!(
                     out,
-                    "        ::core::include!({:?});",
+                    "            ::core::include!({:?});",
                     path_to_include.as_ref()
                 );
+
                 // TODO: Generate module imports.
+
                 writeln!(
                     out,
-                    "        wasm!(pub mod module use ::wasm2rs_rt::embedder::self_contained);\n"
+                    "            wasm!(mod module use ::wasm2rs_rt::embedder::self_contained);"
                 );
+                out.write_str("            pub use module::*;\n        }\n");
 
                 let (line, col) = wat_span.linecol_in(script_text);
                 write!(
@@ -232,7 +236,7 @@ pub(crate) fn convert(
                 let (line, col) = assert_span.linecol_in(script_text);
                 writeln!(
                     out,
-                    ").unwrap_err(\"expected trap in {}:{}:{}\");",
+                    ").expect_err(\"expected trap in {}:{}:{}\");",
                     script_path.display(),
                     line.saturating_add(1),
                     col.saturating_add(1)
@@ -306,10 +310,15 @@ pub(crate) fn convert(
                     col.saturating_add(1)
                 );
 
+                let many_results = results.len() > 1;
                 for (i, result) in results.into_iter().enumerate() {
                     use wast::core::WastRetCore;
 
-                    write!(out, "    assert_eq!(result.{i}, ");
+                    out.write_str("    assert_eq!(result");
+                    if many_results {
+                        write!(out, ".{i}");
+                    }
+                    out.write_str(", ");
 
                     match result {
                         wast::WastRet::Core(core_ret) => match core_ret {
