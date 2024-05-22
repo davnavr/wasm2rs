@@ -454,7 +454,7 @@ impl crate::ast::Expr {
                         c_1.print(out, arena, true, context);
                         out.write_str(" as u64 >> (");
                         c_2.print(out, arena, true, context);
-                        out.write_str(" as u64 % 64) as i64");
+                        out.write_str(" as u64 % 64)) as i64");
                     },
                     BinOp::I32Rotl => {
                         c_1.print(out, arena, true, context);
