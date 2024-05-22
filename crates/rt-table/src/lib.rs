@@ -24,8 +24,11 @@ pub use wasm2rs_rt_core::{
     BoundsCheck, BoundsCheckError,
 };
 
+mod array;
+//mod slice; // struct SliceTable<'a> // Lifetimes in wasm2rs modules are not yet supported
 mod empty;
 
+pub use array::ArrayTable;
 pub use empty::EmptyTable;
 
 /// Constant value returned by [`AnyTable::grow()`] used to indicate failure.
@@ -218,7 +221,3 @@ pub trait TableExt<E: TableElement>: Table<E> {
         default_clone_from_conservative(self, src, dst_idx, src_idx, len)
     }
 }
-
-// pub struct ArrayTable<const N: usize, E: TableElement> {
-//     elements: [E; CAP],
-// }
