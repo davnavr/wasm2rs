@@ -610,16 +610,40 @@ fn convert_impl(
             Operator::I64Rotr => bin_op!(I64Rotr),
             Operator::F32Neg | Operator::F64Neg => un_op!(FxxNeg),
             Operator::I32WrapI64 => un_op!(I32WrapI64),
-            Operator::I32TruncF32S => un_op!(I32TruncF32S),
-            Operator::I32TruncF32U => un_op!(I32TruncF32U),
-            Operator::I32TruncF64S => un_op!(I32TruncF64S),
-            Operator::I32TruncF64U => un_op!(I32TruncF64U),
+            Operator::I32TruncF32S => {
+                builder.can_trap();
+                un_op!(I32TruncF32S);
+            }
+            Operator::I32TruncF32U => {
+                builder.can_trap();
+                un_op!(I32TruncF32U)
+            }
+            Operator::I32TruncF64S => {
+                builder.can_trap();
+                un_op!(I32TruncF64S)
+            }
+            Operator::I32TruncF64U => {
+                builder.can_trap();
+                un_op!(I32TruncF64U)
+            }
             Operator::I64ExtendI32S => un_op!(I64ExtendI32S),
             Operator::I64ExtendI32U => un_op!(I64ExtendI32U),
-            Operator::I64TruncF32S => un_op!(I64TruncF32S),
-            Operator::I64TruncF32U => un_op!(I64TruncF32U),
-            Operator::I64TruncF64S => un_op!(I64TruncF64S),
-            Operator::I64TruncF64U => un_op!(I64TruncF64U),
+            Operator::I64TruncF32S => {
+                builder.can_trap();
+                un_op!(I64TruncF32S)
+            }
+            Operator::I64TruncF32U => {
+                builder.can_trap();
+                un_op!(I64TruncF32U)
+            }
+            Operator::I64TruncF64S => {
+                builder.can_trap();
+                un_op!(I64TruncF64S)
+            }
+            Operator::I64TruncF64U => {
+                builder.can_trap();
+                un_op!(I64TruncF64U)
+            }
             Operator::F32ConvertI32S | Operator::F32ConvertI64S => un_op!(F32ConvertIxxS),
             Operator::F32ConvertI32U => un_op!(F32ConvertI32U),
             Operator::F32ConvertI64U => un_op!(F32ConvertI64U),

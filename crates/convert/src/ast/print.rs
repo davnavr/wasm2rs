@@ -208,7 +208,7 @@ impl crate::ast::Expr {
                         out.write_str(paths::RT_MATH);
                         out.write_str(concat!("::", stringify!($name), "("));
                         c_1.print(out, arena, true, context);
-                        out.write_str(")?");
+                        out.write_str(").trap_with(None)?");
                     }};
                 }
 
