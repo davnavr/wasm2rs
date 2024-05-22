@@ -478,6 +478,7 @@ dependencies = [
  "wasm2rs-rt-memory",
  "wasm2rs-rt-simd",
  "wasm2rs-rt-stack",
+ "wasm2rs-rt-table",
 ]
 
 [[package]]

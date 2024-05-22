@@ -22,10 +22,12 @@
 //!   occurred. It is re-exported as the [`stack`] module. By default, stack overflow checks are a
 //!   no-op, and require the [`stack-overflow-checks`](crate#stack-overflow-checks) feature flag
 //!   to be enabled.
+//! - [`wasm2rs_rt_table`], which provides the implementation for WebAssembly tables. It is enabled
+//!   by the [`table`](crate#table) feature flag, and is re-exported as the [`table`] module.
 //!
 //! # Feature Flags
 //!
-//! By default, the [`std`](crate#std), [`memory`](crate#memory),
+//! By default, the [`std`](crate#std), [`memory`](crate#memory), [`table`](crate#table),
 //! [`simd-intrinsics`](crate#simd-intrinsics),
 //! [`feature-reference-types`](crate#feature-reference-types), and
 //! [`feature-simd128`](crate#feature-simd128) flags are enabled.
@@ -55,6 +57,13 @@
 //!
 //! Provides runtime support for linear memory, enabling the [`memory`] module. Adds a dependency
 //! on the [`wasm2rs_rt_memory`] crate.
+//!
+//! - Enabled by: [`default`](crate#feature-flags)
+//!
+//! ## [`table`]
+//!
+//! Provides runtime support for tables, enabling the [`table`] module.  Adds a dependency on the
+//! [`wasm2rs_rt_table`] crate.
 //!
 //! - Enabled by: [`default`](crate#feature-flags)
 //!
@@ -94,6 +103,7 @@
 //! [`wasm2rs_rt_memory`]: rt_memory
 //! [`wasm2rs_rt_simd`]: rt_simd
 //! [`wasm2rs_rt_stack`]: rt_stack
+//! [`wasm2rs_rt_table`]: rt_table
 
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
@@ -117,6 +127,9 @@ pub use wasm2rs_rt_core::{global, symbol, trace};
 
 #[cfg(feature = "memory")]
 pub use rt_memory as memory;
+
+#[cfg(feature = "table")]
+pub use rt_table as table;
 
 #[cfg(feature = "feature-simd128")]
 pub use rt_simd as simd;

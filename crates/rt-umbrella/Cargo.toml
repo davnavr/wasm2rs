@@ -9,6 +9,7 @@ repository.workspace = true
 default = [
     "std",
     "memory",
+    "table",
     "simd-intrinsics",
     "feature-reference-types",
     "feature-simd128"
@@ -25,6 +26,7 @@ std = [
 alloc = ["rt-memory/alloc"]
 func-ref = ["dep:rt-func-ref"]
 memory = ["dep:rt-memory"]
+table = ["dep:rt-table"]
 simd-intrinsics = ["rt-simd/simd-intrinsics"]
 stack-overflow-checks = ["rt-stack/enabled"]
 feature-reference-types = ["func-ref"]
@@ -54,6 +56,12 @@ optional = true
 [dependencies.rt-memory]
 package = "wasm2rs-rt-memory"
 path = "../rt-memory"
+default-features = false
+optional = true
+
+[dependencies.rt-table]
+package = "wasm2rs-rt-table"
+path = "../rt-table"
 default-features = false
 optional = true
 
