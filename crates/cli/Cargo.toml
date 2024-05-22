@@ -19,11 +19,12 @@ friendly = [
     "clap/usage",
     "clap/suggestions"
 ]
-test-utils = ["rayon"]
+test-utils = ["rayon", "dep:wasm2rs-convert-wast"]
 
 [dependencies]
 anyhow = { workspace = true }
 clap = { version = "4.5.4", default-features = false, features = ["std", "derive"] }
 rayon = { workspace = true, optional = true }
 wasm2rs-convert = { path = "../convert", default-features = false }
+wasm2rs-convert-wast = { path = "../convert-wast", optional = true }
 wat = { workspace = true }

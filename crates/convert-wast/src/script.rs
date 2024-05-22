@@ -69,6 +69,8 @@ pub(crate) fn convert(
     output: &(dyn crate::Output<'_> + '_),
     script_path: &std::path::Path,
     script_text: &str,
+    conversion_options: &wasm2rs_convert::Convert,
+    conversion_allocations: &wasm2rs_convert::Allocations,
 ) -> Result<(), anyhow::Error> {
     use wasm2rs_convert::write::Write as _;
 
@@ -111,7 +113,14 @@ pub(crate) fn convert(
                     })?;
 
                 let path_to_include = output
-                    .create_module_file(script_path, module_count, module_id.as_ref(), wasm)
+                    .create_module_file(
+                        script_path,
+                        module_count,
+                        module_id.as_ref(),
+                        wasm,
+                        conversion_options,
+                        conversion_allocations,
+                    )
                     .with_context(|| {
                         let mut err =
                             wast::Error::new(wat_span, "could not obtain path to module".into());

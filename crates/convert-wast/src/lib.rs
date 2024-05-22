@@ -57,6 +57,8 @@ pub trait Output<'a>: Sync {
         sequence: u32,
         id: Option<&wast::token::Id>,
         binary: Vec<u8>,
+        conversion_options: &wasm2rs_convert::Convert,
+        conversion_allocations: &wasm2rs_convert::Allocations,
     ) -> anyhow::Result<crate::CowPath<'a>>;
 
     /// Creates a file that will containing the Rust code corresponding to a single [`.wast`] file.
@@ -71,7 +73,79 @@ pub trait Output<'a>: Sync {
     fn create_root_file(&self) -> anyhow::Result<PathWriter<'a>>;
 }
 
-//struct DirectoryOutput
+/// An [`Output`] implementation that writes all files into a given directory.
+#[derive(Debug)]
+pub struct DirectoryOutput<'a> {
+    root_directory: &'a std::path::Path,
+}
+
+impl<'a> DirectoryOutput<'a> {
+    /// Creates files within an existing directory.
+    pub fn existing(root_directory: &'a std::path::Path) -> Self {
+        Self { root_directory }
+    }
+}
+
+impl<'a> Output<'a> for DirectoryOutput<'_> {
+    fn create_module_file(
+        &self,
+        script: &std::path::Path,
+        sequence: u32,
+        id: Option<&wast::token::Id>,
+        binary: Vec<u8>,
+        conversion_options: &wasm2rs_convert::Convert,
+        conversion_allocations: &wasm2rs_convert::Allocations,
+    ) -> anyhow::Result<crate::CowPath<'a>> {
+        let mut path = std::path::PathBuf::from(self.root_directory);
+        let stem = script
+            .file_stem()
+            .ok_or_else(|| anyhow::anyhow!("missing stem for {script:?}"))?;
+        path.push(stem);
+
+        match std::fs::create_dir(&path) {
+            Err(err) if err.kind() != std::io::ErrorKind::AlreadyExists => {
+                return Err(anyhow::Error::new(err))
+            }
+            _ => (),
+        }
+
+        if let Some(name) = id {
+            path.push(name.name());
+        } else {
+            path.push(format!("module_{sequence}"));
+        }
+
+        {
+            let mut convert_output =
+                std::fs::File::create(&path).context("unable to create output file")?;
+
+            conversion_options
+                .convert_from_buffer_with_allocations(
+                    &binary,
+                    &mut convert_output,
+                    conversion_allocations,
+                )
+                .context("conversion failed")?;
+        }
+
+        Ok(path.into())
+    }
+
+    fn create_script_file(&self, script: &std::path::Path) -> anyhow::Result<PathWriter<'a>> {
+        let mut path = std::path::PathBuf::from(self.root_directory);
+
+        if let Some(stem) = script.file_stem() {
+            path.push(stem);
+        }
+
+        path.set_extension("wast.rs");
+        PathWriter::create_file(path).map_err(Into::into)
+    }
+
+    fn create_root_file(&self) -> anyhow::Result<PathWriter<'a>> {
+        PathWriter::create_file(self.root_directory.join("include.wasm2.rs")).map_err(Into::into)
+    }
+}
 
 /// Maps an input [`.wast`] file to an output `.rs` file.
 ///
@@ -113,6 +187,7 @@ pub fn convert_to_output<'input, 'output>(
         }
     }
 
+    let conversion_allocations = wasm2rs_convert::Allocations::default();
     let mut results = Vec::with_capacity(inputs.len());
 
     // This may not handle opening too many files at once correctly. However, the limit on
@@ -146,6 +221,8 @@ pub fn convert_to_output<'input, 'output>(
                 output,
                 &test_file.input,
                 &input_buffer.string,
+                test_file.options,
+                &conversion_allocations,
             )
             .with_context(|| format!("could not translate script file {:?}", test_file.input))?;
 
@@ -163,9 +240,46 @@ pub fn convert_to_output<'input, 'output>(
         }
     }
 
-    if errors.is_empty() {
-        Ok(successes)
-    } else {
-        Err(errors)
+    if !errors.is_empty() {
+        return Err(errors);
     }
+
+    let mut root_file = output
+        .create_root_file()
+        .context("could not create root file")
+        .map_err(|err| vec![err])?;
+
+    {
+        use wasm2rs_convert::write::Write as _;
+
+        let mut out = wasm2rs_convert::write::IoWrite::new(&mut root_file.file);
+
+        writeln!(out, "// Translated {} tests\n", successes.len());
+
+        for (i, path) in successes.iter().enumerate() {
+            // Would relative paths work better here?
+            writeln!(out, "#[path = {path:?}]");
+            if let Some(stem) = path.file_stem() {
+                let module_name = stem.to_string_lossy();
+                writeln!(
+                    out,
+                    "mod {};",
+                    wasm2rs_convert::ident::SafeIdent::from(module_name.as_ref())
+                );
+            } else {
+                writeln!(
+                    out,
+                    "mod test_{i}; // Translated from {:?}",
+                    inputs[i].input
+                );
+            }
+        }
+
+        out.flush();
+        out.into_inner()
+            .with_context(|| format!("I/O error while writing {:?}", root_file.path.as_ref()))
+            .map_err(|err| vec![err])?;
+    }
+
+    Ok(successes)
 }

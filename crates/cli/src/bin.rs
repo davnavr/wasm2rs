@@ -29,18 +29,19 @@ enum Command {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
     },
-    /// Translates and executes WebAssembly specification tests.
+    /// Translates WebAssembly specification tests.
+    #[cfg(feature = "test-utils")]
     Test {
-        /// Specifies the `.wast` files to translate and execute.
+        /// Specifies the `.wast` files to translate.
         #[arg(short, long)]
         input: Vec<std::path::PathBuf>,
-        /// If set, the generated Rust source code is not executed.
+        /// The directory that will contain the generated Rust source code.
         #[arg(long)]
-        no_run: bool,
+        output_directory: std::path::PathBuf,
     },
 }
 
-pub fn main() -> anyhow::Result<()> {
+pub fn main() -> anyhow::Result<std::process::ExitCode> {
     use anyhow::Context;
 
     let arguments = <Arguments as clap::Parser>::parse();
@@ -53,7 +54,7 @@ pub fn main() -> anyhow::Result<()> {
             .context("unable to create global thread pool")?;
     }
 
-    match arguments.command {
+    let exit_code = match arguments.command {
         Command::Convert { input, output } => {
             let wasm =
                 wat::parse_file(&input).with_context(|| format!("could not parse {input:?}"))?;
@@ -65,11 +66,41 @@ pub fn main() -> anyhow::Result<()> {
             wasm2rs_convert::Convert::new()
                 .convert_from_buffer(&wasm, &mut std::io::BufWriter::with_capacity(4096, out))?;
 
-            Ok(())
+            std::process::ExitCode::SUCCESS
         }
+        #[cfg(feature = "test-utils")]
         Command::Test {
-            input: _,
-            no_run: _,
-        } => anyhow::bail!("specification tests are not yet supported"),
-    }
+            input,
+            output_directory,
+        } => {
+            let options = wasm2rs_convert::Convert::new();
+
+            let input_files = input
+                .into_iter()
+                .map(|path| wasm2rs_convert_wast::TestFile {
+                    input: path.into(),
+                    options: &options,
+                })
+                .collect::<Vec<_>>();
+
+            let output = wasm2rs_convert_wast::DirectoryOutput::existing(&output_directory);
+
+            match wasm2rs_convert_wast::convert_to_output(&input_files, &output) {
+                Ok(_) => std::process::ExitCode::SUCCESS,
+                Err(errors) => {
+                    use std::io::Write as _;
+
+                    let mut stderr = std::io::stderr().lock();
+
+                    for err in errors.into_iter() {
+                        let _ = writeln!(&mut stderr, "{err}");
+                    }
+
+                    std::process::ExitCode::FAILURE
+                }
+            }
+        }
+    };
+
+    Ok(exit_code)
 }

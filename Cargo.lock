@@ -438,6 +438,7 @@ dependencies = [
  "clap",
  "rayon",
  "wasm2rs-convert",
+ "wasm2rs-convert-wast",
  "wat",
 ]
 
