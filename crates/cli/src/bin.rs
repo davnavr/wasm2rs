@@ -93,7 +93,7 @@ pub fn main() -> anyhow::Result<std::process::ExitCode> {
                     let mut stderr = std::io::stderr().lock();
 
                     for err in errors.into_iter() {
-                        let _ = writeln!(&mut stderr, "{err}");
+                        let _ = writeln!(&mut stderr, "{err:#}");
                     }
 
                     std::process::ExitCode::FAILURE

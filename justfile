@@ -22,11 +22,17 @@ test_compiler cargo='cargo': clippy_rt
     cargo run -- convert -i ./tests/compiler/src/imports.wat
     cd ./tests/compiler && {{cargo}} test
 
-test_spec:
+test_spec: && test_spec_run
     cargo run --features test-utils -- \
         test \
+        -i ./tests/spec/testsuite/forward.wast \
         -i ./tests/spec/testsuite/i64.wast \
+        -i ./tests/spec/testsuite/int_exprs.wast \
+        -i ./tests/spec/testsuite/int_literals.wast \
+        -i ./tests/spec/testsuite/traps.wast \
         --output-directory ./tests/spec/src/generated/
+
+test_spec_run:
     cd ./tests/spec && cargo test
 
 # Generate documentation; requires Rust nightly.
