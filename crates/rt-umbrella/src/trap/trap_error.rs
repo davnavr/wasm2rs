@@ -20,16 +20,28 @@ pub enum TrapCause {
     /// [`math::ConversionToIntegerError`].
     ///
     /// [`math::ConversionToIntegerError`]: crate::math::ConversionToIntegerError
-    ConversionToInteger,
+    #[non_exhaustive]
+    ConversionToInteger {
+        #[allow(missing_docs)]
+        error: crate::math::ConversionToIntegerError,
+    },
     /// An integer operation attempted a division by zero. This corresponds to a
     /// [`math::DivisionByZeroError`].
     ///
     /// [`math::DivisionByZeroError`]: crate::math::DivisionByZeroError
-    IntegerDivisionByZero,
+    #[non_exhaustive]
+    IntegerDivisionByZero {
+        #[allow(missing_docs)]
+        error: crate::math::DivisionByZeroError,
+    },
     /// An integer operation overflowed. This corresponds to a [`math::IntegerOverflowError`].
     ///
     /// [`math::IntegerOverflowError`]: crate::math::IntegerOverflowError
-    IntegerOverflow,
+    #[non_exhaustive]
+    IntegerOverflow {
+        #[allow(missing_docs)]
+        error: crate::math::IntegerOverflowError,
+    },
     /// A memory access was out of bounds. This corresponds to a [`memory::AccessError`].
     ///
     /// [`memory::AccessError`]: crate::memory::AccessError
@@ -102,9 +114,9 @@ impl core::fmt::Display for TrapCause {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Unreachable { error } => core::fmt::Display::fmt(error, f),
-            Self::ConversionToInteger => f.write_str("invalid conversion to integer"),
-            Self::IntegerDivisionByZero => f.write_str("integer division by zero"),
-            Self::IntegerOverflow => f.write_str("integer overflow"),
+            Self::ConversionToInteger { error } => core::fmt::Display::fmt(error, f),
+            Self::IntegerDivisionByZero { error } => core::fmt::Display::fmt(error, f),
+            Self::IntegerOverflow { error } => core::fmt::Display::fmt(error, f),
             #[cfg(all(feature = "alloc", feature = "memory"))]
             Self::MemoryBoundsCheck { access } => core::fmt::Display::fmt(access, f),
             #[cfg(not(all(feature = "alloc", feature = "memory")))]
@@ -236,8 +248,7 @@ impl Trap<crate::math::ConversionToIntegerError> for TrapError {
         cause: crate::math::ConversionToIntegerError,
         frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
     ) -> Self {
-        let crate::math::ConversionToIntegerError = cause;
-        Self::new(TrapCause::ConversionToInteger, frame)
+        Self::new(TrapCause::ConversionToInteger { error: cause }, frame)
     }
 }
 
@@ -246,8 +257,7 @@ impl Trap<crate::math::DivisionByZeroError> for TrapError {
         cause: crate::math::DivisionByZeroError,
         frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
     ) -> Self {
-        let crate::math::DivisionByZeroError = cause;
-        Self::new(TrapCause::IntegerDivisionByZero, frame)
+        Self::new(TrapCause::IntegerDivisionByZero { error: cause }, frame)
     }
 }
 
@@ -256,8 +266,23 @@ impl Trap<crate::math::IntegerOverflowError> for TrapError {
         cause: crate::math::IntegerOverflowError,
         frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
     ) -> Self {
-        let crate::math::IntegerOverflowError = cause;
-        Self::new(TrapCause::IntegerOverflow, frame)
+        Self::new(TrapCause::IntegerOverflow { error: cause }, frame)
+    }
+}
+
+impl Trap<crate::math::IntegerDivisionError> for TrapError {
+    fn trap(
+        cause: crate::math::IntegerDivisionError,
+        frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
+    ) -> Self {
+        match cause {
+            rt_math::IntegerDivisionError::DivisionByZero => {
+                Self::trap(rt_math::DivisionByZeroError, frame)
+            }
+            rt_math::IntegerDivisionError::Overflow => {
+                Self::trap(rt_math::IntegerOverflowError, frame)
+            }
+        }
     }
 }
 
