@@ -466,7 +466,7 @@ impl crate::ast::Expr {
                         c_1.print(out, arena, true, context);
                         out.write_str(".rotate_left((");
                         c_2.print(out, arena, true, context);
-                        out.write_str(" % 64) as u64)");
+                        out.write_str(" % 64) as u32)");
                     }
                     BinOp::I32Rotr => {
                         c_1.print(out, arena, true, context);
@@ -478,7 +478,7 @@ impl crate::ast::Expr {
                         c_1.print(out, arena, true, context);
                         out.write_str(".rotate_right((");
                         c_2.print(out, arena, true, context);
-                        out.write_str(" % 64) as u64)");
+                        out.write_str(" % 64) as u32)");
                     }
                 }
             }
