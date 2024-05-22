@@ -352,18 +352,18 @@ impl crate::ast::Expr {
 
                 macro_rules! infix_comparison {
                     ($operator:literal $(as $cast:ident)?) => {{
-                        out.write_str("(");
+                        out.write_str("((");
                         c_1.print(out, arena, true, context);
                         out.write_str(concat!(
                             $(" as ", stringify!($cast),)?
-                            " ",
+                            ") ",
                             $operator,
-                            " ",
+                            " (",
                         ));
                         c_2.print(out, arena, true, context);
                         out.write_str(concat!(
                             $(" as ", stringify!($cast),)?
-                            ") as i32"
+                            ")) as i32"
                         ));
                     }};
                 }
