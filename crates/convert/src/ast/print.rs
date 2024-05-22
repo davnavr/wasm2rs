@@ -501,11 +501,12 @@ impl crate::ast::Expr {
                 address,
                 offset,
             } => {
-                use crate::ast::{I32StorageSize, I64StorageSize, LoadKind};
+                use crate::ast::{I32StorageSize, I64StorageSize, LoadKind, SignExtensionMode};
 
                 match kind {
                     LoadKind::F32 => out.write_str("f32::from_bits("),
                     LoadKind::F64 => out.write_str("f64::from_bits("),
+                    LoadKind::AsI32 { .. } | LoadKind::AsI64 { .. } if nested => out.write_str("("),
                     _ => (),
                 }
 
@@ -557,6 +558,34 @@ impl crate::ast::Expr {
                 match kind {
                     LoadKind::F32 => out.write_str("as u32)"),
                     LoadKind::F64 => out.write_str("as u64)"),
+                    LoadKind::AsI32 {
+                        storage_size: _,
+                        sign_extension,
+                    } => {
+                        if matches!(sign_extension, SignExtensionMode::Unsigned) {
+                            out.write_str("as u32 ");
+                        }
+
+                        out.write_str("as i32");
+
+                        if nested {
+                            out.write_str(")");
+                        }
+                    }
+                    LoadKind::AsI64 {
+                        storage_size: _,
+                        sign_extension,
+                    } => {
+                        if matches!(sign_extension, SignExtensionMode::Unsigned) {
+                            out.write_str("as u64 ");
+                        }
+
+                        out.write_str("as i64");
+
+                        if nested {
+                            out.write_str(")");
+                        }
+                    }
                     _ => (),
                 }
             }
