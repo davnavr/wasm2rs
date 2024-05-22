@@ -556,17 +556,17 @@ impl crate::ast::Expr {
                 out.write_str(")?");
 
                 match kind {
-                    LoadKind::F32 => out.write_str("as u32)"),
-                    LoadKind::F64 => out.write_str("as u64)"),
+                    LoadKind::F32 => out.write_str(" as u32)"),
+                    LoadKind::F64 => out.write_str(" as u64)"),
                     LoadKind::AsI32 {
                         storage_size: _,
                         sign_extension,
                     } => {
                         if matches!(sign_extension, SignExtensionMode::Unsigned) {
-                            out.write_str("as u32 ");
+                            out.write_str(" as u32");
                         }
 
-                        out.write_str("as i32");
+                        out.write_str(" as i32");
 
                         if nested {
                             out.write_str(")");
@@ -577,10 +577,10 @@ impl crate::ast::Expr {
                         sign_extension,
                     } => {
                         if matches!(sign_extension, SignExtensionMode::Unsigned) {
-                            out.write_str("as u64 ");
+                            out.write_str(" as u64");
                         }
 
-                        out.write_str("as i64");
+                        out.write_str(" as i64");
 
                         if nested {
                             out.write_str(")");
@@ -722,17 +722,67 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
 
             match stmt {
                 Statement::Expr(expr) => {
+                    use crate::ast::{BinOp, Expr, UnOp};
+
                     debug_assert!(!is_last, "expected a terminator statement");
 
                     match arena.get(expr) {
-                        crate::ast::Expr::Literal(literal) => write!(out, "// {literal}"),
+                        Expr::Literal(literal) => write!(out, "// {literal}"),
                         // No side effects or sub-expressions to evauluate.
-                        crate::ast::Expr::GetGlobal(_)
-                        | crate::ast::Expr::GetLocal(_)
-                        | crate::ast::Expr::LoopInput(_)
-                        | crate::ast::Expr::Temporary(_)
-                        | crate::ast::Expr::MemorySize(_) => (),
+                        Expr::GetGlobal(_)
+                        | Expr::GetLocal(_)
+                        | Expr::LoopInput(_)
+                        | Expr::Temporary(_)
+                        | Expr::MemorySize(_) => (),
                         expr => {
+                            const DISCARD: &str = "let _ = ";
+
+                            match expr {
+                                Expr::Call { callee, .. } => {
+                                    let has_error = self
+                                        .context
+                                        .function_attributes
+                                        .unwind_kind(callee)
+                                        .can_unwind();
+
+                                    let returns_values = !self
+                                        .context
+                                        .function_signature(callee)
+                                        .results()
+                                        .is_empty();
+
+                                    if has_error || returns_values {
+                                        out.write_str(DISCARD);
+                                    }
+                                }
+                                Expr::UnaryOperator {
+                                    kind:
+                                        UnOp::I32TruncF32S
+                                        | UnOp::I32TruncF32U
+                                        | UnOp::I32TruncF64S
+                                        | UnOp::I32TruncF64U
+                                        | UnOp::I64TruncF32S
+                                        | UnOp::I64TruncF32U
+                                        | UnOp::I64TruncF64S
+                                        | UnOp::I64TruncF64U,
+                                    ..
+                                }
+                                | Expr::BinaryOperator {
+                                    kind:
+                                        BinOp::I32DivS
+                                        | BinOp::I32DivU
+                                        | BinOp::I32RemS
+                                        | BinOp::I32RemU
+                                        | BinOp::I64DivS
+                                        | BinOp::I64DivU
+                                        | BinOp::I64RemS
+                                        | BinOp::I64RemU,
+                                    ..
+                                }
+                                | Expr::MemoryLoad { .. } => out.write_str(DISCARD),
+                                _ => (),
+                            }
+
                             expr.print(out, arena, false, self.context);
                             out.write_str(";");
                         }
