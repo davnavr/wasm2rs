@@ -16,8 +16,17 @@ impl core::fmt::Display for UnreachableError {
 #[cfg(feature = "std")]
 impl std::error::Error for UnreachableError {}
 
+/// Contains common methods shared across WebAssembly [`Trap`] implementations.
+pub trait TrapInfo: core::fmt::Debug + crate::trace::Trace {
+    /// Attempts to interpret the [`Trap`] as an [`std::error::Error`].
+    #[cfg(feature = "std")]
+    fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
+        None
+    }
+}
+
 /// Trait for implementing WebAssembly traps.
-pub trait Trap<C: core::fmt::Debug>: core::fmt::Debug + crate::trace::Trace {
+pub trait Trap<C: core::fmt::Debug>: TrapInfo {
     /// Generates a trap with the given reason and an optional WebAssembly stack frame indicating
     /// the source of the trap in the original WebAssembly function.
     ///
@@ -26,12 +35,6 @@ pub trait Trap<C: core::fmt::Debug>: core::fmt::Debug + crate::trace::Trace {
     fn trap(cause: C, frame: Option<&'static crate::trace::WasmFrame>) -> Self
     where
         Self: Sized;
-
-    /// Attempts to interpret the [`Trap`] as an [`std::error::Error`].
-    #[cfg(feature = "std")]
-    fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
-        None
-    }
 }
 
 /// Implementation of a [`Trap`] that simply indicates that it occurred, without storing additional
@@ -55,14 +58,24 @@ impl crate::trace::Trace for TrapOccurred {
     }
 }
 
+impl TrapInfo for TrapOccurred {
+    #[cfg(feature = "std")]
+    fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
+        Some(self)
+    }
+}
+
 impl<C: core::fmt::Debug> Trap<C> for TrapOccurred {
     fn trap(_: C, _: Option<&'static crate::trace::WasmFrame>) -> Self {
         Self
     }
+}
 
+#[cfg(feature = "anyhow")]
+impl TrapInfo for anyhow::Error {
     #[cfg(feature = "std")]
     fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
-        Some(self)
+        Some(self.as_ref())
     }
 }
 
@@ -77,11 +90,6 @@ where
             err = err.context(frame);
         }
         err
-    }
-
-    #[cfg(feature = "std")]
-    fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
-        Some(self.as_ref())
     }
 }
 

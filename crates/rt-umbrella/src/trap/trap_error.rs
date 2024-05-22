@@ -243,6 +243,13 @@ impl crate::trace::Trace for TrapError {
     // TODO: Implement fn push_wasm_frame
 }
 
+impl crate::trap::TrapInfo for TrapError {
+    #[cfg(feature = "std")]
+    fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
+        Some(self)
+    }
+}
+
 impl Trap<crate::trap::UnreachableError> for TrapError {
     fn trap(
         cause: crate::trap::UnreachableError,
@@ -250,12 +257,6 @@ impl Trap<crate::trap::UnreachableError> for TrapError {
     ) -> Self {
         Self::new(TrapCause::Unreachable { error: cause }, frame)
     }
-
-    // TODO: Make a common `TrapInfo` trait that has `as_error and `as_display` and `Self: Debug + Trace`
-    // #[cfg(feature = "std")]
-    // fn as_error(&self) -> Option<&(dyn std::error::Error + '_)> {
-    //     Some(self)
-    // }
 }
 
 impl Trap<crate::math::ConversionToIntegerError> for TrapError {
