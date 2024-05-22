@@ -19,7 +19,10 @@ extern crate std;
 extern crate alloc;
 
 #[doc(no_inline)]
-pub use wasm2rs_rt_core::{BoundsCheck, BoundsCheckError};
+pub use wasm2rs_rt_core::{
+    table::{NullableTableElement, TableElement},
+    BoundsCheck, BoundsCheckError,
+};
 
 /// Trait for common operations shared by [`Table`]s of all element types.
 pub trait AnyTable {
@@ -32,17 +35,26 @@ pub trait AnyTable {
     }
 }
 
-/// Trait for values that can be stored in [`Table`]s.
-pub trait TableElement: Clone {
-    const NULL: Self;
-}
-
 /// Trait for implementations of [WebAssembly tables].
 ///
 /// [WebAssembly tables]: https://webassembly.github.io/spec/core/syntax/modules.html#tables
 pub trait Table<E: TableElement>: AnyTable {
+    /// Gets the element at the given index.
+    ///
+    /// # Error
+    ///
+    /// Returns an error if the index is greater than or equal to the [`table.size`].
+    ///
+    /// [`table.size`]: AnyTable::size()
     fn get(&self, idx: u32) -> BoundsCheck<E>;
 
+    /// Gets the element at the given index.
+    ///
+    /// # Error
+    ///
+    /// Returns an error if the index is greater than or equal to the [`table.size`].
+    ///
+    /// [`table.size`]: AnyTable::size()
     fn set(&self, idx: u32, elem: E) -> BoundsCheck<()>;
 }
 

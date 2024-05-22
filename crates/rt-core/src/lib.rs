@@ -20,6 +20,7 @@ extern crate std;
 pub mod global;
 pub mod limit;
 pub mod symbol;
+pub mod table;
 pub mod trace;
 pub mod trap;
 
