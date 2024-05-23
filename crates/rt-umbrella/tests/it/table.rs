@@ -1,7 +1,7 @@
-use table::AnyTable;
-use wasm2rs_rt::table::{self, BoundsCheckError, Table};
+use wasm2rs_rt::table::{self, AnyTable, BoundsCheckError, Table};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
 struct IntRef(Option<u32>);
 
 impl table::TableElement for IntRef {}
@@ -67,10 +67,72 @@ fn array() {
 #[test]
 #[cfg(feature = "alloc")]
 fn heap_table_cannot_allocate() {
-    use table::HeapTable;
-
-    let result = HeapTable::<IntRef>::with_limits(3, 1);
+    let result = table::HeapTable::<IntRef>::with_limits(3, 1);
     assert!(matches!(result, Err(e) if e.size() == 3), "{result:?}");
 
     // Can't test request for `u32::MAX` elements. since it could actually succeed on 64-bit systems.
+}
+
+#[test]
+#[cfg(feature = "alloc")]
+fn heap_table() {
+    use alloc::boxed::Box;
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    #[repr(transparent)]
+    struct TestRef(Option<Box<u32>>);
+
+    const EMPTY_ELEMENT: TestRef = TestRef(None);
+
+    impl table::TableElement for TestRef {}
+
+    impl table::NullableTableElement for TestRef {
+        const NULL: Self = Self(None);
+    }
+
+    let table = table::HeapTable::<TestRef>::with_maximum(10);
+
+    assert_eq!(table.get(0), Err(BoundsCheckError), "{table:?}");
+    assert_eq!(
+        table.set(1, TestRef(None)),
+        Err(BoundsCheckError),
+        "{table:?}"
+    );
+    assert!(table.is_empty(), "{table:?}");
+
+    assert_eq!(table.grow(4), 0, "{table:?}");
+    assert_eq!(
+        table.replace(2, TestRef(Some(Box::new(2222)))),
+        Ok(TestRef(None)),
+        "{table:?}"
+    );
+    assert_eq!(table.get(1), Ok(TestRef(None)), "{table:?}");
+    assert_eq!(table.get(3), Ok(TestRef(None)), "{table:?}");
+
+    assert_eq!(table.grow(3), 4, "{table:?}");
+    assert_eq!(table.get(4), Ok(TestRef(None)), "{table:?}");
+
+    assert_eq!(table.grow(4), table::GROW_FAILED, "{table:?}");
+    assert_eq!(table.maximum(), 10, "{table:?}");
+
+    let buffer = [
+        TestRef(Some(Box::new(0xAA))),
+        TestRef(Some(Box::new(0xBB))),
+        TestRef(Some(Box::new(0xCC))),
+        TestRef(Some(Box::new(0xDD))),
+    ];
+    assert_eq!(
+        table.clone_from_slice(3, buffer.as_slice()),
+        Ok(()),
+        "{table:?}"
+    );
+    assert_eq!(table.grow(3), 7, "{table:?}");
+    assert_eq!(table.size(), table.maximum(), "{table:?}");
+    let mut result = [EMPTY_ELEMENT; 4];
+    assert_eq!(
+        table.clone_into_slice(3, result.as_mut_slice()),
+        Ok(()),
+        "{table:?}"
+    );
+    assert_eq!(buffer, result, "{table:?}");
 }
