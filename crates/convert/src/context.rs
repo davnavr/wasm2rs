@@ -79,15 +79,30 @@ impl FunctionAttributes {
 #[repr(transparent)]
 pub(crate) struct ImportedModule(pub(crate) u16);
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[repr(transparent)]
+pub(crate) struct WasmStr<'wasm>(pub(crate) &'wasm str);
+
+impl<'wasm> From<WasmStr<'wasm>> for crate::ident::SafeIdent<'wasm> {
+    fn from(s: WasmStr<'wasm>) -> Self {
+        s.0.into()
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Import<'ctx, 'wasm> {
-    pub(crate) module: &'ctx crate::ident::BoxedIdent<'wasm>,
-    pub(crate) name: &'ctx crate::ident::BoxedIdent<'wasm>,
+    pub(crate) module: &'ctx WasmStr<'wasm>,
+    pub(crate) name: &'ctx WasmStr<'wasm>,
 }
 
 impl std::fmt::Display for Import<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "imports.{}().{}", self.module, self.name,)
+        write!(
+            f,
+            "imports.{}().{}",
+            crate::ident::SafeIdent::from(*self.module),
+            crate::ident::SafeIdent::from(*self.name)
+        )
     }
 }
 
@@ -96,7 +111,7 @@ impl std::fmt::Display for Import<'_, '_> {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum FunctionName<'ctx, 'wasm> {
     /// The function's WebAssembly export name is used.
-    Export(&'ctx crate::ident::BoxedIdent<'wasm>),
+    Export(&'ctx WasmStr<'wasm>),
     /// An identifier based on the [**funcidx**](FuncId) is used.
     Id(FuncId),
 }
@@ -113,7 +128,7 @@ impl FunctionName<'_, '_> {
 impl std::fmt::Display for FunctionName<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Export(name) => std::fmt::Display::fmt(*name, f),
+            Self::Export(name) => std::fmt::Display::fmt(&crate::ident::SafeIdent::from(**name), f),
             Self::Id(FuncId(idx)) => write!(f, "_f{idx}"),
         }
     }
@@ -174,8 +189,7 @@ pub(crate) struct ActiveDataSegment {
     pub(crate) offset: crate::ast::ExprId,
 }
 
-pub(crate) type ExportLookup<'wasm, I> =
-    std::collections::HashMap<I, Vec<crate::ident::BoxedIdent<'wasm>>>;
+pub(crate) type ExportLookup<'wasm, I> = std::collections::HashMap<I, Vec<WasmStr<'wasm>>>;
 
 /// Stores all information relating to a WebAssembly module and how it's components are accessed
 /// when translated to Rust.
@@ -187,7 +201,7 @@ pub(crate) struct Context<'wasm> {
     /// - The offset for active data segments.
     pub(crate) constant_expressions: crate::ast::Arena,
     /// Contains the name of each [`ImportedModule`].
-    pub(crate) imported_modules: Vec<crate::ident::BoxedIdent<'wasm>>,
+    pub(crate) imported_modules: Vec<WasmStr<'wasm>>,
     /// Specifies the module each imported function originated from.
     pub(crate) func_import_modules: Box<[ImportedModule]>,
     /// Specifies the module each imported memory originated from.
@@ -195,11 +209,11 @@ pub(crate) struct Context<'wasm> {
     /// Specifies the module each imported global originated from.
     pub(crate) global_import_modules: Box<[ImportedModule]>,
     /// Specifies the name of each WebAssembly function import.
-    pub(crate) func_import_names: Box<[crate::ident::BoxedIdent<'wasm>]>,
+    pub(crate) func_import_names: Box<[WasmStr<'wasm>]>, // TODO: Maybe store (BoxedIdent, WasmStr)?
     /// Specifies the name of each WebAssembly memory import.
-    pub(crate) memory_import_names: Box<[crate::ident::BoxedIdent<'wasm>]>,
+    pub(crate) memory_import_names: Box<[WasmStr<'wasm>]>,
     /// Specifies the name of each WebAssembly global import.
-    pub(crate) global_import_names: Box<[crate::ident::BoxedIdent<'wasm>]>,
+    pub(crate) global_import_names: Box<[WasmStr<'wasm>]>,
     /// Lookup table for each exported WebAssembly function.
     pub(crate) function_export_names: ExportLookup<'wasm, FuncId>,
     /// Lookup table for each exported WebAssembly memory.
@@ -215,6 +229,8 @@ pub(crate) struct Context<'wasm> {
     /// These are in the order they were specified in the WebAssembly export section.
     pub(crate) global_exports: Vec<GlobalId>,
     pub(crate) function_attributes: FunctionAttributes,
+    /// Specifies the offset to the code section entry for each defined WebAssembly function.
+    pub(crate) function_code_offsets: Box<[u64]>,
     /// Specifies the WebAssembly globals that correspond to a Rust field. These require
     /// assignment of their initial value within the generated `instantiate()` function.
     ///
@@ -282,8 +298,8 @@ impl<'wasm> Context<'wasm> {
     fn import_lookup<'ctx>(
         &'ctx self,
         index: usize,
-        modules: &'ctx Box<[ImportedModule]>,
-        names: &'ctx Box<[crate::ident::BoxedIdent<'wasm>]>,
+        modules: &'ctx [ImportedModule],
+        names: &'ctx [WasmStr<'wasm>],
     ) -> Option<Import<'ctx, 'wasm>> {
         names.get(index).map(|name| {
             assert_eq!(modules.len(), names.len());

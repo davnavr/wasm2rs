@@ -7,6 +7,12 @@ pub(in crate::convert) struct Code<'wasm> {
     validator: wasmparser::FuncToValidate<wasmparser::ValidatorResources>,
 }
 
+impl Code<'_> {
+    pub(in crate::convert) fn code_section_entry_offset(&self) -> u64 {
+        u64::try_from(self.body.range().start).unwrap_or(u64::MAX)
+    }
+}
+
 #[must_use]
 pub(in crate::convert) struct Definition {
     // Caller is responsible for returning these to the pool.

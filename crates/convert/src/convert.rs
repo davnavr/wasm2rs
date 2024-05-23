@@ -226,6 +226,7 @@ fn get_section_count<T>(section: &Option<wasmparser::SectionLimited<'_, T>>) -> 
 fn parse_sections<'wasm>(
     types: wasmparser::types::Types,
     function_attributes: crate::context::FunctionAttributes,
+    function_code_offsets: Box<[u64]>,
     allocations: &crate::Allocations,
     sections: Sections<'wasm>,
 ) -> crate::Result<crate::context::Context<'wasm>> {
@@ -239,6 +240,7 @@ fn parse_sections<'wasm>(
         constant_expressions: allocations.take_ast_arena(),
         function_attributes,
         start_function: sections.start_function,
+        function_code_offsets,
         // These will be filled in later.
         imported_modules: Default::default(),
         func_import_modules: Default::default(),
@@ -294,29 +296,15 @@ fn parse_sections<'wasm>(
         let mut memory_idx = crate::ast::MemoryId(0);
         let mut global_idx = crate::ast::GlobalId(0);
 
-        let mut import_module_buffer = String::new();
         for result in import_section.into_iter_with_offsets() {
             use wasmparser::TypeRef;
 
             let (import_offset, import) = result?;
 
-            // Fill the buffer with the name of the module so it can be used in comparisons.
-            {
-                use std::fmt::Write as _;
-
-                import_module_buffer.clear();
-                import_module_buffer.reserve(import.module.len());
-                let _ = write!(
-                    &mut import_module_buffer,
-                    "{}",
-                    crate::ident::SafeIdent::from(import.module)
-                );
-            }
-
             let module_idx = if let Some(existing) = context
                 .imported_modules
                 .iter()
-                .position(|name| name.as_str() == import_module_buffer.as_str())
+                .position(|name| name.0 == import.module)
             {
                 crate::context::ImportedModule(existing as u16)
             } else {
@@ -328,13 +316,12 @@ fn parse_sections<'wasm>(
 
                 context
                     .imported_modules
-                    .push(crate::ident::BoxedIdent::from_str_unchecked(
-                        import_module_buffer.clone(),
-                    ));
+                    .push(crate::context::WasmStr(import.module));
+
                 crate::context::ImportedModule(idx)
             };
 
-            let safe_import_name = crate::ident::BoxedIdent::from_str_safe(import.name);
+            let safe_import_name = crate::context::WasmStr(import.name);
             match import.ty {
                 TypeRef::Func(_) => {
                     // TODO: set call kind for imported functions
@@ -421,7 +408,7 @@ fn parse_sections<'wasm>(
         fn export_lookup_insert<'wasm, I>(
             lookup: &mut crate::context::ExportLookup<'wasm, I>,
             id: I,
-            name: crate::ident::BoxedIdent<'wasm>,
+            name: crate::context::WasmStr<'wasm>,
         ) where
             I: Eq + std::hash::Hash,
         {
@@ -439,7 +426,7 @@ fn parse_sections<'wasm>(
             use wasmparser::ExternalKind;
 
             let (export_offset, export) = result?;
-            let export_name = crate::ident::BoxedIdent::from_str_safe(&export.name);
+            let export_name = crate::context::WasmStr(export.name);
             match export.kind {
                 ExternalKind::Func => {
                     let func_idx = crate::ast::FuncId(export.index);
@@ -539,15 +526,16 @@ impl Convert<'_> {
         allocations: &crate::Allocations,
         attributes: &mut crate::context::FunctionAttributes,
         code: Vec<code::Code<'wasm>>,
-    ) -> crate::Result<Vec<code::Definition>> {
+    ) -> crate::Result<(Vec<code::Definition>, Vec<u64>)> {
         let convert_function_bodies =
             move |call_kind: &mut crate::context::CallKind,
                   unwind_kind: &mut crate::context::UnwindKind,
                   code: code::Code<'wasm>| {
+                let offset = code.code_section_entry_offset();
                 let (attr, definition) = code.convert(allocations, self, types)?;
                 *call_kind = attr.call_kind;
                 *unwind_kind = attr.unwind_kind;
-                Ok(definition)
+                Ok((definition, offset))
             };
 
         let import_count = types.core_function_count() as usize - code.len();
@@ -604,14 +592,20 @@ impl Convert<'_> {
                 .into_boxed_slice(),
         };
 
-        let function_definitions = self.convert_function_definitions(
+        let (function_definitions, function_offsets) = self.convert_function_definitions(
             &types,
             allocations,
             &mut function_attributes,
             function_bodies,
         )?;
 
-        let context = parse_sections(types, function_attributes, allocations, sections)?;
+        let context = parse_sections(
+            types,
+            function_attributes,
+            function_offsets.into_boxed_slice(),
+            allocations,
+            sections,
+        )?;
 
         Ok(Ast {
             context,
@@ -757,8 +751,12 @@ impl Convert<'_> {
                     &export_names[1..]
                 };
 
-                for export in export_names {
-                    write!(out, "\npub fn {export}(&self",);
+                for export in export_names.iter() {
+                    write!(
+                        out,
+                        "\npub fn {}(&self",
+                        crate::ident::SafeIdent::from(*export)
+                    );
 
                     if !has_parameters {
                         out.write_str(", ");
@@ -932,7 +930,8 @@ impl Convert<'_> {
         for (export, memory_id) in exported_memories {
             write!(
                 o,
-                "\n{sp}pub fn {export}(&self) -> &embedder::Memory{} {{\n{sp}{sp}",
+                "\n{sp}pub fn {}(&self) -> &embedder::Memory{} {{\n{sp}{sp}",
+                crate::ident::SafeIdent::from(*export),
                 memory_id.0
             );
 
@@ -956,7 +955,11 @@ impl Convert<'_> {
         });
 
         for (export, global_id) in exported_globals {
-            write!(o, "\n{sp}pub fn {export}(&self) -> ");
+            write!(
+                o,
+                "\n{sp}pub fn {}(&self) -> ",
+                crate::ident::SafeIdent::from(*export)
+            );
 
             let global_type = context.types.global_at(global_id.0);
 
@@ -1096,7 +1099,7 @@ impl Convert<'_> {
             o.write_str(" = ");
 
             if let Some(import) = context.global_import(global) {
-                write!(o, "inst.imports.{}().{}()", import.module, import.name);
+                write!(o, "inst.{import}()");
             } else {
                 let init = context
                     .defined_globals
@@ -1162,21 +1165,110 @@ impl Convert<'_> {
 
         let mut o = crate::write::IoWrite::new(output);
 
-        /* // Write function symbols used in stack traces.
+        // Write function symbols used in stack traces.
         if self.debug_info != DebugInfo::Omit {
-            for (func_idx, unwind_kind) in context.function_attributes.unwind_kinds
-                [context.func_import_names.len()..]
+            let func_import_count = context.func_import_names.len();
+            for (unwind_kind, func_id) in context.function_attributes.unwind_kinds
+                [func_import_count..]
                 .iter()
-                .enumerate()
+                .zip((func_import_count as u32..=u32::MAX).map(crate::ast::FuncId))
             {
-                // Functions that cannot trap are excluded.
-                if !unwind_kind.can_unwind() {
+                let export_names = context.function_export_names.get(&func_id);
+
+                // Non-exported functions that cannot trap are excluded.
+                if !unwind_kind.can_unwind() && export_names.is_none() {
                     continue;
                 }
 
-                let func_id = crate::ast::FuncId(func_idx as u32);
+                write!(
+                    o,
+                    "{sp}const {}: embedder::rt::symbol::WasmSymbol = {{",
+                    crate::ast::SymbolName(func_id),
+                );
+                write!(
+                    o,
+                    " let mut sym = embedder::rt::symbol::WasmSymbol::new({}, &",
+                    func_id.0,
+                );
+
+                // Write function signature.
+                fn write_result_types(
+                    o: &mut dyn crate::write::Write,
+                    types: &[wasmparser::ValType],
+                ) {
+                    o.write_str("&[");
+
+                    for (i, ty) in types.iter().enumerate() {
+                        use wasmparser::ValType;
+
+                        if i > 0 {
+                            o.write_str(", ");
+                        }
+
+                        o.write_str("embedder::rt::symbol::WasmValType::");
+                        o.write_str(match ty {
+                            ValType::I32 => "I32",
+                            ValType::I64 => "I64",
+                            ValType::F32 => "F32",
+                            ValType::F64 => "F64",
+                            ValType::V128 => "V128",
+                            ValType::Ref(wasmparser::RefType::FUNCREF) => "FuncRef",
+                            ValType::Ref(wasmparser::RefType::EXTERNREF) => "ExternRef",
+                            ValType::Ref(unknown) => {
+                                todo!("unknown reference type in signature {unknown:?}")
+                            }
+                        });
+                    }
+
+                    o.write_str("]");
+                }
+
+                let signature = context.function_signature(func_id);
+                o.write_str("embedder::rt::symbol::WasmSymbolSignature { parameters: ");
+                write_result_types(&mut o, signature.params());
+                o.write_str(", results: ");
+                write_result_types(&mut o, signature.results());
+
+                // Import or definition?
+                o.write_str(" }, embedder::rt::symbol::WasmSymbolKind::");
+                if let Some(import) = context.function_import(func_id) {
+                    write!(
+                        o,
+                        "Imported(&embedder::rt::symbol::WasmImportSymbol {{ module: \"{}\", name: \"{}\" }})",
+                        import.module.0.escape_default(),
+                        import.name.0.escape_default(),
+                    );
+                } else {
+                    write!(
+                        o,
+                        "Defined {{ offset: {} }}",
+                        context.function_code_offsets
+                            [func_id.0 as usize - context.func_import_names.len()]
+                    );
+                }
+
+                o.write_str(");");
+
+                if let Some(export_names) = export_names {
+                    o.write_str(" sym.export_names = &[");
+
+                    for (i, name) in export_names.iter().enumerate() {
+                        if i > 0 {
+                            o.write_str(", ");
+                        }
+
+                        write!(o, "\"{}\"", name.0.escape_default());
+                    }
+
+                    o.write_str("];");
+                }
+
+                // Custom name
+                // write!(o, " sym.custom_name = Some(\"{}\");", custom_name.escape_default());
+
+                o.write_str(" sym };\n")
             }
-        } */
+        }
 
         o.write_str("\n} // impl Instance\n\n");
         o.write_str("} // mod $module\n\n");
@@ -1278,19 +1370,18 @@ impl<'conv, 'wasm> Intermediate<'conv, 'wasm> {
     /// names and types.
     pub fn function_export_types(
         &self,
-    ) -> impl Iterator<
-        Item = (
-            &'conv crate::ident::BoxedIdent<'wasm>,
-            &'conv wasmparser::FuncType,
-        ),
-    > + 'conv {
+    ) -> impl Iterator<Item = (crate::ident::SafeIdent<'wasm>, &'conv wasmparser::FuncType)> + 'conv
+    {
         self.context
             .function_export_names
             .iter()
             .flat_map(|(id, names)| {
-                let ty: &'conv _ = &self.context.types[self.context.types.core_function_at(id.0)];
-                let signature: &'conv _ = ty.unwrap_func();
-                names.iter().zip(std::iter::repeat(signature))
+                let signature: &'conv _ = self.context.function_signature(*id);
+                names
+                    .iter()
+                    .copied()
+                    .map(crate::ident::SafeIdent::from)
+                    .zip(std::iter::repeat(signature))
             })
     }
 }

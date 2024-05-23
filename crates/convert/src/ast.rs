@@ -12,18 +12,21 @@ pub(crate) use print::Print;
 ///
 /// [*funcidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[repr(transparent)]
 pub(crate) struct FuncId(pub(crate) u32);
 
 /// Represents a WebAssembly [*memidx*], an index to a linear memory.
 ///
 /// [*memidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[repr(transparent)]
 pub(crate) struct MemoryId(pub(crate) u32);
 
 /// Represents a WebAssembly [*globalidx*], an index to a global variable.
 ///
 /// [*globalidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[repr(transparent)]
 pub(crate) struct GlobalId(pub(crate) u32);
 
 impl std::fmt::Display for GlobalId {
@@ -41,6 +44,7 @@ impl std::fmt::Display for GlobalId {
 /// [*dataidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 /// [data segment]: https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[repr(transparent)]
 pub(crate) struct DataId(pub(crate) u32);
 
 impl std::fmt::Display for DataId {
@@ -53,6 +57,7 @@ impl std::fmt::Display for DataId {
 ///
 /// [*localidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
 pub(crate) struct LocalId(pub(crate) u32);
 
 impl std::fmt::Display for LocalId {
@@ -63,6 +68,7 @@ impl std::fmt::Display for LocalId {
 
 /// Refers to a temporary local variable used to store the result of evaluating an expression.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
 pub(crate) struct TempId(pub(crate) u32);
 
 impl std::fmt::Display for TempId {
@@ -72,11 +78,22 @@ impl std::fmt::Display for TempId {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
 pub(crate) struct BlockId(pub(crate) u32);
 
 impl std::fmt::Display for BlockId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "'_b{}", self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
+pub(crate) struct SymbolName(pub(crate) FuncId);
+
+impl std::fmt::Display for SymbolName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_SYM_FN_{}", self.0 .0)
     }
 }
 

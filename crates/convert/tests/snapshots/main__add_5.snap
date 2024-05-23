@@ -37,6 +37,7 @@ fn _f0(mut _l0: i32) -> i32 {
 pub fn add_five(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Trap> {
     Ok(Self::_f0(_l0))
 }
+    const _SYM_FN_0: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(0, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[embedder::rt::symbol::WasmValType::I32], results: &[embedder::rt::symbol::WasmValType::I32] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 38 }); sym.export_names = &["add_five"]; sym };
 
 } // impl Instance
 
