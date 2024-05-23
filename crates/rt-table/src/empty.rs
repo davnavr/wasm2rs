@@ -63,6 +63,15 @@ impl<E: crate::TableElement> crate::Table<E> for EmptyTable {
             Err(BoundsCheckError)
         }
     }
+
+    #[cfg(feature = "alloc")]
+    fn to_boxed_slice(&self, idx: u32, len: u32) -> BoundsCheck<alloc::boxed::Box<[E]>> {
+        if idx == 0 && len == 0 {
+            Ok(alloc::boxed::Box::default())
+        } else {
+            Err(BoundsCheckError)
+        }
+    }
 }
 
 impl<E: crate::TableElement> crate::TableExt<E> for EmptyTable {
