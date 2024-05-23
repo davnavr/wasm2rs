@@ -36,13 +36,16 @@ impl<E: NullableTableElement> HeapTable<E> {
         Self::with_maximum(u32::MAX)
     }
 
-    /// Allocates a table, with the minimum and maximum number of elements.
+    /// Allocates a table, with the minimum and maximum number of elements. The table will
+    /// initially be filled with [`E::NULL`].
     ///
     /// If the `minimum` is `0`, then no initial allocation occurs.
     ///
     /// # Errors
     ///
     /// Returns an error if the `minimum` number of pages could not be allocated.
+    ///
+    /// [`E::NULL`]: NullableTableElement::NULL
     pub fn with_limits(minimum: u32, maximum: u32) -> Result<Self, crate::AllocationError> {
         let table = Self::with_maximum(maximum);
         table.try_grow(minimum)?;
@@ -157,13 +160,6 @@ impl<E: NullableTableElement> HeapTable<E> {
         core::ptr::slice_from_raw_parts(self.allocation.get().as_ptr(), self.len())
     }
 
-    /// Returns a mutable raw pointer to the underlying allocation.
-    ///
-    /// See [`HeapTable::as_ptr()`] for more information.
-    fn as_mut_ptr(&mut self) -> *mut [Cell<E>] {
-        core::ptr::slice_from_raw_parts_mut(self.allocation.get_mut().as_ptr(), self.len())
-    }
-
     /// Returns a slice containing the tables elements.
     ///
     /// # Safety
@@ -181,32 +177,28 @@ impl<E: NullableTableElement> Default for HeapTable<E> {
     }
 }
 
-/// Obtains a boxed slice containing the table's elements without creating a new allocation.
 impl<E: NullableTableElement> From<HeapTable<E>> for alloc::boxed::Box<[Cell<E>]> {
+    /// Creates a boxed slice containing the table's elements without creating a new allocation.
     fn from(table: HeapTable<E>) -> Self {
         let table = core::mem::ManuallyDrop::new(table);
         let allocation =
             core::ptr::slice_from_raw_parts_mut(table.allocation.get().as_ptr(), table.len());
 
         // SAFETY: `ptr` originates from global allocator.
-        // SAFETY: `ptr` refers to allocation using the exact layout of `E`.
-        // SAFETY: `ptr` refers to a valid `[E; length]`.
+        // SAFETY: `ptr` refers to allocation using the exact layout of `Cell<E>`.
+        // SAFETY: `ptr` refers to a valid `[Cell<E>; length]`.
         unsafe { alloc::boxed::Box::from_raw(allocation) }
     }
 }
 
-/// Obtains a [`Vec`] containing the table's elements without creating a new allocation.
-///
-/// [`Vec`]: alloc::vec::Vec
 impl<E: NullableTableElement> From<HeapTable<E>> for alloc::vec::Vec<Cell<E>> {
+    /// Creates a [`Vec`] containing the table's elements without creating a new allocation.
+    ///
+    /// [`Vec`]: alloc::vec::Vec
     fn from(table: HeapTable<E>) -> Self {
         alloc::boxed::Box::<[Cell<E>]>::from(table).into()
     }
 }
-
-// /// Attempts to create a [`HeapTable`] from the elements stored in the given boxed slice without creating a new heap allocation.
-// impl TryFrom<Box<Cell<E>>>
-// impl TryFrom<Vec<Cell<E>>> // fill to capacity
 
 impl<E: NullableTableElement> crate::AnyTable for HeapTable<E> {
     fn size(&self) -> u32 {
@@ -245,7 +237,8 @@ impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
     }
 
     fn as_mut_slice(&mut self) -> &mut [E] {
-        let ptr = self.as_mut_ptr();
+        let ptr =
+            core::ptr::slice_from_raw_parts_mut(self.allocation.get_mut().as_ptr(), self.len());
 
         // SAFETY: `&mut self` ensures exclusive access.
         // SAFETY: allocation lives for `&self`.
@@ -303,10 +296,22 @@ impl<E: NullableTableElement> crate::TableExt<E> for HeapTable<E> {}
 
 impl<E: NullableTableElement> Drop for HeapTable<E> {
     fn drop(&mut self) {
-        // SAFETY: pointer is valid exclusive reference to `[E; size]`.
-        // SAFETY: can drop, since allocation will no longer be used after this point.
+        let len = self.len();
+        let allocation = NonNull::slice_from_raw_parts(self.allocation.get(), len);
+
+        // SAFETY: `allocation` is valid exclusive reference to `[Cell<E>; size]`.
+        // SAFETY: `allocation` can be drop, since it will no longer be used after this point.
         unsafe {
-            core::ptr::drop_in_place::<[Cell<E>]>(self.as_mut_ptr());
+            core::ptr::drop_in_place::<[Cell<E>]>(allocation.as_ptr());
+        }
+
+        // SAFETY: `Ok` is returned since `try_grow()` would have failed.
+        let layout = unsafe { core::alloc::Layout::array::<Cell<E>>(len).unwrap_unchecked() };
+
+        // SAFETY: `allocation` originates from the global allocator.
+        // SAFETY: `allocation` referred to a `[Cell<E>; size]`, which is what the `layout` is.
+        unsafe {
+            alloc::alloc::dealloc(allocation.as_ptr() as *mut u8, layout);
         }
     }
 }
