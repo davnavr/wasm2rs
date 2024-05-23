@@ -8,32 +8,36 @@ repository.workspace = true
 [features]
 default = [
     "std",
-    "memory",
-    "table",
     "simd-intrinsics",
-    "feature-reference-types",
-    "feature-simd128"
+    "feature-simd128",
 ]
 std = [
     "alloc",
     "wasm2rs-rt-core/std",
-    "rt-func-ref?/std",
+    "rt-func-ref/std",
     "rt-math/std",
-    "rt-memory?/std",
+    "rt-memory/std",
     "rt-simd?/std",
-    "rt-stack/std"
+    "rt-stack/std",
+    "rt-table/std",
 ]
-alloc = ["rt-memory/alloc"]
-func-ref = ["dep:rt-func-ref"]
-memory = ["dep:rt-memory"]
-table = ["dep:rt-table"]
-simd-intrinsics = ["rt-simd/simd-intrinsics"]
+alloc = [
+    "rt-memory/alloc",
+    "rt-table/alloc",
+]
+
+simd-intrinsics = ["rt-simd?/simd-intrinsics"]
 stack-overflow-checks = ["rt-stack/enabled"]
-feature-reference-types = ["func-ref"]
+
 feature-simd128 = ["dep:rt-simd"]
 
 [dependencies]
 wasm2rs-rt-core = { workspace = true, default-features = false }
+
+[dependencies.rt-func-ref]
+package = "wasm2rs-rt-func-ref"
+path = "../rt-func-ref"
+default-features = false
 
 [dependencies.rt-stack]
 package = "wasm2rs-rt-stack"
@@ -45,25 +49,15 @@ package = "wasm2rs-rt-math"
 path = "../rt-math"
 default-features = false
 
-# Optional dependencies
-
-[dependencies.rt-func-ref]
-package = "wasm2rs-rt-func-ref"
-path = "../rt-func-ref"
-default-features = false
-optional = true
-
 [dependencies.rt-memory]
 package = "wasm2rs-rt-memory"
 path = "../rt-memory"
 default-features = false
-optional = true
 
 [dependencies.rt-table]
 package = "wasm2rs-rt-table"
 path = "../rt-table"
 default-features = false
-optional = true
 
 [dependencies.rt-simd]
 package = "wasm2rs-rt-simd"

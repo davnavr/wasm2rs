@@ -8,13 +8,11 @@
 //! - [`wasm2rs_rt_core`], which contains code shared among other component crates. It's modules
 //!   are re-exported in the crate root.
 //! - [`wasm2rs_rt_func_ref`], which provides the implementation for WebAssembly function
-//!   references. It is enabled by the [`func-ref`](crate#func-ref) feature flag, and is
-//!   re-exported as the [`func_ref`] module.
+//!   references. It is re-exported as the [`func_ref`] module.
 //! - [`wasm2rs_rt_math`], which contains functions for performing integer and floating-point
 //!   arithmetic. It is re-exported as the [`math`] module.
-//! - [`wasm2rs_rt_memory`], which provides the implementation for WebAssembly linear memory. It
-//!   is enabled by the [`memory`](crate#memory) feature flag, and is re-exported as the [`memory`]
-//!   module.
+//! - [`wasm2rs_rt_memory`], which provides the implementation for WebAssembly linear memory. It is
+//!   re-exported as the [`memory`] module.
 //! - [`wasm2rs_rt_simd`], which provides an implementation for 128-bit SIMD operations. It is
 //!   enabled by the [`feature-simd128`](crate#feature-simd128) feature flag, and is re-exported as
 //!   the [`simd`] module.
@@ -22,14 +20,12 @@
 //!   occurred. It is re-exported as the [`stack`] module. By default, stack overflow checks are a
 //!   no-op, and require the [`stack-overflow-checks`](crate#stack-overflow-checks) feature flag
 //!   to be enabled.
-//! - [`wasm2rs_rt_table`], which provides the implementation for WebAssembly tables. It is enabled
-//!   by the [`table`](crate#table) feature flag, and is re-exported as the [`table`] module.
+//! - [`wasm2rs_rt_table`], which provides the implementation for WebAssembly tables. It is
+//!   re-exported as the [`table`] module.
 //!
 //! # Feature Flags
 //!
-//! By default, the [`std`](crate#std), [`memory`](crate#memory), [`table`](crate#table),
-//! [`simd-intrinsics`](crate#simd-intrinsics),
-//! [`feature-reference-types`](crate#feature-reference-types), and
+//! By default, the [`std`](crate#std), [`simd-intrinsics`](crate#simd-intrinsics), and
 //! [`feature-simd128`](crate#feature-simd128) flags are enabled.
 //!
 //! ## [`std`]
@@ -45,28 +41,6 @@
 //!
 //! - Enabled by: [`std`](crate#std), [`default`](crate#feature-flags)
 //!
-//! ## `func-ref`
-//!
-//! Provides runtime support for untyped function reference types, enabling the [`func_ref`]
-//! module. Adds a dependency on the [`wasm2rs_rt_func_ref`] crate.
-//!
-//! - Enabled by: [`feature-reference-types`](crate#feature-reference-types),
-//!   [`default`](crate#feature-flags)
-//!
-//! ## [`memory`]
-//!
-//! Provides runtime support for linear memory, enabling the [`memory`] module. Adds a dependency
-//! on the [`wasm2rs_rt_memory`] crate.
-//!
-//! - Enabled by: [`default`](crate#feature-flags)
-//!
-//! ## [`table`]
-//!
-//! Provides runtime support for tables, enabling the [`table`] module.  Adds a dependency on the
-//! [`wasm2rs_rt_table`] crate.
-//!
-//! - Enabled by: [`default`](crate#feature-flags)
-//!
 //! ## `simd-intrinsics`
 //!
 //! When the [`feature-simd128`](crate#feature-simd128) flag is enabled, then target
@@ -79,14 +53,6 @@
 //!
 //! Sets the [`wasm2rs_rt_stack`] crate's `enabled` feature flag. See the documentation on the
 //! [`stack`] module for more information.
-//!
-//! ## `feature-reference-types`
-//!
-//! Enables runtime support for the [reference types proposal]. Adds a dependency on the
-//! [`wasm2rs_rt_func_ref`] crate.
-//!
-//! - Enables [`func-ref`](crate#func-ref)
-//! - Enabled by: [`default`](crate#feature-flags)
 //!
 //! ## `feature-simd128`
 //!
@@ -122,22 +88,15 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+pub use rt_func_ref as func_ref;
 pub use rt_math as math;
-pub use wasm2rs_rt_core::{global, symbol, trace};
-
-#[cfg(feature = "memory")]
 pub use rt_memory as memory;
-
-#[cfg(feature = "table")]
+pub use rt_stack as stack;
 pub use rt_table as table;
+pub use wasm2rs_rt_core::{global, symbol, trace};
 
 #[cfg(feature = "feature-simd128")]
 pub use rt_simd as simd;
-
-#[cfg(feature = "func-ref")]
-pub use rt_func_ref as func_ref;
-
-pub use rt_stack as stack;
 
 pub mod embedder;
 pub mod store;

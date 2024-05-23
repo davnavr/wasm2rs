@@ -2,10 +2,8 @@
 //!
 //! [WebAssembly allocation]: https://webassembly.github.io/spec/core/exec/modules.html#allocation
 
-#[cfg(feature = "memory")]
 mod allocate_memory;
 
-#[cfg(feature = "memory")]
 pub use allocate_memory::{AllocateHeapMemory, AllocateMemory, AllocateMemoryError};
 
 #[allow(missing_docs)]

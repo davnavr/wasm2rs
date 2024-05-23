@@ -48,7 +48,7 @@ pub enum TrapCause {
     #[non_exhaustive]
     MemoryBoundsCheck {
         #[allow(missing_docs)]
-        #[cfg(all(feature = "alloc", feature = "memory"))]
+        #[cfg(feature = "alloc")]
         access: crate::memory::AccessError<u64>,
     },
     //UnalignedAtomicOperation
@@ -59,7 +59,7 @@ pub enum TrapCause {
     #[non_exhaustive]
     MemoryAllocationFailure {
         #[allow(missing_docs)]
-        #[cfg(all(feature = "alloc", feature = "memory"))]
+        #[cfg(feature = "alloc")]
         error: crate::store::AllocateMemoryError<u64>,
     },
     /// Instantiating a module failed because a linear memory did not have matching limits. This
@@ -69,7 +69,7 @@ pub enum TrapCause {
     #[non_exhaustive]
     MemoryLimitsMismatch {
         #[allow(missing_docs)]
-        #[cfg(all(feature = "alloc", feature = "memory"))]
+        #[cfg(feature = "alloc")]
         error: crate::memory::LimitsMismatchError<u64>,
     },
     /// A function reference did not have the correct signature. This corresponds to a
@@ -81,7 +81,7 @@ pub enum TrapCause {
     #[non_exhaustive]
     IndirectCallSignatureMismatch {
         #[allow(missing_docs)]
-        #[cfg(all(feature = "alloc", feature = "func-ref"))]
+        #[cfg(feature = "alloc")]
         mismatch: crate::func_ref::SignatureMismatchError,
     },
     /// A function reference was null. This corresponds to [`func_ref::FuncRefCastError::Null`].
@@ -90,7 +90,7 @@ pub enum TrapCause {
     #[non_exhaustive]
     NullFunctionReference {
         /// The type that the function reference was expected to have.
-        #[cfg(all(feature = "alloc", feature = "func-ref"))]
+        #[cfg(feature = "alloc")]
         expected: &'static crate::func_ref::FuncRefSignature,
     },
     /// The stack space was exhausted, usually due to an infinitely recursive function. This
@@ -124,31 +124,31 @@ impl core::fmt::Display for TrapCause {
             Self::ConversionToInteger { error } => core::fmt::Display::fmt(error, f),
             Self::IntegerDivisionByZero { error } => core::fmt::Display::fmt(error, f),
             Self::IntegerOverflow { error } => core::fmt::Display::fmt(error, f),
-            #[cfg(all(feature = "alloc", feature = "memory"))]
+            #[cfg(feature = "alloc")]
             Self::MemoryBoundsCheck { access } => core::fmt::Display::fmt(access, f),
-            #[cfg(not(all(feature = "alloc", feature = "memory")))]
+            #[cfg(not(feature = "alloc"))]
             Self::MemoryBoundsCheck {} => f.write_str("memory access was out of bounds"),
-            #[cfg(all(feature = "alloc", feature = "memory"))]
+            #[cfg(feature = "alloc")]
             Self::MemoryAllocationFailure { error } => core::fmt::Display::fmt(error, f),
-            #[cfg(not(all(feature = "alloc", feature = "memory")))]
+            #[cfg(not(feature = "alloc"))]
             Self::MemoryAllocationFailure {} => f.write_str("memory allocation failure"),
-            #[cfg(all(feature = "alloc", feature = "memory"))]
+            #[cfg(feature = "alloc")]
             Self::MemoryLimitsMismatch { error } => core::fmt::Display::fmt(error, f),
-            #[cfg(not(all(feature = "alloc", feature = "memory")))]
+            #[cfg(not(feature = "alloc"))]
             Self::MemoryLimitsMismatch {} => f.write_str("incorrect memory limits"),
-            #[cfg(all(feature = "alloc", feature = "func-ref"))]
+            #[cfg(feature = "alloc")]
             Self::IndirectCallSignatureMismatch { mismatch } => {
                 write!(f, "function reference {mismatch}")
             }
-            #[cfg(not(all(feature = "alloc", feature = "func-ref")))]
+            #[cfg(not(feature = "alloc"))]
             Self::IndirectCallSignatureMismatch {} => {
                 f.write_str("function reference signature mismatch")
             }
             Self::NullFunctionReference {
-                #[cfg(all(feature = "alloc", feature = "func-ref"))]
+                #[cfg(feature = "alloc")]
                 expected,
             } => {
-                #[cfg(all(feature = "alloc", feature = "func-ref"))]
+                #[cfg(feature = "alloc")]
                 write!(f, "expected signature {expected:?} for ")?;
 
                 f.write_str("null function reference")
@@ -162,11 +162,11 @@ impl core::fmt::Display for TrapCause {
 impl std::error::Error for TrapCause {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            #[cfg(all(feature = "alloc", feature = "memory"))]
+            #[cfg(feature = "alloc")]
             Self::MemoryBoundsCheck { access } => Some(access),
-            #[cfg(all(feature = "alloc", feature = "memory"))]
+            #[cfg(feature = "alloc")]
             Self::MemoryAllocationFailure { error } => Some(error),
-            #[cfg(all(feature = "alloc", feature = "func-ref"))]
+            #[cfg(feature = "alloc")]
             Self::IndirectCallSignatureMismatch { mismatch } => Some(mismatch),
             Self::CallStackExhausted { error } => Some(error),
             _ => None,
@@ -309,7 +309,6 @@ impl Trap<crate::math::IntegerDivisionError> for TrapError {
     }
 }
 
-#[cfg(feature = "memory")]
 impl<I> Trap<crate::memory::AccessError<I>> for TrapError
 where
     I: crate::memory::Address,
@@ -329,7 +328,6 @@ where
     }
 }
 
-#[cfg(feature = "memory")]
 impl<I> Trap<crate::store::AllocateMemoryError<I>> for TrapError
 where
     I: crate::memory::Address,
@@ -348,7 +346,6 @@ where
     }
 }
 
-#[cfg(feature = "memory")]
 impl<I> Trap<crate::memory::LimitsMismatchError<I>> for TrapError
 where
     I: crate::memory::Address,
@@ -367,7 +364,6 @@ where
     }
 }
 
-#[cfg(feature = "func-ref")]
 impl Trap<crate::func_ref::SignatureMismatchError> for TrapError {
     fn trap(
         cause: crate::func_ref::SignatureMismatchError,
@@ -383,7 +379,6 @@ impl Trap<crate::func_ref::SignatureMismatchError> for TrapError {
     }
 }
 
-#[cfg(feature = "func-ref")]
 impl Trap<crate::func_ref::FuncRefCastError> for TrapError {
     fn trap(
         cause: crate::func_ref::FuncRefCastError,
