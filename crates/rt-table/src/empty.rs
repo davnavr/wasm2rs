@@ -30,7 +30,7 @@ impl<E: crate::TableElement> crate::Table<E> for EmptyTable {
         Err(BoundsCheckError)
     }
 
-    fn set(&self, idx: u32, elem: E) -> BoundsCheck<()> {
+    fn replace(&self, idx: u32, elem: E) -> BoundsCheck<E> {
         let _ = idx;
         let _ = elem;
         Err(BoundsCheckError)

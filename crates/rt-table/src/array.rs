@@ -99,13 +99,12 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E
         Ok(crate::swap_guard::Guard::access(cell).clone())
     }
 
-    fn set(&self, idx: u32, elem: E) -> crate::BoundsCheck<()> {
-        self.as_slice_of_cells()
+    fn replace(&self, idx: u32, elem: E) -> crate::BoundsCheck<E> {
+        Ok(self
+            .as_slice_of_cells()
             .get(idx as usize)
             .ok_or(crate::BoundsCheckError)?
-            .set(elem);
-
-        Ok(())
+            .replace(elem))
     }
 
     fn as_mut_slice(&mut self) -> &mut [E] {
@@ -120,6 +119,15 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E
         let cell: &mut Cell<[E]> = unsafe { &mut *(slice as *mut [Cell<E>] as *mut Cell<[E]>) };
 
         cell.get_mut()
+    }
+
+    fn set(&self, idx: u32, elem: E) -> crate::BoundsCheck<()> {
+        self.as_slice_of_cells()
+            .get(idx as usize)
+            .ok_or(crate::BoundsCheckError)?
+            .set(elem);
+
+        Ok(())
     }
 
     fn clone_from_slice(&self, idx: u32, src: &[E]) -> crate::BoundsCheck<()> {

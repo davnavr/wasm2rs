@@ -142,17 +142,29 @@ pub trait Table<E: TableElement>: AnyTable {
     /// [`table.size`]: AnyTable::size()
     fn get(&self, idx: u32) -> BoundsCheck<E>;
 
-    /// Gets the element at the given index.
+    /// Replaces the element at the given index with the given value, and returns the old value.
     ///
     /// # Errors
     ///
     /// Returns an error if the index is greater than or equal to the [`table.size`].
     ///
     /// [`table.size`]: AnyTable::size()
-    fn set(&self, idx: u32, elem: E) -> BoundsCheck<()>;
+    fn replace(&self, idx: u32, new: E) -> BoundsCheck<E>;
 
     /// Returns a mutable slice containing the table's elements.
     fn as_mut_slice(&mut self) -> &mut [E];
+
+    /// Sets the element at the given index.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the index is greater than or equal to the [`table.size`].
+    ///
+    /// [`table.size`]: AnyTable::size()
+    fn set(&self, idx: u32, elem: E) -> BoundsCheck<()> {
+        let _ = self.replace(idx, elem)?;
+        Ok(())
+    }
 
     /// Copies elements (calling [`E::clone()`]) from `src` into the table starting at the
     /// specified index.

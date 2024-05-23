@@ -234,16 +234,14 @@ impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
         Ok(crate::swap_guard::Guard::access(cell).clone())
     }
 
-    fn set(&self, idx: u32, elem: E) -> crate::BoundsCheck<()> {
+    fn replace(&self, idx: u32, elem: E) -> crate::BoundsCheck<E> {
         // SAFETY: no `try_grow()` calls in this method.
         let elements = unsafe { self.as_slice_of_cells() };
 
-        elements
+        Ok(elements
             .get(crate::index_to_usize(idx)?)
             .ok_or(crate::BoundsCheckError)?
-            .set(elem);
-
-        Ok(())
+            .replace(elem))
     }
 
     fn as_mut_slice(&mut self) -> &mut [E] {
@@ -254,6 +252,18 @@ impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
         let cell: &mut Cell<[E]> = unsafe { &mut *(ptr as *mut Cell<[E]>) };
 
         cell.get_mut()
+    }
+
+    fn set(&self, idx: u32, elem: E) -> crate::BoundsCheck<()> {
+        // SAFETY: no `try_grow()` calls in this method.
+        let elements = unsafe { self.as_slice_of_cells() };
+
+        elements
+            .get(crate::index_to_usize(idx)?)
+            .ok_or(crate::BoundsCheckError)?
+            .set(elem);
+
+        Ok(())
     }
 
     fn clone_from_slice(&self, idx: u32, src: &[E]) -> wasm2rs_rt_core::BoundsCheck<()> {
