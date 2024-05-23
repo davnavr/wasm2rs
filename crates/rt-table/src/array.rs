@@ -96,29 +96,7 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E
             .get(idx as usize)
             .ok_or(crate::BoundsCheckError)?;
 
-        struct ReplaceGuard<'a, E: NullableTableElement> {
-            cell: &'a Cell<E>,
-            contents: E,
-        }
-
-        let clone = {
-            let guard = ReplaceGuard::<'_, E> {
-                contents: cell.replace(E::NULL),
-                cell,
-            };
-
-            guard.contents.clone()
-        };
-
-        /// Moves the element back into the table if a panic occurs.
-        impl<E: NullableTableElement> Drop for ReplaceGuard<'_, E> {
-            fn drop(&mut self) {
-                self.cell
-                    .set(core::mem::replace(&mut self.contents, E::NULL));
-            }
-        }
-
-        Ok(clone)
+        Ok(crate::swap_guard::Guard::access(cell).clone())
     }
 
     fn set(&self, idx: u32, elem: E) -> crate::BoundsCheck<()> {
