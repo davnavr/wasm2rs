@@ -97,6 +97,16 @@ impl std::fmt::Display for SymbolName {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
+pub(crate) struct MakeFrame(pub(crate) FuncId);
+
+impl std::fmt::Display for MakeFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_frame_fn_{}", self.0 .0)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum ValType {
     I32,

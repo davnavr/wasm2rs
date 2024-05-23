@@ -669,16 +669,19 @@ impl crate::ast::Expr {
 
 pub(crate) struct Print<'wasm, 'ctx> {
     indentation: Indentation,
+    debug_info: crate::DebugInfo,
     context: &'ctx crate::context::Context<'wasm>,
 }
 
 impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
     pub(crate) const fn new(
         indentation: Indentation,
+        debug_info: crate::DebugInfo,
         context: &'ctx crate::context::Context<'wasm>,
     ) -> Self {
         Self {
             indentation,
+            debug_info,
             context,
         }
     }
@@ -690,6 +693,24 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
     fn write_indentation(&self, out: &mut dyn crate::write::Write, indent_level: u32) {
         for _ in 0..indent_level {
             out.write_str(self.indentation.to_str());
+        }
+    }
+
+    fn print_frame(
+        &self,
+        function: crate::ast::FuncId,
+        instruction_offset: u32,
+        out: &mut dyn crate::write::Write,
+    ) {
+        if self.debug_info != crate::DebugInfo::Omit {
+            write!(
+                out,
+                "Some({{ const F: embedder::rt::trace::WasmFrame = Instance::{}({}); &F }})",
+                crate::ast::MakeFrame(function),
+                instruction_offset
+            );
+        } else {
+            out.write_str("None");
         }
     }
 
@@ -1168,7 +1189,7 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
 
                     out.write_str(")?;");
                 }
-                Statement::Unreachable { offset: _ } => {
+                Statement::Unreachable { offset } => {
                     out.write_str("return ::core::result::Result::Err(");
 
                     write!(
@@ -1177,7 +1198,8 @@ impl<'wasm, 'ctx> Print<'wasm, 'ctx> {
                         paths::RT_TRAP
                     );
 
-                    out.write_str(", None"); // TODO: Include frame info for `unreachable` traps.
+                    out.write_str(", ");
+                    self.print_frame(function, offset, out);
                     out.write_str("));");
                 }
             }

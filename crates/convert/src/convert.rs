@@ -688,7 +688,7 @@ impl Convert<'_> {
             }
         }
 
-        let printer_options = crate::ast::Print::new(self.indentation, context);
+        let printer_options = crate::ast::Print::new(self.indentation, self.debug_info, context);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
             use crate::context::CallKind;
 
@@ -1266,7 +1266,15 @@ impl Convert<'_> {
                 // Custom name
                 // write!(o, " sym.custom_name = Some(\"{}\");", custom_name.escape_default());
 
-                o.write_str(" sym };\n")
+                o.write_str(" sym };\n");
+
+                // Generate a function to produce a `WasmFrame`
+                writeln!(
+                    o,
+                    "{sp}const fn {}(o: u32) -> embedder::rt::trace::WasmFrame {{ embedder::rt::trace::WasmFrame::new(&Self::{}, o) }}",
+                    crate::ast::MakeFrame(func_id),
+                    crate::ast::SymbolName(func_id)
+                )
             }
         }
 

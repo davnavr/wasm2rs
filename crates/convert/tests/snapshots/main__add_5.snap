@@ -38,6 +38,7 @@ pub fn add_five(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Tr
     Ok(Self::_f0(_l0))
 }
     const _SYM_FN_0: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(0, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[embedder::rt::symbol::WasmValType::I32], results: &[embedder::rt::symbol::WasmValType::I32] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 38 }); sym.export_names = &["add_five"]; sym };
+    const fn _frame_fn_0(o: u32) -> embedder::rt::trace::WasmFrame { embedder::rt::trace::WasmFrame::new(&Self::_SYM_FN_0, o) }
 
 } // impl Instance
 
