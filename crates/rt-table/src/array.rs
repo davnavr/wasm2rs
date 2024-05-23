@@ -1,4 +1,4 @@
-use crate::{NullableTableElement, Table};
+use crate::NullableTableElement;
 use core::cell::Cell;
 
 /// A [`Table`] implementation backed by an array.
@@ -93,7 +93,7 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E
     fn get(&self, idx: u32) -> crate::BoundsCheck<E> {
         let cell = self
             .as_slice_of_cells()
-            .get(idx as usize)
+            .get(crate::index_to_usize(idx)?)
             .ok_or(crate::BoundsCheckError)?;
 
         Ok(crate::swap_guard::Guard::access(cell).clone())
@@ -102,7 +102,7 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E
     fn replace(&self, idx: u32, elem: E) -> crate::BoundsCheck<E> {
         Ok(self
             .as_slice_of_cells()
-            .get(idx as usize)
+            .get(crate::index_to_usize(idx)?)
             .ok_or(crate::BoundsCheckError)?
             .replace(elem))
     }
@@ -123,7 +123,7 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E
 
     fn set(&self, idx: u32, elem: E) -> crate::BoundsCheck<()> {
         self.as_slice_of_cells()
-            .get(idx as usize)
+            .get(crate::index_to_usize(idx)?)
             .ok_or(crate::BoundsCheckError)?
             .set(elem);
 
@@ -133,12 +133,26 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E
     fn clone_from_slice(&self, idx: u32, src: &[E]) -> crate::BoundsCheck<()> {
         let slice = self
             .as_slice_of_cells()
-            .get(idx as usize..)
+            .get(crate::index_to_usize(idx)?..)
             .and_then(|elems| elems.get(..src.len()))
             .ok_or(crate::BoundsCheckError)?;
 
         for (cloned, dst) in src.iter().cloned().zip(slice) {
             dst.set(cloned);
+        }
+
+        Ok(())
+    }
+
+    fn clone_into_slice(&self, idx: u32, dst: &mut [E]) -> wasm2rs_rt_core::BoundsCheck<()> {
+        let slice = self
+            .as_slice_of_cells()
+            .get(crate::index_to_usize(idx)?..)
+            .and_then(|elems| elems.get(..dst.len()))
+            .ok_or(crate::BoundsCheckError)?;
+
+        for (dst, src) in dst.iter_mut().zip(slice) {
+            *dst = crate::swap_guard::Guard::access(src).clone();
         }
 
         Ok(())
@@ -153,10 +167,8 @@ impl<E: NullableTableElement + core::fmt::Debug, const MAX: usize> core::fmt::De
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut list = f.debug_list();
 
-        for idx in 0..self.size.get() {
-            if let Ok(item) = self.get(idx) {
-                list.entry(&item);
-            }
+        for cell in self.as_slice_of_cells() {
+            list.entry(&*crate::swap_guard::Guard::access(cell));
         }
 
         list.finish()
