@@ -167,9 +167,10 @@ where
 /// This implements the [`memory.copy`] instruction in the case where the source and destination
 /// memories differ.
 ///
-/// For more information, see the documentation for the [`Memory::copy_from()`] method.
+/// For more information, see the documentation for the [`MemoryExt::copy_from()`] method.
 ///
 /// [`memory.copy`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+/// [`MemoryExt::copy_from()`]: crate::MemoryExt::copy_from()
 pub fn copy<const DST_MEM: u32, const SRC_MEM: u32, I, Dst, Src, E>(
     dst: &Dst,
     src: &Src,
@@ -180,7 +181,7 @@ pub fn copy<const DST_MEM: u32, const SRC_MEM: u32, I, Dst, Src, E>(
 ) -> Result<(), E>
 where
     I: Address,
-    Dst: Memory<I>,
+    Dst: crate::MemoryExt<I>,
     Src: Memory<I> + ?Sized,
     E: Trap<AccessError<I>>,
 {

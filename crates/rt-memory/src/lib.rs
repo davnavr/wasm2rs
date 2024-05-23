@@ -111,6 +111,8 @@ where
 
 /// Trait for implementations of [WebAssembly linear memory].
 ///
+/// See also the [`MemoryExt`] trait.
+///
 /// [WebAssembly linear memory]: https://webassembly.github.io/spec/core/syntax/modules.html#memories
 pub trait Memory<I: Address = u32> {
     // /// Implementation detail to allow attempts to perform reflection with `self`.
@@ -127,23 +129,16 @@ pub trait Memory<I: Address = u32> {
     /// Gets the maximum number of pages that this linear memory can have.
     fn maximum(&self) -> I;
 
-    /// Increases the size of the linear memory by the specified number of [pages], and returns the old number of pages.
-    ///
-    /// The default implementation for this method simply calls [`Memory::size()`] of `delta` is
-    /// `0`, and returns `-1` otherwise.
+    /// Increases the size of the linear memory by the specified number of [pages], and returns the
+    /// old number of pages.
     ///
     /// # Errors
     ///
-    /// If the size of the memory oculd not be increased, then `-1` is returned.
+    /// If the size of the memory oculd not be increased, then [`I::GROW_FAILED`] is returned.
     ///
     /// [pages]: PAGE_SIZE
-    fn grow(&self, delta: I) -> I {
-        if delta == I::ZERO {
-            self.size()
-        } else {
-            I::max_value()
-        }
-    }
+    /// [`I::GROW_FAILED`]: Address::GROW_FAILED
+    fn grow(&self, delta: I) -> I;
 
     /// Copies bytes from linear memory starting at the specified address into the given slice.
     ///
@@ -159,6 +154,9 @@ pub trait Memory<I: Address = u32> {
     /// Returns an error if the range of addresses `addr..(addr + dst.len())` is not in bounds.
     fn copy_from_slice(&self, addr: I, src: &[u8]) -> BoundsCheck<()>;
 
+    /// Returns a mutable slice over the linear memory contents.
+    fn as_bytes_mut(&mut self) -> &mut [u8];
+
     /// Moves a range of bytes in this linear memory to another location.
     ///
     /// # Errors
@@ -168,34 +166,24 @@ pub trait Memory<I: Address = u32> {
         default_copy_between(self, self, dst_addr, src_addr, len)
     }
 
-    /// Copies bytes from the given linear memory into `self`.
+    //fn copy_to_uninit_slice
+
+    /// Copies the contents of the linear memory into a boxed slice.
     ///
     /// # Errors
     ///
-    /// Returns an error if `src_addr + len` is not in bounds in the source memory, or if
-    /// `dst_addr + len` is not in bounds in `self`.
-    fn copy_from<Src>(&self, src: &Src, dst_addr: I, src_addr: I, len: I) -> BoundsCheck<()>
-    where
-        Src: Memory<I> + ?Sized,
-    {
-        // If neither `src` or `self` are zero-sized types, then they should refer to the same
-        // object if the pointers are equal.
-        if core::mem::size_of_val(self) > 0
-            && core::mem::size_of_val(src) > 0
-            && core::ptr::addr_eq(self as *const Self, src as *const Src)
-        {
-            self.copy_within(dst_addr, src_addr, len)
+    /// Returns an error if the range of addresses `addr..(addr + len)` is not in bounds.
+    #[cfg(feature = "alloc")]
+    fn to_boxed_bytes(&self, idx: I, len: I) -> BoundsCheck<alloc::boxed::Box<[u8]>> {
+        let size = self.size();
+        if idx >= size || size - idx < len {
+            Err(BoundsCheckError)
         } else {
-            default_copy_between(self, src, dst_addr, src_addr, len)
+            let mut bytes = alloc::vec![0u8; len.as_()].into_boxed_slice();
+            self.copy_to_slice(idx, &mut bytes)?;
+            Ok(bytes)
         }
     }
-
-    //fn to_boxed_slice<R>(&self, range: R)
-    // where
-    //     R: core::ops::RangeBounds<I>,
-    //     Self: Sized,
-    // {
-    // }
 
     /// Loads the value of the byte stored at the given address.
     fn i8_load(&self, addr: I) -> BoundsCheck<i8> {
@@ -239,6 +227,37 @@ pub trait Memory<I: Address = u32> {
     /// Stores a potentially aligned 64-bit integer into the given address.
     fn i64_store(&self, addr: I, value: i64) -> BoundsCheck<()> {
         unaligned_i64_store(self, addr, value)
+    }
+}
+
+const _OBJECT_SAFETY_CHECK: core::marker::PhantomData<dyn Memory> = core::marker::PhantomData;
+
+/// Provides additional operations on [`Memory`] implementations.
+///
+/// These methods are not provided in the [`Memory`] trait to ensure that it remains [object safe].
+///
+/// [object safe]: https://doc.rust-lang.org/reference/items/traits.html#object-safety
+pub trait MemoryExt<I: Address = u32>: Memory<I> {
+    /// Copies bytes from the given linear memory into `self`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `src_addr + len` is not in bounds in the source memory, or if
+    /// `dst_addr + len` is not in bounds in `self`.
+    fn copy_from<Src>(&self, src: &Src, dst_addr: I, src_addr: I, len: I) -> BoundsCheck<()>
+    where
+        Src: Memory<I> + ?Sized,
+    {
+        // If neither `src` or `self` are zero-sized types, then they should refer to the same
+        // object if the pointers are equal.
+        if core::mem::size_of_val(self) > 0
+            && core::mem::size_of_val(src) > 0
+            && core::ptr::addr_eq(self as *const Self, src as *const Src)
+        {
+            self.copy_within(dst_addr, src_addr, len)
+        } else {
+            default_copy_between(self, src, dst_addr, src_addr, len)
+        }
     }
 }
 

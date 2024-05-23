@@ -71,21 +71,21 @@ impl<I: Address> HeapMemory<I> {
         self.len.get() == I::ZERO
     }
 
-    /// Attempts to increase the size of the linear memory by the given number of pages.
+    /// Attempts to increase the size of the linear memory by the given number of pages. Returns the old number of pages.
     ///
     /// # Errors
     ///
     /// Returns an error if the pages could not be allocated.
-    pub fn try_grow(&self, delta: I) -> Result<(), crate::AllocationError<I>> {
+    pub fn try_grow(&self, delta: I) -> Result<I, crate::AllocationError<I>> {
+        let old_size = self.size();
         if delta == I::ZERO {
-            return Ok(());
+            return Ok(old_size);
         }
 
         let error = || crate::AllocationError { size: delta };
 
         // Calculate the new number of pages
         let old_len = self.len();
-        let old_size = self.size();
         let new_size = match old_size.checked_add(&delta) {
             Some(sum) if sum <= self.limit => sum,
             _ => return Err(error()), // Size exceeded or overflow occurred
@@ -148,7 +148,7 @@ impl<I: Address> HeapMemory<I> {
         // Done allocating, update the size and allocation.
         self.len.set(I::cast_from_usize(new_layout.size()));
         self.allocation.set(new_allocation);
-        Ok(())
+        Ok(old_size)
     }
 
     /// Returns a [`NonNull`] pointer into the underlying heap allocation.
@@ -174,16 +174,6 @@ impl<I: Address> HeapMemory<I> {
 
         // SAFETY: contents live as long as `&self`, as long as caller does `grow` the memory.
         unsafe { slice.as_ref() }
-    }
-
-    /// Returns a mutable slice to the linear memory contents.
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        let mut slice =
-            NonNull::slice_from_raw_parts(self.allocation.get_mut().cast::<u8>(), self.len());
-
-        // SAFETY: `&mut self` ensures exclusive access to the memory contents.
-        // SAFETY: contents live as long as `&mut self`.
-        unsafe { slice.as_mut() }
     }
 }
 
@@ -213,9 +203,8 @@ impl<I: Address> crate::Memory<I> for HeapMemory<I> {
     }
 
     fn grow(&self, delta: I) -> I {
-        let old = self.size();
         match self.try_grow(delta) {
-            Ok(()) => old,
+            Ok(old) => old,
             Err(_) => I::GROW_FAILED,
         }
     }
@@ -248,6 +237,15 @@ impl<I: Address> crate::Memory<I> for HeapMemory<I> {
         Ok(())
     }
 
+    fn as_bytes_mut(&mut self) -> &mut [u8] {
+        let mut slice =
+            NonNull::slice_from_raw_parts(self.allocation.get_mut().cast::<u8>(), self.len());
+
+        // SAFETY: `&mut self` ensures exclusive access to the memory contents.
+        // SAFETY: contents live as long as `&mut self`.
+        unsafe { slice.as_mut() }
+    }
+
     fn copy_within(&self, dst_addr: I, src_addr: I, len: I) -> crate::BoundsCheck<()> {
         // SAFETY: no calls to `grow` occur within this method.
         let memory = unsafe { self.as_slice_of_cells() };
@@ -263,8 +261,28 @@ impl<I: Address> crate::Memory<I> for HeapMemory<I> {
         Ok(())
     }
 
-    // TODO: Would a `modify()` helper allow exclusive access + easier memmove for `copy_from`?
-    // Would have to prevent exposing address of heap allocation to user to avoid surprise U.B.s
+    #[cfg(feature = "alloc")]
+    fn to_boxed_bytes(&self, idx: I, len: I) -> crate::BoundsCheck<alloc::boxed::Box<[u8]>> {
+        // SAFETY: no calls to `grow` occur within this method.
+        let memory = unsafe { self.as_slice_of_cells() };
+        let src = slice_into(memory, idx, len)?;
+        let mut dst = alloc::vec::Vec::<u8>::with_capacity(src.len());
+
+        // This should get optimized into a call to `memmove`.
+        for (uninit, value) in dst.spare_capacity_mut().iter_mut().zip(src) {
+            uninit.write(value.get());
+        }
+
+        // SAFETY: loop above initialized the contents of the entire vector.
+        unsafe {
+            dst.set_len(src.len());
+        }
+
+        Ok(dst.into_boxed_slice())
+    }
+}
+
+impl<I: Address> crate::MemoryExt<I> for HeapMemory<I> {
     /* fn copy_from<Src>(
         &self,
         src: &Src,
