@@ -296,7 +296,12 @@ impl<E: NullableTableElement> crate::TableExt<E> for HeapTable<E> {}
 
 impl<E: NullableTableElement> Drop for HeapTable<E> {
     fn drop(&mut self) {
+        // If empty, no need to deallocate
         let len = self.len();
+        if len == 0 {
+            return;
+        }
+
         let allocation = NonNull::slice_from_raw_parts(self.allocation.get(), len);
 
         // SAFETY: `allocation` is valid exclusive reference to `[Cell<E>; size]`.
