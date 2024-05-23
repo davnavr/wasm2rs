@@ -316,6 +316,11 @@ impl<E: NullableTableElement> Drop for HeapTable<E> {
     }
 }
 
+impl<E: NullableTableElement + core::panic::UnwindSafe> core::panic::UnwindSafe for HeapTable<E> {}
+
+// SAFETY: References to elements won't exist when the table is sent to another thread.
+unsafe impl<E: NullableTableElement + Send> Send for HeapTable<E> {}
+
 impl<E: NullableTableElement + core::fmt::Debug> core::fmt::Debug for HeapTable<E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut list = f.debug_list();
