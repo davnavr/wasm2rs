@@ -11,3 +11,4 @@ extern crate std;
 extern crate alloc;
 
 mod func_ref;
+mod table;
