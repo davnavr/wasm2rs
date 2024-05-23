@@ -112,4 +112,11 @@
       return
     end
     unreachable)
+
+  (func $multiple_export (export "export_once_shame_on_you") (param i32) (result i64)
+    local.get 0
+    i64.extend_i32_s)
+
+  (export "export_twice_shame_on_me" (func $multiple_export))
+  (export "export_three_times_shame_on_us" (func $multiple_export))
 )

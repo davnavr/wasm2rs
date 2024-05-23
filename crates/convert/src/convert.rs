@@ -418,6 +418,23 @@ fn parse_sections<'wasm>(
             (export_section.count() as usize / 2).min(context.types.core_function_count() as usize),
         );
 
+        fn export_lookup_insert<'wasm, I>(
+            lookup: &mut crate::context::ExportLookup<'wasm, I>,
+            id: I,
+            name: crate::ident::BoxedIdent<'wasm>,
+        ) where
+            I: Eq + std::hash::Hash,
+        {
+            use std::collections::hash_map::Entry;
+
+            match lookup.entry(id) {
+                Entry::Occupied(mut existing) => existing.get_mut().push(name),
+                Entry::Vacant(vacant) => {
+                    vacant.insert(vec![name]);
+                }
+            }
+        }
+
         for result in export_section.into_iter_with_offsets() {
             use wasmparser::ExternalKind;
 
@@ -426,17 +443,17 @@ fn parse_sections<'wasm>(
             match export.kind {
                 ExternalKind::Func => {
                     let func_idx = crate::ast::FuncId(export.index);
-                    context.function_export_names.insert(func_idx, export_name);
+                    export_lookup_insert(&mut context.function_export_names, func_idx, export_name);
                 }
                 ExternalKind::Memory => {
                     let mem_idx = crate::ast::MemoryId(export.index);
                     context.memory_exports.push(mem_idx);
-                    context.memory_export_names.insert(mem_idx, export_name);
+                    export_lookup_insert(&mut context.memory_export_names, mem_idx, export_name);
                 }
                 ExternalKind::Global => {
                     let global_idx = crate::ast::GlobalId(export.index);
                     context.global_exports.push(global_idx);
-                    context.global_export_names.insert(global_idx, export_name);
+                    export_lookup_insert(&mut context.global_export_names, global_idx, export_name);
                 }
                 ExternalKind::Tag => anyhow::bail!("tag exports are not yet supported"),
                 bad => anyhow::bail!("TODO: Unsupported export {bad:?} @ {export_offset:#X}"),
@@ -732,8 +749,15 @@ impl Convert<'_> {
             // Check if an additional Rust function must be generated to access the function
             // export. A stub function is used to hides implementation details, such as the
             // possible omission of the `&self` parameter in the original function.
-            match context.function_export_names.get(&func_id) {
-                Some(export) if matches!(function_name, crate::context::FunctionName::Id(_)) => {
+            if let Some(export_names) = context.function_export_names.get(&func_id) {
+                let export_names = if matches!(function_name, crate::context::FunctionName::Id(_)) {
+                    export_names.as_slice()
+                } else {
+                    // Function already uses the first export name, so exclude it
+                    &export_names[1..]
+                };
+
+                for export in export_names {
                     write!(out, "\npub fn {export}(&self",);
 
                     if !has_parameters {
@@ -755,7 +779,6 @@ impl Convert<'_> {
 
                     out.write_str("}\n");
                 }
-                _ => (),
             }
 
             definition.finish(allocations);
@@ -897,12 +920,16 @@ impl Convert<'_> {
         }
 
         // Write exported memories.
-        for memory_id in context.memory_exports.iter().copied() {
-            let export = context
+        let exported_memories = context.memory_exports.iter().flat_map(|id| {
+            context
                 .memory_export_names
-                .get(&memory_id)
-                .expect("memory export did not have a name");
+                .get(id)
+                .expect("memory export did not have a name")
+                .iter()
+                .zip(std::iter::repeat(*id))
+        });
 
+        for (export, memory_id) in exported_memories {
             write!(
                 o,
                 "\n{sp}pub fn {export}(&self) -> &embedder::Memory{} {{\n{sp}{sp}",
@@ -919,12 +946,16 @@ impl Convert<'_> {
         }
 
         // Write exported globals.
-        for global_id in context.global_exports.iter().copied() {
-            let export = context
+        let exported_globals = context.global_exports.iter().flat_map(|id| {
+            context
                 .global_export_names
-                .get(&global_id)
-                .expect("global export did not have a name");
+                .get(id)
+                .expect("memory export did not have a name")
+                .iter()
+                .zip(std::iter::repeat(*id))
+        });
 
+        for (export, global_id) in exported_globals {
             write!(o, "\n{sp}pub fn {export}(&self) -> ");
 
             let global_type = context.types.global_at(global_id.0);
@@ -1130,6 +1161,23 @@ impl Convert<'_> {
         )?;
 
         let mut o = crate::write::IoWrite::new(output);
+
+        /* // Write function symbols used in stack traces.
+        if self.debug_info != DebugInfo::Omit {
+            for (func_idx, unwind_kind) in context.function_attributes.unwind_kinds
+                [context.func_import_names.len()..]
+                .iter()
+                .enumerate()
+            {
+                // Functions that cannot trap are excluded.
+                if !unwind_kind.can_unwind() {
+                    continue;
+                }
+
+                let func_id = crate::ast::FuncId(func_idx as u32);
+            }
+        } */
+
         o.write_str("\n} // impl Instance\n\n");
         o.write_str("} // mod $module\n\n");
         writeln!(o, "{sp}}}"); // ($vis mod $module use $path)
@@ -1230,17 +1278,19 @@ impl<'conv, 'wasm> Intermediate<'conv, 'wasm> {
     /// names and types.
     pub fn function_export_types(
         &self,
-    ) -> impl ExactSizeIterator<
+    ) -> impl Iterator<
         Item = (
             &'conv crate::ident::BoxedIdent<'wasm>,
             &'conv wasmparser::FuncType,
         ),
     > + 'conv {
-        self.context.function_export_names.iter().map(|(id, name)| {
-            (
-                name,
-                self.context.types[self.context.types.core_function_at(id.0)].unwrap_func(),
-            )
-        })
+        self.context
+            .function_export_names
+            .iter()
+            .flat_map(|(id, names)| {
+                let ty: &'conv _ = &self.context.types[self.context.types.core_function_at(id.0)];
+                let signature: &'conv _ = ty.unwrap_func();
+                names.iter().zip(std::iter::repeat(signature))
+            })
     }
 }

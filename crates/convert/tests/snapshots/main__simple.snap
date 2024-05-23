@@ -177,6 +177,22 @@ pub fn trap_on_three(&self, mut _l0: i32) -> ::core::result::Result<(), embedder
     Self::_f12(_l0)
 }
 
+fn _f13(mut _l0: i32) -> i64 {
+    _l0 as i64
+}
+
+pub fn export_once_shame_on_you(&self, mut _l0: i32) -> ::core::result::Result<i64, embedder::Trap> {
+    Ok(Self::_f13(_l0))
+}
+
+pub fn export_twice_shame_on_me(&self, mut _l0: i32) -> ::core::result::Result<i64, embedder::Trap> {
+    Ok(Self::_f13(_l0))
+}
+
+pub fn export_three_times_shame_on_us(&self, mut _l0: i32) -> ::core::result::Result<i64, embedder::Trap> {
+    Ok(Self::_f13(_l0))
+}
+
 } // impl Instance
 
 } // mod $module

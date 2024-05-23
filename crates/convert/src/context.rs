@@ -174,6 +174,9 @@ pub(crate) struct ActiveDataSegment {
     pub(crate) offset: crate::ast::ExprId,
 }
 
+pub(crate) type ExportLookup<'wasm, I> =
+    std::collections::HashMap<I, Vec<crate::ident::BoxedIdent<'wasm>>>;
+
 /// Stores all information relating to a WebAssembly module and how it's components are accessed
 /// when translated to Rust.
 #[must_use = "call .finish()"]
@@ -198,14 +201,11 @@ pub(crate) struct Context<'wasm> {
     /// Specifies the name of each WebAssembly global import.
     pub(crate) global_import_names: Box<[crate::ident::BoxedIdent<'wasm>]>,
     /// Lookup table for each exported WebAssembly function.
-    pub(crate) function_export_names:
-        std::collections::HashMap<FuncId, crate::ident::BoxedIdent<'wasm>>,
+    pub(crate) function_export_names: ExportLookup<'wasm, FuncId>,
     /// Lookup table for each exported WebAssembly memory.
-    pub(crate) memory_export_names:
-        std::collections::HashMap<MemoryId, crate::ident::BoxedIdent<'wasm>>,
+    pub(crate) memory_export_names: ExportLookup<'wasm, MemoryId>,
     /// Lookup table for each exported WebAssembly global.
-    pub(crate) global_export_names:
-        std::collections::HashMap<GlobalId, crate::ident::BoxedIdent<'wasm>>,
+    pub(crate) global_export_names: ExportLookup<'wasm, GlobalId>,
     /// Specifies which WebAssembly memories are exported.
     ///
     /// These are in the order they were specified in the WebAssembly export section.
@@ -258,7 +258,7 @@ impl<'wasm> Context<'wasm> {
     pub(crate) fn function_name(&self, f: FuncId) -> FunctionName<'_, 'wasm> {
         match self.function_export_names.get(&f) {
             Some(name) if self.function_attributes.can_use_export_name(f) => {
-                FunctionName::Export(name)
+                FunctionName::Export(name.first().unwrap())
             }
             Some(_) | None => FunctionName::Id(f),
         }
