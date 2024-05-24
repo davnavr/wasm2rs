@@ -94,10 +94,7 @@ where
         src.copy_from_slice(src_addr + written, slice)?;
 
         // `slice.len() <= buffer.len() <= u32::MAX`
-        #[allow(clippy::cast_possible_truncation)]
-        {
-            written += I::cast_from_usize(slice.len());
-        }
+        written += I::cast_from_usize(slice.len());
     }
 
     Ok(())
@@ -167,6 +164,28 @@ pub trait Memory<I: Address = u32> {
     }
 
     //fn copy_to_uninit_slice
+
+    /// Fills a range of bytes in the linear memory with the given byte `value`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the range of addresses `addr..(addr + len)` is not in bounds.
+    fn fill(&self, addr: I, len: I, value: u8) -> BoundsCheck<()> {
+        match addr.checked_add(&len) {
+            Some(sum) if sum < self.size() => (),
+            _ => return Err(BoundsCheckError),
+        }
+
+        // This should reduce the number of calls to `copy_from_slice()`
+        let buffer = [value; 2048];
+        let mut written = I::ZERO;
+        while let Some(slice @ [_, ..]) = buffer.get(..buffer.len().min((len - written).as_())) {
+            self.copy_from_slice(addr + written, slice)?;
+            written += I::cast_from_usize(slice.len());
+        }
+
+        Ok(())
+    }
 
     /// Copies the contents of the linear memory into a boxed slice.
     ///

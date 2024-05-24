@@ -206,7 +206,37 @@ where
         })
 }
 
-//fn fill
+/// This implements the [`memory.fill`] instruction, which fills a region of memory with a byte
+/// value (the `val` integer truncated to 8 bits).
+///
+/// For more information, see the documentation for the [`Memory::fill()`] method.
+///
+/// [`memory.fill`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+pub fn fill<const MEMORY: u32, I, M, E>(
+    mem: &M,
+    addr: I::Signed,
+    val: i32,
+    len: I::Signed,
+    frame: Option<&'static WasmFrame>,
+) -> Result<(), E>
+where
+    I: Address,
+    M: Memory<I> + ?Sized,
+    E: Trap<AccessError<I>>,
+{
+    let address = I::cast_from_signed(addr);
+    let length = I::cast_from_signed(len);
+    #[allow(clippy::cast_possible_truncation)]
+    let value = val as u8;
+    mem.fill(address, length, value)
+        .map_err(|BoundsCheckError| {
+            trap_access_error(
+                MEMORY,
+                EffectiveAddress::<I>::with_offset(address, length),
+                frame,
+            )
+        })
+}
 
 /// This implements the [**i*nn*.load8_*sx***] instructions.
 ///

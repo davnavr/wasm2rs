@@ -47,6 +47,15 @@ impl<I: crate::Address> crate::Memory<I> for EmptyMemory {
         }
     }
 
+    fn fill(&self, addr: I, len: I, value: u8) -> BoundsCheck<()> {
+        let _ = value;
+        if addr == I::ZERO && len == I::ZERO {
+            Ok(())
+        } else {
+            Err(BoundsCheckError)
+        }
+    }
+
     fn i8_load(&self, addr: I) -> BoundsCheck<i8> {
         let _ = addr;
         Err(BoundsCheckError)

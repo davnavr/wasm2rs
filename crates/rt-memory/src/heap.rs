@@ -1,4 +1,4 @@
-use crate::{Address, Memory};
+use crate::{Address, BoundsCheck, BoundsCheckError, Memory};
 use core::{cell::Cell, ptr::NonNull};
 
 /// A [`Memory`] implementation backed by a heap allcation.
@@ -177,7 +177,7 @@ impl<I: Address> HeapMemory<I> {
     }
 }
 
-fn slice_into<I, L>(memory: &[Cell<u8>], address: I, length: L) -> crate::BoundsCheck<&[Cell<u8>]>
+fn slice_into<I, L>(memory: &[Cell<u8>], address: I, length: L) -> BoundsCheck<&[Cell<u8>]>
 where
     I: Address,
     L: num_traits::AsPrimitive<usize>,
@@ -185,7 +185,7 @@ where
     memory
         .get(address.as_()..)
         .and_then(|start| start.get(..length.as_()))
-        .ok_or(crate::BoundsCheckError)
+        .ok_or(BoundsCheckError)
 }
 
 impl<I: Address> crate::Memory<I> for HeapMemory<I> {
@@ -209,7 +209,7 @@ impl<I: Address> crate::Memory<I> for HeapMemory<I> {
         }
     }
 
-    fn copy_to_slice(&self, addr: I, dst: &mut [u8]) -> crate::BoundsCheck<()> {
+    fn copy_to_slice(&self, addr: I, dst: &mut [u8]) -> BoundsCheck<()> {
         // SAFETY: no calls to `grow` occur within this method.
         let memory = unsafe { self.as_slice_of_cells() };
 
@@ -223,7 +223,7 @@ impl<I: Address> crate::Memory<I> for HeapMemory<I> {
         Ok(())
     }
 
-    fn copy_from_slice(&self, addr: I, src: &[u8]) -> crate::BoundsCheck<()> {
+    fn copy_from_slice(&self, addr: I, src: &[u8]) -> BoundsCheck<()> {
         // SAFETY: no calls to `grow` occur within this method.
         let memory = unsafe { self.as_slice_of_cells() };
 
@@ -246,7 +246,7 @@ impl<I: Address> crate::Memory<I> for HeapMemory<I> {
         unsafe { slice.as_mut() }
     }
 
-    fn copy_within(&self, dst_addr: I, src_addr: I, len: I) -> crate::BoundsCheck<()> {
+    fn copy_within(&self, dst_addr: I, src_addr: I, len: I) -> BoundsCheck<()> {
         // SAFETY: no calls to `grow` occur within this method.
         let memory = unsafe { self.as_slice_of_cells() };
 
@@ -261,8 +261,20 @@ impl<I: Address> crate::Memory<I> for HeapMemory<I> {
         Ok(())
     }
 
+    fn fill(&self, addr: I, len: I, value: u8) -> BoundsCheck<()> {
+        // SAFETY: no calls to `grow` occur within this method.
+        let memory = unsafe { self.as_slice_of_cells() };
+
+        // This should get optimized into a call to `memset`.
+        for cell in slice_into(memory, addr, len)? {
+            cell.set(value);
+        }
+
+        Ok(())
+    }
+
     #[cfg(feature = "alloc")]
-    fn to_boxed_bytes(&self, idx: I, len: I) -> crate::BoundsCheck<alloc::boxed::Box<[u8]>> {
+    fn to_boxed_bytes(&self, idx: I, len: I) -> BoundsCheck<alloc::boxed::Box<[u8]>> {
         // SAFETY: no calls to `grow` occur within this method.
         let memory = unsafe { self.as_slice_of_cells() };
         let src = slice_into(memory, idx, len)?;
