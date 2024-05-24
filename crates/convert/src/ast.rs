@@ -1,10 +1,12 @@
 //! Contains types modeling a Rust-like syntax tree representing a WebAssembly function body.
 
 mod arena;
+mod expr_id;
 
 pub(crate) mod print;
 
-pub(crate) use arena::{Arena, ExprId, ExprListId};
+pub(crate) use arena::{Arena, ArenaError, ExprListId};
+pub(crate) use expr_id::{ExprId, DecodeExprId};
 
 /// Represents a WebAssembly [*funcidx*], an index to a function.
 ///
