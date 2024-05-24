@@ -45,8 +45,6 @@ impl ExprId {
     /// [`Literal::I64`]: crate::ast::Literal::I64
     const FLAG_INT: u32 = 0b001;
 
-    // const FLAG_RESERVED: u32 = 0b010;
-
     /// Encodes a [`Literal::F32`] or a [`Literal::F64`] ([`DecodeExprId::Literal`]):
     /// - Bit 28 is set by [`ExprId::ENCODE_FLOAT_IS_F64`].
     /// - If a [`Literal::F32`] is being encoded:
@@ -66,12 +64,58 @@ impl ExprId {
     /// [`Literal::F32`]: crate::ast::Literal::F32
     /// [`Literal::F64`]: crate::ast::Literal::F64
     /// [*canonical NaN*s]: https://webassembly.github.io/spec/core/syntax/values.html#floating-point
-    const FLAG_FLOAT: u32 = 0b011;
+    const FLAG_FLOAT: u32 = 0b010;
+
+    /* /// Encodes an [`Expr::BinaryOperator`] ([`DecodeExprId::BinaryOperator`]) or an
+    /// [`Expr::UnaryOperator`] ([`DecodeExprId::UnaryOperator`]). The kind of operator is
+    /// indicated by bit 28, set by [`ExprId::ENCODE_OP_IS_UNARY`].
+    ///
+    /// If an [`Expr::BinaryOperator`] (`binop(x, C)` or `binop(C, x)`) is being encoded:
+    /// - Bit 27 is set by [`ExprId::ENCODE_OP_BINARY_FLIP_OPERANDS`].
+    /// - Bit 26 is set by [`ExprId::ENCODE_OP_BINARY_IS_CONSTANT_64`].
+    /// - Bit 25 is set by [`ExprId::ENCODE_OP_BINARY_IS_CONSTANT_FLOAT`]
+    /// - Bits 20 to 24 store the [`BinOp`], corresponding to the `ExprId::ENCODE_OP_BINARY_DEF_`
+    ///   constants.
+    /// - The constant operand `C` is encoded in bits 7 to 19 as follows:
+    ///   - If a [`Literal::I32`] or [`Literal::I64`] is being encoded, then:
+    ///     - Bit 19 contains the high bit of the value.
+    ///     - Bit 7 to 17 correspond to the low 11 bits of the value.
+    ///     - If a [`Literal::I32`] is being encoded, bit 18 corresponds to bits 12 to 30 of the
+    ///       value.
+    ///     - If a [`Literal::I64`] is being encoded, bit 18 corresponds to bits 12 to 62 of the
+    ///       value.
+    ///   - If a [`Literal::F32`] or [`Literal::F64`] is being encoded, then only the top 13 bits
+    ///     of the value are stored. The value is essentially shifted left 19 and 51 bits
+    ///     respectively.
+    /// - Bit 5 to 6 correspond to the `ExprId::ENCODE_OP_VAR_`, and indicate what kind of
+    ///   index stored in bits 0 to 4. This 5-bit index corresponds to the operand `x`.
+    ///
+    /// If an [`Expr::UnaryOperator`] is being encoded:
+    /// - Bits 20 to 24 store the [`UnOp`], corresponding to the `ExprId::ENCODE_OP_UNARY_DEF_`
+    ///   constants.
+    /// - Bit 18 to 19 correspond to the `ExprId::ENCODE_OP_VAR_`, and indicate what kind of
+    ///   index stored in bits 0 to 17. This 18-bit index corresponds to the operand `x`.
+    ///
+    /// Note that only operators that do not *trap* are encoded, as they would require storing
+    /// instruction offset information.
+    ///
+    /// [`Expr::BinaryOperator`]: crate::ast::Expr::BinaryOperator
+    /// [`Expr::UnaryOperator`]: crate::ast::Expr::UnaryOperator
+    /// [`BinOp`]: crate::ast::BinOp
+    /// [`UnOp`]: crate::ast::UnOp
+    /// [`Literal::I32`]: crate::ast::Literal::I32
+    /// [`Literal::I64`]: crate::ast::Literal::I64
+    /// [`Literal::F32`]: crate::ast::Literal::F32
+    /// [`Literal::F64`]: crate::ast::Literal::F64
+    /// [`Arena`]: crate::ast::Arena
+    const FLAG_OP: u32 = 0b011; */
 
     /// Encodes a variable, which is a parameter or local in the original WebAssembly
     /// ([`DecodeExprId::Local`]), or a new temporary ([`DecodeExprId::Temporary`]).
     ///  - Bit 28 is set by [`ExprId::ENCODE_VAR_IS_LOCAL`].
     ///  - Bits 0 to 27 encode the 28-bit value for the [`TempId`] or [`LocalId`].
+    ///
+    /// TODO: Allow LoopInput and GetGlobal as well
     ///
     /// [`TempId`]: crate::ast::TempId
     /// [`LocalId`]: crate::ast::LocalId
@@ -81,7 +125,7 @@ impl ExprId {
 
     // const FLAG_REF: u32 = 0b110; // Encode null `funcref`
 
-    // const FLAG_RESERVED: u32 = 0b111;
+    // const FLAG_RESERVED: u32 = 0b111; // Memory loads from MemId(0)
 
     /// Gets the flag (the upper 3) bits.
     const fn flag(self) -> u32 {
@@ -225,6 +269,48 @@ impl ExprId {
         }
     }
 
+    /* /// Indicates that the [`Expr::BinaryOperator`] is encoded as `binop(C, x)`.
+    ///
+    /// [`Expr::BinaryOperator`]: crate::ast::Expr::BinaryOperator
+    const ENCODE_OP_BINARY_FLIP_OPERANDS: u32 = 1 << 27;
+    /// Indicates that the constant operand `C` is a [`Literal::I64`] or a [`Literal::F64`].
+    ///
+    /// [`Literal::I64`]: crate::ast::Literal::I64
+    /// [`Literal::F64`]: crate::ast::Literal::F64
+    const ENCODE_OP_BINARY_IS_CONSTANT_64: u32 = 1 << 26;
+    /// Indicates that the constant operand `C` is a [`Literal::F32`] or a [`Literal::F64`].
+    ///
+    /// [`Literal::F32`]: crate::ast::Literal::F32
+    /// [`Literal::F64`]: crate::ast::Literal::F64
+    const ENCODE_OP_BINARY_IS_CONSTANT_FLOAT: u32 = 1 << 25;
+
+    const ENCODE_OP_VAR_INDEX: u32 = 0;
+
+    /// See [`ExprId::FLAG_OP`] for more details.
+    pub(in crate::ast) fn from_bin_op(kind: crate::ast::BinOp, c_1: crate::ast::ExprId, c_2: crate::ast::ExprId) -> Option<Self> {
+        let operands_flipped;
+        let x;
+        let c;
+
+        match (DecodeExprId::from(c_1), DecodeExprId::from(c_2)) {
+            (DecodeExprId::Index(index), DecodeExprId::Literal(literal)) => {
+                operands_flipped = false;
+                x = index;
+                c = literal;
+            }
+            (DecodeExprId::Literal(literal), DecodeExprId::Index(index)) => {
+                operands_flipped = true;
+                x = index;
+                c = literal;
+            }
+            _ => return None,
+        }
+
+        todo!()
+    } */
+
+    // const ENCODE_OP_IS_UNARY: u32 = 1 << 28;
+
     /// The largest index to a [`TempId`] or [`LocalId`] that can be encoded using
     /// [`ExprId::FLAG_VAR`].
     ///
@@ -265,6 +351,10 @@ impl ExprId {
 pub(crate) enum DecodeExprId {
     Index(usize),
     Literal(crate::ast::Literal),
+    /* BinaryOperator {
+        kind: crate::ast::BinOp,
+        //operands:
+    }, */
     Temporary(crate::ast::TempId),
     Local(crate::ast::LocalId),
 }

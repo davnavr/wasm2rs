@@ -131,6 +131,7 @@ impl Arena {
                 Literal::F32(bits) => try_encode!(ExprId::from_f32(*bits)),
                 Literal::F64(bits) => try_encode!(ExprId::from_f64(*bits)),
             },
+            // Expr::BinaryOperator { kind, c_1, c_2 } => try_encode!(ExprId::from_bin_op(*kind, *c_1, *c_2)),
             Expr::Temporary(temporary) => try_encode!(ExprId::from_temporary(*temporary)),
             Expr::GetLocal(local) => try_encode!(ExprId::from_local(*local)),
             _ => (),
