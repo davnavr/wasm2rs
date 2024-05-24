@@ -730,7 +730,7 @@ impl Convert<'_> {
             crate::ast::print::print_statements(
                 &mut out,
                 &crate::ast::print::Context {
-                    wasm: &context,
+                    wasm: context,
                     arena: &definition.arena,
                     debug_info: self.debug_info,
                 },
@@ -906,7 +906,7 @@ impl Convert<'_> {
             fn write_byte_string(out: &mut dyn crate::write::Write, data: &[u8]) {
                 out.write_str("b\"");
                 for b in data {
-                    let _ = write!(out, "{}", std::ascii::escape_default(*b));
+                    write!(out, "{}", std::ascii::escape_default(*b));
                 }
                 out.write_str("\"");
             }
