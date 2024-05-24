@@ -1,6 +1,9 @@
-//! Helper functions for performing memory accesses.
+//! Helper functions for performing [`Memory`] accesses.
 //!
 //! Calls to these functions are generated as part of the `wasm2rs` translation process.
+
+#![deny(unsafe_code)]
+#![deny(clippy::cast_possible_truncation)]
 
 use crate::{AccessError, Address, BoundsCheck, BoundsCheckError, EffectiveAddress, Memory};
 use wasm2rs_rt_core::{trace::WasmFrame, trap::Trap};
