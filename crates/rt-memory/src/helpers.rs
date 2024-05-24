@@ -194,8 +194,8 @@ where
     dst.copy_from(src, dst_addr, src_addr, len)
         .map_err(|BoundsCheckError| {
             let (memory, address) = match src_addr.checked_add(&len) {
-                Some(oob) if oob < src.size() => (SRC_MEM, src_addr),
-                _ => (DST_MEM, dst_addr),
+                Some(sum) if sum < src.size() => (DST_MEM, dst_addr),
+                _ => (SRC_MEM, src_addr),
             };
 
             trap_access_error(
@@ -205,6 +205,8 @@ where
             )
         })
 }
+
+//fn fill
 
 /// This implements the [**i*nn*.load8_*sx***] instructions.
 ///

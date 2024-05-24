@@ -38,13 +38,14 @@ impl From<AllocationError<u32>> for AllocationError<u64> {
 /// Error type used when an attempt to read or write from a linear [`Memory`] fails.
 ///
 /// [`Memory`]: crate::Memory
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct AccessError<I: Address = u32> {
     memory: u32,
     address: crate::EffectiveAddress<I>,
 }
 
 impl<I: Address> AccessError<I> {
+    // TODO: Remove this
     pub(crate) const fn new(memory: u32, address: crate::EffectiveAddress<I>) -> Self {
         Self { memory, address }
     }
@@ -141,5 +142,12 @@ impl From<LimitsMismatchError<u32>> for LimitsMismatchError<u64> {
             memory: error.memory,
             kind: error.kind.into(),
         }
+    }
+}
+
+impl<I: Address> From<AccessError<I>> for crate::BoundsCheckError {
+    fn from(error: AccessError<I>) -> Self {
+        let _ = error;
+        Self
     }
 }
