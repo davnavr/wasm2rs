@@ -89,7 +89,9 @@ impl<E: NullableTableElement, const MAX: usize> crate::AnyTable for ArrayTable<E
     }
 }
 
-impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E, MAX> {
+impl<E: NullableTableElement, const MAX: usize> crate::Table for ArrayTable<E, MAX> {
+    type Element = E;
+
     fn get(&self, idx: u32) -> BoundsCheck<E> {
         let cell = self
             .as_slice_of_cells()
@@ -162,7 +164,7 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table<E> for ArrayTable<E
     }
 }
 
-impl<E: NullableTableElement, const MAX: usize> crate::TableExt<E> for ArrayTable<E, MAX> {}
+impl<E: NullableTableElement, const MAX: usize> crate::TableExt for ArrayTable<E, MAX> {}
 
 impl<E: NullableTableElement + core::fmt::Debug, const MAX: usize> core::fmt::Debug
     for ArrayTable<E, MAX>

@@ -1,12 +1,19 @@
-use crate::{BoundsCheck, BoundsCheckError};
+use crate::{BoundsCheck, BoundsCheckError, TableElement};
 
 /// A [`Table`] implementation that always has a size of zero.
 ///
 /// [`Table`]: crate::Table
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct EmptyTable;
+pub struct EmptyTable<E: TableElement>(core::marker::PhantomData<fn() -> E>);
 
-impl crate::AnyTable for EmptyTable {
+/// Creates a [`Table`] that is always empty.
+///
+/// [`Table`]: crate::Table
+pub const fn empty<E: TableElement>() -> EmptyTable<E> {
+    EmptyTable(core::marker::PhantomData)
+}
+
+impl<E: TableElement> crate::AnyTable for EmptyTable<E> {
     fn size(&self) -> u32 {
         0
     }
@@ -24,7 +31,9 @@ impl crate::AnyTable for EmptyTable {
     }
 }
 
-impl<E: crate::TableElement> crate::Table<E> for EmptyTable {
+impl<E: TableElement> crate::Table for EmptyTable<E> {
+    type Element = E;
+
     fn get(&self, idx: u32) -> BoundsCheck<E> {
         let _ = idx;
         Err(BoundsCheckError)
@@ -83,10 +92,10 @@ impl<E: crate::TableElement> crate::Table<E> for EmptyTable {
     }
 }
 
-impl<E: crate::TableElement> crate::TableExt<E> for EmptyTable {
+impl<E: TableElement> crate::TableExt for EmptyTable<E> {
     fn clone_from<Src>(&self, src: &Src, dst_idx: u32, src_idx: u32, len: u32) -> BoundsCheck<()>
     where
-        Src: crate::Table<E> + ?Sized,
+        Src: crate::Table<Element = E> + ?Sized,
     {
         let _ = src;
         let _ = src_idx;

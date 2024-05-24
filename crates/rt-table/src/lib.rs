@@ -32,7 +32,7 @@ mod helpers;
 mod swap_guard;
 
 pub use array::ArrayTable;
-pub use empty::EmptyTable;
+pub use empty::{empty, EmptyTable};
 pub use error::{AccessError, AllocationError, LimitsMismatchError};
 pub use helpers::*;
 
@@ -80,7 +80,7 @@ pub trait AnyTable {
 }
 
 /// Assumes that the `src` and `dst` are actually the same tables.
-fn default_clone_from_conservative<E, Dst, Src>(
+fn default_clone_from_conservative<Dst, Src>(
     dst: &Dst,
     src: &Src,
     dst_idx: u32,
@@ -88,9 +88,8 @@ fn default_clone_from_conservative<E, Dst, Src>(
     len: u32,
 ) -> BoundsCheck<()>
 where
-    E: TableElement,
-    Dst: Table<E> + ?Sized,
-    Src: Table<E> + ?Sized,
+    Dst: Table + ?Sized,
+    Src: Table<Element = Dst::Element> + ?Sized,
 {
     // Range math hurts, use 64-bit math instead to avoid dealing with overflows.
     let src_end = u64::from(len) + u64::from(src_idx);
@@ -123,7 +122,10 @@ where
 /// See also the [`TableExt`] trait.
 ///
 /// [WebAssembly tables]: https://webassembly.github.io/spec/core/syntax/modules.html#tables
-pub trait Table<E: TableElement>: AnyTable {
+pub trait Table: AnyTable {
+    /// The type of the elements stored in the table.
+    type Element: TableElement;
+
     /// Gets the element at the given index.
     ///
     /// This returns a clone of the element rather than a reference to it, as future operations
@@ -134,7 +136,7 @@ pub trait Table<E: TableElement>: AnyTable {
     /// Returns an error if the index is greater than or equal to the [`table.size`].
     ///
     /// [`table.size`]: AnyTable::size()
-    fn get(&self, idx: u32) -> BoundsCheck<E>;
+    fn get(&self, idx: u32) -> BoundsCheck<Self::Element>;
 
     /// Replaces the element at the given index with the given value, and returns the old value.
     ///
@@ -143,10 +145,10 @@ pub trait Table<E: TableElement>: AnyTable {
     /// Returns an error if the index is greater than or equal to the [`table.size`].
     ///
     /// [`table.size`]: AnyTable::size()
-    fn replace(&self, idx: u32, new: E) -> BoundsCheck<E>;
+    fn replace(&self, idx: u32, new: Self::Element) -> BoundsCheck<Self::Element>;
 
     /// Returns a mutable slice containing the table's elements.
-    fn as_mut_slice(&mut self) -> &mut [E];
+    fn as_mut_slice(&mut self) -> &mut [Self::Element];
 
     /// Sets the element at the given index.
     ///
@@ -155,20 +157,20 @@ pub trait Table<E: TableElement>: AnyTable {
     /// Returns an error if the index is greater than or equal to the [`table.size`].
     ///
     /// [`table.size`]: AnyTable::size()
-    fn set(&self, idx: u32, elem: E) -> BoundsCheck<()> {
+    fn set(&self, idx: u32, elem: Self::Element) -> BoundsCheck<()> {
         let _ = self.replace(idx, elem)?;
         Ok(())
     }
 
-    /// Copies elements (calling [`E::clone()`]) from `src` into the table starting at the
+    /// Copies elements (calling [`Element::clone()`]) from `src` into the table starting at the
     /// specified index.
     ///
     /// # Errors
     ///
     /// Returns an error if the range of indices `idx..(idx + src.size())` is not in bounds.
     ///
-    /// [`E::clone()`]: Clone::clone()
-    fn clone_from_slice(&self, idx: u32, src: &[E]) -> BoundsCheck<()> {
+    /// [`Element::clone()`]: Clone::clone()
+    fn clone_from_slice(&self, idx: u32, src: &[Self::Element]) -> BoundsCheck<()> {
         // 64-bit math since I don't know what to do if `idx + u32::from(src.len())` overflows.
         let src_len = u32::try_from(src.len()).map_err(|_| BoundsCheckError)?;
         if u64::from(idx) + u64::from(src_len) > u64::from(self.size()) {
@@ -186,15 +188,15 @@ pub trait Table<E: TableElement>: AnyTable {
         }
     }
 
-    /// Copies elements (calling [`E::clone()`]) from the table starting at the specified index
+    /// Copies elements (calling [`Element::clone()`]) from the table starting at the specified index
     /// into `dst`.
     ///
     /// # Errors
     ///
     /// Returns an error if the range of indices `idx..(idx + dst.size())` is not in bounds.
     ///
-    /// [`E::clone()`]: Clone::clone()
-    fn clone_into_slice(&self, idx: u32, dst: &mut [E]) -> BoundsCheck<()> {
+    /// [`Element::clone()`]: Clone::clone()
+    fn clone_into_slice(&self, idx: u32, dst: &mut [Self::Element]) -> BoundsCheck<()> {
         // Duplicated code from `clone_from_slice()`, go there for more details.
         let dst_len = u32::try_from(dst.len()).map_err(|_| BoundsCheckError)?;
         if u64::from(idx) + u64::from(dst_len) > u64::from(self.size()) {
@@ -209,7 +211,7 @@ pub trait Table<E: TableElement>: AnyTable {
         }
     }
 
-    /// Moves a range of elements (calling [`E::clone()`]) within the table to another location.
+    /// Moves a range of elements (calling [`Element::clone()`]) within the table to another location.
     ///
     /// If elements need to be copied to another table, use the [`TableExt::clone_from()`] method instead.
     ///
@@ -218,7 +220,7 @@ pub trait Table<E: TableElement>: AnyTable {
     /// Returns an error if the ranges `dst_idx..(dst_idx + len)` or `src_idx..(src_idx + len)` are
     /// not in bounds.
     ///
-    /// [`E::clone()`]: Clone::clone()
+    /// [`Element::clone()`]: Clone::clone()
     fn clone_within(&self, dst_idx: u32, src_idx: u32, len: u32) -> BoundsCheck<()> {
         default_clone_from_conservative(self, self, dst_idx, src_idx, len)
     }
@@ -230,7 +232,7 @@ pub trait Table<E: TableElement>: AnyTable {
     /// Returns an error if the range of indices `idx..(idx + len))` is not in bounds.
     ///
     /// [`clone`]: Clone::clone()
-    fn fill(&self, idx: u32, len: u32, elem: E) -> BoundsCheck<()> {
+    fn fill(&self, idx: u32, len: u32, elem: Self::Element) -> BoundsCheck<()> {
         // `Cow<E>` could be used for `elem` if it was available in `core`, however, such a change
         // would only benefit the (expected to be rare) case where `len == 0`.
 
@@ -252,16 +254,20 @@ pub trait Table<E: TableElement>: AnyTable {
         Ok(())
     }
 
-    /// Copies elements (calling [`E::clone()`]) from the table starting at the specified index,
+    /// Copies elements (calling [`Element::clone()`]) from the table starting at the specified index,
     /// returning a boxed slice containing them.
     ///
     /// # Errors
     ///
     /// Returns an error if the range of indices `idx..(idx + len)` is not in bounds.
     ///
-    /// [`E::clone()`]: Clone::clone()
+    /// [`Element::clone()`]: Clone::clone()
     #[cfg(feature = "alloc")]
-    fn to_boxed_slice(&self, idx: u32, len: u32) -> BoundsCheck<alloc::boxed::Box<[E]>> {
+    fn to_boxed_slice(
+        &self,
+        idx: u32,
+        len: u32,
+    ) -> BoundsCheck<alloc::boxed::Box<[Self::Element]>> {
         let truncated_len = usize::try_from(len).unwrap_or(usize::MAX);
 
         #[allow(clippy::cast_possible_truncation)]
@@ -282,7 +288,8 @@ pub trait Table<E: TableElement>: AnyTable {
     }
 }
 
-const _OBJECT_SAFETY: core::marker::PhantomData<&dyn Table<()>> = core::marker::PhantomData;
+const _OBJECT_SAFETY: core::marker::PhantomData<&dyn Table<Element = ()>> =
+    core::marker::PhantomData;
 
 /// Provides additional operations on [`Table`]s.
 ///
@@ -292,8 +299,8 @@ const _OBJECT_SAFETY: core::marker::PhantomData<&dyn Table<()>> = core::marker::
 ///
 /// [object safe]: https://doc.rust-lang.org/reference/items/traits.html#object-safety
 /// [`clone_from()`]: TableExt::clone_from()
-pub trait TableExt<E: TableElement>: Table<E> {
-    /// Copies elements (calling [`E::clone()`]) from `src` into `self`.
+pub trait TableExt: Table {
+    /// Copies elements (calling [`Element::clone()`]) from `src` into `self`.
     ///
     /// If `src` and `self` are the same tables, use [`Table::clone_within`] instead.
     ///
@@ -302,10 +309,10 @@ pub trait TableExt<E: TableElement>: Table<E> {
     /// Returns an error if the range `dst_idx..(dst_idx + len)` is not in bounds in `self`, or if
     /// the range `src_idx..(src_idx + len)` is not in bounds in `src`.
     ///
-    /// [`E::clone()`]: Clone::clone()
+    /// [`Element::clone()`]: Clone::clone()
     fn clone_from<Src>(&self, src: &Src, dst_idx: u32, src_idx: u32, len: u32) -> BoundsCheck<()>
     where
-        Src: Table<E> + ?Sized,
+        Src: Table<Element = Self::Element> + ?Sized,
     {
         // It is possible for `self` and `src` to have the same address, even when they are
         // actually "different objects" (e.g. ZSTs and `dyn` shenanigans).

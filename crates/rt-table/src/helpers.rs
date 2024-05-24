@@ -5,7 +5,7 @@
 #![deny(unsafe_code)]
 #![deny(clippy::cast_possible_truncation)]
 
-use crate::{AccessError, AnyTable, BoundsCheck, BoundsCheckError, Table, TableElement};
+use crate::{AccessError, AnyTable, BoundsCheck, BoundsCheckError, Table};
 use wasm2rs_rt_core::{trace::WasmFrame, trap::Trap};
 
 /// Checks that the given [`Table`] has the correct `minimum` and `maximum` number of elements.
@@ -90,17 +90,16 @@ fn trap_access_error<E: Trap<AccessError>>(
 ///
 /// [`table.init`]: https://webassembly.github.io/spec/core/syntax/instructions.html#table-instructions
 /// [active element segment initialization]: https://webassembly.github.io/spec/core/syntax/modules.html#element-segments
-pub fn init<const TABLE: u32, R, T, E>(
+pub fn init<const TABLE: u32, T, E>(
     table: &T,
     table_idx: i32,
     segment_idx: i32,
     length: i32,
-    element_segment: &[R],
+    element_segment: &[T::Element],
     frame: Option<&'static WasmFrame>,
 ) -> Result<(), E>
 where
-    R: TableElement,
-    T: Table<R> + ?Sized,
+    T: Table + ?Sized,
     E: Trap<AccessError>,
 {
     fn source<R>(elements: &[R], offset: u32, len: u32) -> Option<&[R]> {
@@ -109,12 +108,12 @@ where
             .and_then(|remaining| remaining.get(..usize::try_from(len).ok()?))
     }
 
-    fn inner<R: TableElement>(
-        dst: &(impl Table<R> + ?Sized),
+    fn inner<T: Table + ?Sized>(
+        dst: &T,
         dst_idx: u32,
         src_idx: u32,
         len: u32,
-        src: &[R],
+        src: &[T::Element],
     ) -> BoundsCheck<()> {
         dst.clone_from_slice(dst_idx, source(src, src_idx, len).ok_or(BoundsCheckError)?)
     }
@@ -131,7 +130,7 @@ where
 /// For more information, see the documentation for the [`Table::clone_within()`] method.
 ///
 /// [`table.copy`]: https://webassembly.github.io/spec/core/syntax/instructions.html#table-instructions
-pub fn copy_within<const TABLE: u32, R, T, E>(
+pub fn copy_within<const TABLE: u32, T, E>(
     table: &T,
     dst_idx: i32,
     src_idx: i32,
@@ -139,8 +138,7 @@ pub fn copy_within<const TABLE: u32, R, T, E>(
     frame: Option<&'static WasmFrame>,
 ) -> Result<(), E>
 where
-    R: TableElement,
-    T: Table<R> + ?Sized,
+    T: Table + ?Sized,
     E: Trap<AccessError>,
 {
     let dst_idx = dst_idx as u32;
@@ -158,7 +156,7 @@ where
 ///
 /// [`table.copy`]: https://webassembly.github.io/spec/core/syntax/instructions.html#table-instructions
 /// [`TableExt::clone_from()`]: crate::TableExt::clone_from()
-pub fn copy<const DST_TBL: u32, const SRC_TBL: u32, R, Dst, Src, E>(
+pub fn copy<const DST_TBL: u32, const SRC_TBL: u32, Dst, Src, E>(
     dst: &Dst,
     src: &Src,
     dst_idx: i32,
@@ -167,9 +165,8 @@ pub fn copy<const DST_TBL: u32, const SRC_TBL: u32, R, Dst, Src, E>(
     frame: Option<&'static WasmFrame>,
 ) -> Result<(), E>
 where
-    R: TableElement,
-    Dst: crate::TableExt<R> + ?Sized,
-    Src: Table<R> + ?Sized,
+    Dst: crate::TableExt + ?Sized,
+    Src: Table<Element = Dst::Element> + ?Sized,
     E: Trap<AccessError>,
 {
     let dst_idx = dst_idx as u32;
@@ -191,16 +188,15 @@ where
 /// For more information, see the documentation for the [`Table::fill()`] method.
 ///
 /// [`table.fill`]: https://webassembly.github.io/spec/core/syntax/instructions.html#table-instructions
-pub fn fill<const TABLE: u32, R, T, E>(
+pub fn fill<const TABLE: u32, T, E>(
     table: &T,
     idx: i32,
-    elem: R,
+    elem: T::Element,
     len: i32,
     frame: Option<&'static WasmFrame>,
 ) -> Result<(), E>
 where
-    R: TableElement,
-    T: Table<R> + ?Sized,
+    T: Table + ?Sized,
     E: Trap<AccessError>,
 {
     let index = idx as u32;
@@ -215,15 +211,14 @@ where
 /// For more information, see the documentation for the [`Table::set()`] method.
 ///
 /// [`table.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#table-instructions
-pub fn set<const TABLE: u32, R, T, E>(
+pub fn set<const TABLE: u32, T, E>(
     table: &T,
     idx: i32,
-    elem: R,
+    elem: T::Element,
     frame: Option<&'static WasmFrame>,
 ) -> Result<(), E>
 where
-    R: TableElement,
-    T: Table<R> + ?Sized,
+    T: Table + ?Sized,
     E: Trap<AccessError>,
 {
     table
@@ -236,14 +231,13 @@ where
 /// For more information, see the documentation for the [`Table::get()`] method.
 ///
 /// [`table.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#table-instructions
-pub fn get<const TABLE: u32, R, T, E>(
+pub fn get<const TABLE: u32, T, E>(
     table: &T,
     idx: i32,
     frame: Option<&'static WasmFrame>,
-) -> Result<R, E>
+) -> Result<T::Element, E>
 where
-    R: TableElement,
-    T: Table<R> + ?Sized,
+    T: Table + ?Sized,
     E: Trap<AccessError>,
 {
     table

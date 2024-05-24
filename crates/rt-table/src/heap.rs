@@ -214,7 +214,9 @@ impl<E: NullableTableElement> crate::AnyTable for HeapTable<E> {
     }
 }
 
-impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
+impl<E: NullableTableElement> crate::Table for HeapTable<E> {
+    type Element = E;
+
     fn get(&self, idx: u32) -> BoundsCheck<E> {
         // SAFETY: no `try_grow()` calls in this method.
         let elements = unsafe { self.as_slice_of_cells() };
@@ -300,7 +302,7 @@ impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
     }
 }
 
-impl<E: NullableTableElement> crate::TableExt<E> for HeapTable<E> {}
+impl<E: NullableTableElement> crate::TableExt for HeapTable<E> {}
 
 impl<E: NullableTableElement> Drop for HeapTable<E> {
     fn drop(&mut self) {
