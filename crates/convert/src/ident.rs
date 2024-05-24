@@ -1,12 +1,12 @@
 //! Contains types representing Rust identifiers.
 
 mod any_ident;
-mod boxed_ident;
+// mod boxed_ident;
 mod mangled_ident;
 mod safe_ident;
 
 pub use any_ident::AnyIdent;
-pub use boxed_ident::BoxedIdent;
+// pub use boxed_ident::BoxedIdent;
 pub use mangled_ident::MangledIdent;
 pub use safe_ident::SafeIdent;
 

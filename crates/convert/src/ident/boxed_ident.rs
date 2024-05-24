@@ -62,6 +62,8 @@ impl<'a> BoxedIdent<'a> {
     }
 
     /// Converts an arbitrary string into a [`SafeIdent`], then allocates it on the heap.
+    ///
+    /// [`SafeIdent`]: crate::ident::SafeIdent
     pub fn from_str_safe(s: &'a str) -> Self {
         Self::new(&crate::ident::SafeIdent::from(s))
     }
