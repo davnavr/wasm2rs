@@ -1,12 +1,10 @@
 //! Contains types modeling a Rust-like syntax tree representing a WebAssembly function body.
 
 mod arena;
-mod print;
 
-pub use print::Indentation;
+pub(crate) mod print;
 
 pub(crate) use arena::{Arena, ExprId, ExprListId};
-pub(crate) use print::Print;
 
 /// Represents a WebAssembly [*funcidx*], an index to a function.
 ///
@@ -161,16 +159,32 @@ pub(crate) enum UnOp {
     /// Corresponds to the `f32.neg` and `f64.neg` instructions.
     FxxNeg,
     I32WrapI64,
-    I32TruncF32S,
-    I32TruncF32U,
-    I32TruncF64S,
-    I32TruncF64U,
+    I32TruncF32S {
+        offset: u32,
+    },
+    I32TruncF32U {
+        offset: u32,
+    },
+    I32TruncF64S {
+        offset: u32,
+    },
+    I32TruncF64U {
+        offset: u32,
+    },
     I64ExtendI32S,
     I64ExtendI32U,
-    I64TruncF32S,
-    I64TruncF32U,
-    I64TruncF64S,
-    I64TruncF64U,
+    I64TruncF32S {
+        offset: u32,
+    },
+    I64TruncF32U {
+        offset: u32,
+    },
+    I64TruncF64S {
+        offset: u32,
+    },
+    I64TruncF64U {
+        offset: u32,
+    },
     F32ConvertIxxS,
     F32ConvertI32U,
     F32ConvertI64U,
@@ -225,16 +239,32 @@ pub(crate) enum BinOp {
     I64Mul,
     /// Signed division on `i32`s, trapping when the denominator is `0` (`c_1 / c_2`). Corresponds
     /// to the `i32.div_s` instruction.
-    I32DivS,
-    I64DivS,
+    I32DivS {
+        offset: u32,
+    },
+    I64DivS {
+        offset: u32,
+    },
     /// Signed division on `i64`s, trapping when the denominator is `0` (`c_1 / c_2`). Corresponds
     /// to the `i64.div_u` instruction.
-    I32DivU,
-    I64DivU,
-    I32RemS,
-    I64RemS,
-    I32RemU,
-    I64RemU,
+    I32DivU {
+        offset: u32,
+    },
+    I64DivU {
+        offset: u32,
+    },
+    I32RemS {
+        offset: u32,
+    },
+    I64RemS {
+        offset: u32,
+    },
+    I32RemU {
+        offset: u32,
+    },
+    I64RemU {
+        offset: u32,
+    },
     /// Bitwise integer AND (`c_1 & c_2`). Corresponds to the `i32.and` and `i64.and` instructions.
     IxxAnd,
     /// Bitwise integer OR (`c_1 | c_2`). Corresponds to the `i32.or` and `i64.or` instructions.
@@ -382,6 +412,7 @@ pub(crate) enum Expr {
         ///
         /// This value must not exceed `u32::MAX` for 32-bit linear memories.
         offset: u64,
+        instruction_offset: u32,
     },
     /// Gets the current number of pages allocated for a linear memory. Corresponds to the
     /// [`memory.size`] instruction.
@@ -402,6 +433,7 @@ pub(crate) enum Expr {
     Call {
         callee: FuncId,
         arguments: ExprListId,
+        offset: u32,
     },
 }
 
@@ -449,6 +481,7 @@ pub(crate) enum Statement {
         callee: FuncId,
         arguments: ExprListId,
         results: Option<(TempId, std::num::NonZeroU32)>,
+        offset: u32,
     },
     /// Corresponds to the [`unreachable`] instruction, which always produces a trap.
     ///
@@ -506,6 +539,7 @@ pub(crate) enum Statement {
         ///
         /// This value must not exceed `u32::MAX` for 32-bit linear memories.
         offset: u64,
+        instruction_offset: u32,
     },
 }
 

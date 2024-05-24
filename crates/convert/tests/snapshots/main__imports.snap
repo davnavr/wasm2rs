@@ -11,10 +11,11 @@ macro_rules! wasm {
 #[allow(unreachable_code)]
 #[allow(unreachable_pub)]
 #[allow(unused_mut)]
+#[allow(unused_imports)]
 $vis mod $module {
 
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
-use embedder::rt::trap::TrapWith as _;
+use embedder::rt::{trap::TrapWith as _, trace::UnwindWith as _};
 
 pub struct Instance {
     pub imports: embedder::Imports,
@@ -44,12 +45,12 @@ pub fn funny_life_number(&self) -> ::core::result::Result<i32, embedder::Trap> {
 }
 
 pub fn two_equals_two(&self) -> ::core::result::Result<(), embedder::Trap> {
-    self.imports.tests().assert_equal(2i32, 2i32)?;
+    self.imports.tests().assert_equal(2i32, 2i32).unwind_with({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_2(5); &F })?;
     Ok(())
 }
 
 pub fn write_5_to_5000(&self) -> ::core::result::Result<(), embedder::Trap> {
-    embedder::rt::memory::i32_store::<0, u32, _, _>(self.imports.tests().memory(), 0, 0x1388i32, 5i32, None)?;
+    embedder::rt::memory::i32_store::<0, u32, _, _>(self.imports.tests().memory(), 0, 0x1388i32, 5i32, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_3(6); &F }))?;
     Ok(())
 }
     const _SYM_FN_1: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(1, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[], results: &[embedder::rt::symbol::WasmValType::I32] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 146 }); sym.export_names = &["funny_life_number"]; sym };

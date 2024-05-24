@@ -11,10 +11,11 @@ macro_rules! wasm {
 #[allow(unreachable_code)]
 #[allow(unreachable_pub)]
 #[allow(unused_mut)]
+#[allow(unused_imports)]
 $vis mod $module {
 
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
-use embedder::rt::trap::TrapWith as _;
+use embedder::rt::{trap::TrapWith as _, trace::UnwindWith as _};
 
 pub struct Instance {
     pub imports: embedder::Imports,
@@ -120,7 +121,7 @@ fn _f7(mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
     '_b0: {
         let mut _b1_0 = _l0;
         '_b1: loop {
-            '_b2: { if embedder::rt::math::i32_rem_u(_b1_0, 2i32).trap_with(None)? == 0 {
+            '_b2: { if embedder::rt::math::i32_rem_u(_b1_0, 2i32).trap_with(Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_7(21); &F }))? == 0 {
                 return Ok(());
             } } // '_b2
             _b1_0 = 1i32;

@@ -11,10 +11,11 @@ macro_rules! wasm {
 #[allow(unreachable_code)]
 #[allow(unreachable_pub)]
 #[allow(unused_mut)]
+#[allow(unused_imports)]
 $vis mod $module {
 
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
-use embedder::rt::trap::TrapWith as _;
+use embedder::rt::{trap::TrapWith as _, trace::UnwindWith as _};
 
 pub struct Instance {
     pub imports: embedder::Imports,

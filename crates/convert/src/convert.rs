@@ -532,7 +532,7 @@ impl Convert<'_> {
                   unwind_kind: &mut crate::context::UnwindKind,
                   code: code::Code<'wasm>| {
                 let offset = code.code_section_entry_offset();
-                let (attr, definition) = code.convert(allocations, self, types)?;
+                let (attr, definition) = code.convert(allocations, types)?;
                 *call_kind = attr.call_kind;
                 *unwind_kind = attr.unwind_kind;
                 Ok((definition, offset))
@@ -688,11 +688,8 @@ impl Convert<'_> {
             }
         }
 
-        let printer_options = crate::ast::Print::new(self.indentation, self.debug_info, context);
         let write_function_definitions = |(index, definition): (usize, code::Definition)| {
             use crate::context::CallKind;
-
-            let context = printer_options.context();
 
             // TODO: Use some average # of Rust bytes per # of Wasm bytes
             let mut out = Writer::new(allocations.byte_buffer_pool());
@@ -730,12 +727,17 @@ impl Convert<'_> {
 
             out.write_str(" {\n");
 
-            printer_options.print_statements(
-                func_id,
-                1,
+            crate::ast::print::print_statements(
                 &mut out,
+                &crate::ast::print::Context {
+                    wasm: &context,
+                    arena: &definition.arena,
+                    debug_info: self.debug_info,
+                },
+                func_id,
+                self.indentation,
+                1,
                 &definition.body,
-                &definition.arena,
             );
 
             out.write_str("}\n");
@@ -768,10 +770,12 @@ impl Convert<'_> {
 
                     out.write_str(" {\n");
 
-                    printer_options.print_stub(
-                        1,
+                    crate::ast::print::print_stub(
                         &mut out,
                         func_id,
+                        context,
+                        self.indentation,
+                        1,
                         signature.params().len() as u32,
                     );
 
@@ -824,9 +828,10 @@ impl Convert<'_> {
         o.write_str("#[allow(unreachable_code)]\n"); // Some branches may not be taken (e.g. infinite loops detected by rustc)
         o.write_str("#[allow(unreachable_pub)]\n"); // Macro may be invoked within a non-public module
         o.write_str("#[allow(unused_mut)]\n"); // Variables may be marked mut
+        o.write_str("#[allow(unused_imports)]\n"); // Sometimes `TrapWith` or `UnwindWith` isn't used
         o.write_str("$vis mod $module {\n\n");
         o.write_str("use $(::$embedder_start::)? $($embedder_more)::+ as embedder;\n");
-        o.write_str("use embedder::rt::trap::TrapWith as _;\n\n");
+        o.write_str("use embedder::rt::{trap::TrapWith as _, trace::UnwindWith as _};\n\n");
 
         // TODO: Option to specify #[derive(Debug)] impl
         writeln!(
@@ -1106,7 +1111,16 @@ impl Convert<'_> {
                     .get(&global)
                     .expect("missing initializer expression for defined global");
 
-                init.print(&mut o, &context.constant_expressions, false, context);
+                init.print(
+                    &mut o,
+                    false,
+                    &crate::ast::print::Context {
+                        wasm: context,
+                        arena: &context.constant_expressions,
+                        debug_info: self.debug_info,
+                    },
+                    None,
+                );
             }
 
             o.write_str(";\n");
@@ -1130,9 +1144,16 @@ impl Convert<'_> {
                 context.memory_ident(data_segment.memory)
             );
 
-            data_segment
-                .offset
-                .print(&mut o, &context.constant_expressions, false, context);
+            data_segment.offset.print(
+                &mut o,
+                false,
+                &crate::ast::print::Context {
+                    wasm: context,
+                    arena: &context.constant_expressions,
+                    debug_info: self.debug_info,
+                },
+                None,
+            );
 
             let data_length = context.data_segment_contents[data_segment.data.0 as usize].len();
 

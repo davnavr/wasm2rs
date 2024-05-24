@@ -30,7 +30,7 @@ pub mod write;
 #[doc(no_inline)]
 pub use anyhow::{Error, Result};
 
-pub use ast::Indentation;
+pub use ast::print::Indentation;
 pub use convert::{
     Allocations, Convert, DataSegmentWriter, DebugInfo, Intermediate, StackOverflowChecks,
 };

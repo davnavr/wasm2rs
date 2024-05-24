@@ -112,7 +112,6 @@ pub(in crate::convert) struct Attributes {
 
 fn convert_impl(
     allocations: &crate::Allocations,
-    options: &crate::Convert<'_>,
     types: &wasmparser::types::Types,
     body: wasmparser::FunctionBody<'_>,
     mut validator: FuncValidator,
@@ -141,6 +140,7 @@ fn convert_impl(
         }
     }
 
+    let code_start = body.range().start;
     let mut operators = body
         .get_operators_reader()
         .context("could not obtain operators")?;
@@ -150,6 +150,8 @@ fn convert_impl(
         use wasmparser::Operator;
 
         let (op, op_offset) = operators.read_with_offset()?;
+
+        let instruction_offset = move || u32::try_from(op_offset - code_start).unwrap_or(u32::MAX);
 
         // `unwrap()` not used in case `read_with_offset` erroneously returns too many
         // operators.
@@ -166,21 +168,21 @@ fn convert_impl(
         }
 
         macro_rules! un_op {
-            ($name:ident) => {{
+            ($name:ident $({ $($init:tt)+ })?) => {{
                 let c_1 = builder.pop_wasm_operand();
                 builder.push_wasm_operand(crate::ast::Expr::UnaryOperator {
-                    kind: crate::ast::UnOp::$name,
+                    kind: crate::ast::UnOp::$name $({ $($init)+ })?,
                     c_1,
                 })?;
             }};
         }
 
         macro_rules! bin_op {
-            ($name:ident) => {{
+            ($name:ident $({ $($init:tt)+ })?) => {{
                 let c_2 = builder.pop_wasm_operand();
                 let c_1 = builder.pop_wasm_operand();
                 builder.push_wasm_operand(crate::ast::Expr::BinaryOperator {
-                    kind: crate::ast::BinOp::$name,
+                    kind: crate::ast::BinOp::$name $({ $($init)+ })?,
                     c_1,
                     c_2,
                 })?;
@@ -190,7 +192,9 @@ fn convert_impl(
         macro_rules! bin_op_trapping {
             ($name:ident) => {{
                 builder.can_trap();
-                bin_op!($name);
+                bin_op!($name {
+                    offset: instruction_offset()
+                });
             }};
         }
 
@@ -204,6 +208,7 @@ fn convert_impl(
                     kind: $kind,
                     address,
                     offset: $memarg.offset,
+                    instruction_offset: instruction_offset(),
                 })?;
             }};
         }
@@ -220,6 +225,7 @@ fn convert_impl(
                     address,
                     value,
                     offset: $memarg.offset,
+                    instruction_offset: instruction_offset(),
                 })?;
             }};
         }
@@ -229,7 +235,7 @@ fn convert_impl(
                 builder.can_trap();
                 builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
                 builder.emit_statement(crate::ast::Statement::Unreachable {
-                    offset: u32::try_from(op_offset - body.range().start).unwrap_or(u32::MAX),
+                    offset: instruction_offset(),
                 })?;
             }
             Operator::Nop => (),
@@ -411,7 +417,11 @@ fn convert_impl(
                 builder.needs_self();
 
                 if result_count == 1 {
-                    builder.push_wasm_operand(crate::ast::Expr::Call { callee, arguments })?;
+                    builder.push_wasm_operand(crate::ast::Expr::Call {
+                        callee,
+                        arguments,
+                        offset: instruction_offset(),
+                    })?;
                 } else {
                     // Multiple results are translated into Rust tuples, which need to be destructured.
                     let results =
@@ -426,6 +436,7 @@ fn convert_impl(
                         callee,
                         arguments,
                         results,
+                        offset: instruction_offset(),
                     })?;
 
                     builder.push_block_results(result_count)?;
@@ -618,37 +629,53 @@ fn convert_impl(
             Operator::I32WrapI64 => un_op!(I32WrapI64),
             Operator::I32TruncF32S => {
                 builder.can_trap();
-                un_op!(I32TruncF32S);
+                un_op!(I32TruncF32S {
+                    offset: instruction_offset()
+                });
             }
             Operator::I32TruncF32U => {
                 builder.can_trap();
-                un_op!(I32TruncF32U)
+                un_op!(I32TruncF32U {
+                    offset: instruction_offset()
+                })
             }
             Operator::I32TruncF64S => {
                 builder.can_trap();
-                un_op!(I32TruncF64S)
+                un_op!(I32TruncF64S {
+                    offset: instruction_offset()
+                })
             }
             Operator::I32TruncF64U => {
                 builder.can_trap();
-                un_op!(I32TruncF64U)
+                un_op!(I32TruncF64U {
+                    offset: instruction_offset()
+                })
             }
             Operator::I64ExtendI32S => un_op!(I64ExtendI32S),
             Operator::I64ExtendI32U => un_op!(I64ExtendI32U),
             Operator::I64TruncF32S => {
                 builder.can_trap();
-                un_op!(I64TruncF32S)
+                un_op!(I64TruncF32S {
+                    offset: instruction_offset()
+                })
             }
             Operator::I64TruncF32U => {
                 builder.can_trap();
-                un_op!(I64TruncF32U)
+                un_op!(I64TruncF32U {
+                    offset: instruction_offset()
+                })
             }
             Operator::I64TruncF64S => {
                 builder.can_trap();
-                un_op!(I64TruncF64S)
+                un_op!(I64TruncF64S {
+                    offset: instruction_offset()
+                })
             }
             Operator::I64TruncF64U => {
                 builder.can_trap();
-                un_op!(I64TruncF64U)
+                un_op!(I64TruncF64U {
+                    offset: instruction_offset()
+                })
             }
             Operator::F32ConvertI32S | Operator::F32ConvertI64S => un_op!(F32ConvertIxxS),
             Operator::F32ConvertI32U => un_op!(F32ConvertI32U),
@@ -721,7 +748,6 @@ impl<'wasm> Code<'wasm> {
     pub(in crate::convert) fn convert(
         self,
         allocations: &crate::Allocations,
-        options: &crate::Convert<'_>,
         types: &wasmparser::types::Types,
     ) -> crate::Result<(Attributes, Definition)> {
         use anyhow::Context;
@@ -732,7 +758,7 @@ impl<'wasm> Code<'wasm> {
 
         let index = validator.index();
 
-        convert_impl(allocations, options, types, self.body, validator)
+        convert_impl(allocations, types, self.body, validator)
             .with_context(|| format!("could not convert function #{index}"))
     }
 }
