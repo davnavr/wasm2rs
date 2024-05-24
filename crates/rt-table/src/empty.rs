@@ -64,6 +64,15 @@ impl<E: crate::TableElement> crate::Table<E> for EmptyTable {
         }
     }
 
+    fn fill(&self, idx: u32, len: u32, elem: E) -> BoundsCheck<()> {
+        let _ = elem;
+        if idx == 0 && len == 0 {
+            Ok(())
+        } else {
+            Err(BoundsCheckError)
+        }
+    }
+
     #[cfg(feature = "alloc")]
     fn to_boxed_slice(&self, idx: u32, len: u32) -> BoundsCheck<alloc::boxed::Box<[E]>> {
         if idx == 0 && len == 0 {

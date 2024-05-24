@@ -186,7 +186,29 @@ where
         })
 }
 
-//fn fill(table: &T, idx: i32, elem: E, len: i32) -> Result<(), E>
+/// This implements the [`table.fill`] instruction.
+///
+/// For more information, see the documentation for the [`Table::fill()`] method.
+///
+/// [`table.fill`]: https://webassembly.github.io/spec/core/syntax/instructions.html#table-instructions
+pub fn fill<const TABLE: u32, R, T, E>(
+    table: &T,
+    idx: i32,
+    elem: R,
+    len: i32,
+    frame: Option<&'static WasmFrame>,
+) -> Result<(), E>
+where
+    R: TableElement,
+    T: Table<R> + ?Sized,
+    E: Trap<AccessError>,
+{
+    let index = idx as u32;
+    let length = len as u32;
+    table
+        .fill(index, length, elem)
+        .map_err(|BoundsCheckError| trap_access_error(TABLE, index.saturating_add(length), frame))
+}
 
 /// This implements the [`table.set`] instruction.
 ///

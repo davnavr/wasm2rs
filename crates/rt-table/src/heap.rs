@@ -1,4 +1,4 @@
-use crate::NullableTableElement;
+use crate::{BoundsCheck, BoundsCheckError, NullableTableElement};
 use core::{cell::Cell, ptr::NonNull};
 
 /// A [`Table`] implementation backed by a heap allcation.
@@ -215,24 +215,24 @@ impl<E: NullableTableElement> crate::AnyTable for HeapTable<E> {
 }
 
 impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
-    fn get(&self, idx: u32) -> crate::BoundsCheck<E> {
+    fn get(&self, idx: u32) -> BoundsCheck<E> {
         // SAFETY: no `try_grow()` calls in this method.
         let elements = unsafe { self.as_slice_of_cells() };
 
         let cell = elements
             .get(crate::index_to_usize(idx)?)
-            .ok_or(crate::BoundsCheckError)?;
+            .ok_or(BoundsCheckError)?;
 
         Ok(crate::swap_guard::Guard::access(cell).clone())
     }
 
-    fn replace(&self, idx: u32, elem: E) -> crate::BoundsCheck<E> {
+    fn replace(&self, idx: u32, elem: E) -> BoundsCheck<E> {
         // SAFETY: no `try_grow()` calls in this method.
         let elements = unsafe { self.as_slice_of_cells() };
 
         Ok(elements
             .get(crate::index_to_usize(idx)?)
-            .ok_or(crate::BoundsCheckError)?
+            .ok_or(BoundsCheckError)?
             .replace(elem))
     }
 
@@ -247,13 +247,13 @@ impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
         cell.get_mut()
     }
 
-    fn set(&self, idx: u32, elem: E) -> crate::BoundsCheck<()> {
+    fn set(&self, idx: u32, elem: E) -> BoundsCheck<()> {
         // SAFETY: no `try_grow()` calls in this method.
         let elements = unsafe { self.as_slice_of_cells() };
 
         elements
             .get(crate::index_to_usize(idx)?)
-            .ok_or(crate::BoundsCheckError)?
+            .ok_or(BoundsCheckError)?
             .set(elem);
 
         Ok(())
@@ -263,11 +263,7 @@ impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
         // SAFETY: no `try_grow()` calls in this method.
         let elements = unsafe { self.as_slice_of_cells() };
 
-        let dst = elements
-            .get(crate::index_to_usize(idx)?..)
-            .and_then(|slice| slice.get(..src.len()))
-            .ok_or(crate::BoundsCheckError)?;
-
+        let dst = crate::index_into_slice(elements, idx, src.len())?;
         for (d, s) in dst.iter().zip(src.iter().cloned()) {
             d.set(s);
         }
@@ -279,13 +275,25 @@ impl<E: NullableTableElement> crate::Table<E> for HeapTable<E> {
         // SAFETY: no `try_grow()` calls in this method.
         let elements = unsafe { self.as_slice_of_cells() };
 
-        let src = elements
-            .get(crate::index_to_usize(idx)?..)
-            .and_then(|slice| slice.get(..dst.len()))
-            .ok_or(crate::BoundsCheckError)?;
-
+        let src = crate::index_into_slice(elements, idx, dst.len())?;
         for (d, s) in dst.iter_mut().zip(src) {
             *d = crate::swap_guard::Guard::access(s).clone();
+        }
+
+        Ok(())
+    }
+
+    fn fill(&self, idx: u32, len: u32, elem: E) -> wasm2rs_rt_core::BoundsCheck<()> {
+        // SAFETY: no `try_grow()` calls in this method.
+        let elements = unsafe { self.as_slice_of_cells() };
+
+        let dst = crate::index_into_slice(elements, idx, len)?;
+        if let Some((last, head)) = dst.split_last() {
+            for cell in head {
+                cell.set(elem.clone());
+            }
+
+            last.set(elem);
         }
 
         Ok(())

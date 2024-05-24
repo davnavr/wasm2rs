@@ -48,6 +48,18 @@ fn index_to_usize(idx: u32) -> BoundsCheck<usize> {
     usize::try_from(idx).map_err(|_| crate::BoundsCheckError)
 }
 
+fn index_into_slice<T>(
+    elements: &[T],
+    index: impl TryInto<usize>,
+    length: impl TryInto<usize>,
+) -> BoundsCheck<&[T]> {
+    index
+        .try_into()
+        .ok()
+        .and_then(|start| elements.get(start..)?.get(..length.try_into().ok()?))
+        .ok_or(BoundsCheckError)
+}
+
 /// Trait for common operations shared by [`Table`]s of all element types.
 pub trait AnyTable {
     /// Returns the current number of elements in the table.
@@ -209,6 +221,35 @@ pub trait Table<E: TableElement>: AnyTable {
     /// [`E::clone()`]: Clone::clone()
     fn clone_within(&self, dst_idx: u32, src_idx: u32, len: u32) -> BoundsCheck<()> {
         default_clone_from_conservative(self, self, dst_idx, src_idx, len)
+    }
+
+    /// Fills a range with the [`clone`]s of the given element.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the range of indices `idx..(idx + len))` is not in bounds.
+    ///
+    /// [`clone`]: Clone::clone()
+    fn fill(&self, idx: u32, len: u32, elem: E) -> BoundsCheck<()> {
+        // `Cow<E>` could be used for `elem` if it was available in `core`, however, such a change
+        // would only benefit the (expected to be rare) case where `len == 0`.
+
+        let end_idx = match idx.checked_add(len) {
+            Some(sum) if sum < self.size() => sum,
+            _ => return Err(BoundsCheckError),
+        };
+
+        if len > 0 {
+            let last_idx = end_idx - 1;
+            for i in idx..last_idx {
+                self.set(i, elem.clone())?;
+            }
+
+            // Optimization, don't needlessly copy the last element.
+            self.set(last_idx, elem)?;
+        }
+
+        Ok(())
     }
 
     /// Copies elements (calling [`E::clone()`]) from the table starting at the specified index,
