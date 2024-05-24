@@ -115,21 +115,24 @@ impl Arena {
     fn allocate_inner(&mut self, expr: crate::ast::Expr) -> Result<ExprId, ArenaError> {
         use crate::ast::{Expr, Literal};
 
+        macro_rules! try_encode {
+            ($encode:expr) => {
+                if let Some(encoded) = $encode {
+                    return Ok(encoded);
+                }
+            };
+        }
+
         // Check if a compact encoding is available.
         match &expr {
             Expr::Literal(literal) => match literal {
-                Literal::I32(i) => {
-                    if let Some(encoded) = ExprId::from_i32(*i as u32) {
-                        return Ok(encoded);
-                    }
-                }
-                _ => (), // TODO: Implement encoding of other types of literals.
+                Literal::I32(value) => try_encode!(ExprId::from_i32(*value)),
+                Literal::I64(value) => try_encode!(ExprId::from_i64(*value)),
+                Literal::F32(bits) => try_encode!(ExprId::from_f32(*bits)),
+                Literal::F64(bits) => try_encode!(ExprId::from_f64(*bits)),
             },
-            Expr::Temporary(temporary) => {
-                if let Some(encoded) = ExprId::from_temporary(*temporary) {
-                    return Ok(encoded);
-                }
-            }
+            Expr::Temporary(temporary) => try_encode!(ExprId::from_temporary(*temporary)),
+            Expr::GetLocal(local) => try_encode!(ExprId::from_local(*local)),
             _ => (),
         }
 
@@ -146,11 +149,11 @@ impl Arena {
     }
 
     pub(crate) fn get(&self, id: ExprId) -> crate::ast::Expr {
-        use crate::ast::{Literal, DecodeExprId};
+        use crate::ast::DecodeExprId;
 
         match DecodeExprId::from(id) {
             DecodeExprId::Index(index) => self.arena[index],
-            DecodeExprId::I32(i32) => Literal::I32(i32).into(),
+            DecodeExprId::Literal(literal) => literal.into(),
             DecodeExprId::Local(local) => crate::ast::Expr::GetLocal(local),
             DecodeExprId::Temporary(temporary) => crate::ast::Expr::Temporary(temporary),
         }

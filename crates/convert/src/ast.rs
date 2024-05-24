@@ -6,7 +6,7 @@ mod expr_id;
 pub(crate) mod print;
 
 pub(crate) use arena::{Arena, ArenaError, ExprListId};
-pub(crate) use expr_id::{ExprId, DecodeExprId};
+pub(crate) use expr_id::{DecodeExprId, ExprId};
 
 /// Represents a WebAssembly [*funcidx*], an index to a function.
 ///
