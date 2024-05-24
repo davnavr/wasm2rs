@@ -26,38 +26,20 @@ pub use wasm2rs_rt_core::{
 
 mod array;
 mod empty;
+mod error;
+mod helpers;
 //mod slice; // struct SliceTable<'a> // Lifetimes in wasm2rs modules are not yet supported
 mod swap_guard;
 
 pub use array::ArrayTable;
 pub use empty::EmptyTable;
+pub use error::{AccessError, AllocationError, LimitsMismatchError};
+pub use helpers::*;
 
 #[cfg(feature = "alloc")]
 mod heap;
 #[cfg(feature = "alloc")]
 pub use heap::HeapTable;
-
-/// Error type used when the [`size()`](AnyTable::size()) of a table could not be increased.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct AllocationError {
-    size: u32,
-}
-
-impl AllocationError {
-    /// The number of elements that was requested.
-    pub fn size(&self) -> u32 {
-        self.size
-    }
-}
-
-impl core::fmt::Display for AllocationError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "couldn't allocate {} elements", self.size)
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for AllocationError {}
 
 /// Constant value returned by [`AnyTable::grow()`] used to indicate failure.
 pub const GROW_FAILED: u32 = -1i32 as u32;
