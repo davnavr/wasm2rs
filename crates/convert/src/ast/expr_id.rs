@@ -31,21 +31,21 @@ impl ExprId {
     /// [`Arena`]: crate::ast::Arena
     const FLAG_INDEX: u32 = 0b000;
 
-    /// Encodes a [`Literal::I32`] ([`DecodeExprId::Literal`]).
-    /// - Bits 0 to 26 correspond to bits 0 to 26 of the encoded value.
-    /// - Bit 27 corresponds to bits 27 to 30 of the encoded value.
-    /// - Bit 28 corresponds to bit 31 of the encoded value.
+    /// Encodes a [`Literal::I32`] or a [`Literal::I64`] ([`DecodeExprId::Literal`]).
+    /// - Bit 28 is set by [`ExprId::ENCODE_INT_IS_I64`].
+    /// - Bits 0 to 25 correspond to bits 0 to 25 of the encoded value.
+    /// - If a [`Literal::I32`] is being encoded:
+    ///   - Bit 26 corresponds to bits 26 to 30 of the encoded value.
+    ///   - Bit 27 corresponds to bit 31 of the encoded value.
+    /// - If a [`Literal::I64`] is being encoded:
+    ///   - Bit 26 corresponds to bits 26 to 62 of the encoded value.
+    ///   - Bit 27 corresponds to bit 63 of the encoded value.
     ///
     /// [`Literal::I32`]: crate::ast::Literal::I32
-    const FLAG_I32: u32 = 0b001;
-
-    /// Encodes a [`Literal::I64`] ([`DecodeExprId::Literal`]).
-    /// - Bits 0 to 26 correspond to bits 0 to 26 of the encoded value.
-    /// - Bit 27 corresponds to bits 27 to 62 of the encoded value.
-    /// - Bit 28 corresponds to bit 63 of the encoded value.
-    ///
     /// [`Literal::I64`]: crate::ast::Literal::I64
-    const FLAG_I64: u32 = 0b010;
+    const FLAG_INT: u32 = 0b001;
+
+    // const FLAG_RESERVED: u32 = 0b010;
 
     /// Encodes a [`Literal::F32`] or a [`Literal::F64`] ([`DecodeExprId::Literal`]):
     /// - Bit 28 is set by [`ExprId::ENCODE_FLOAT_IS_F64`].
@@ -127,56 +127,62 @@ impl ExprId {
         }
     }
 
-    const ENCODE_I32_GET_LOW_BITS: u32 = 0x07FF_FFFF;
-    const ENCODE_I32_GET_MIDDLE_BITS: u32 = 0x7800_0000;
-    const ENCODE_I32_GET_HIGH_BIT: u32 = 0x8000_0000;
-    const ENCODE_I32_SET_MIDDLE: u32 = 1 << 27;
-    const ENCODE_I32_SET_HIGH_BIT: u32 = 1 << 28;
+    const ENCODE_INT_GET_LOW_BITS: u32 = 0x03FF_FFFF;
+    const ENCODE_INT_32_GET_MIDDLE_BITS: u32 = 0x7C00_0000;
+    const ENCODE_INT_32_GET_HIGH_BIT: u32 = 0x8000_0000;
+    const ENCODE_INT_SET_MIDDLE: u32 = 1 << 26;
+    const ENCODE_INT_SET_HIGH_BIT: u32 = 1 << 27;
 
-    /// See [`ExprId::FLAG_I32`] for more details.
+    /// See [`ExprId::FLAG_INT`] for more details.
     pub(in crate::ast) const fn from_i32(value: i32) -> Option<Self> {
         let value = value as u32;
 
-        // Ensure bits 27 to 30 have the same value.
-        if (value & Self::ENCODE_I32_GET_MIDDLE_BITS) ^ Self::ENCODE_I32_GET_MIDDLE_BITS != 0 {
+        // Ensure bits 26 to 30 have the same value.
+        if (value & Self::ENCODE_INT_32_GET_MIDDLE_BITS) ^ Self::ENCODE_INT_32_GET_MIDDLE_BITS != 0
+        {
             None
         } else {
-            let mut bits = value & Self::ENCODE_I32_GET_LOW_BITS;
+            let mut bits = value & Self::ENCODE_INT_GET_LOW_BITS;
 
-            if value & Self::ENCODE_I32_GET_MIDDLE_BITS != 0 {
-                bits |= Self::ENCODE_I32_SET_MIDDLE;
+            if value & Self::ENCODE_INT_32_GET_MIDDLE_BITS != 0 {
+                bits |= Self::ENCODE_INT_SET_MIDDLE;
             }
 
-            if value & Self::ENCODE_I32_GET_HIGH_BIT != 0 {
-                bits |= Self::ENCODE_I32_SET_HIGH_BIT;
+            if value & Self::ENCODE_INT_32_GET_HIGH_BIT != 0 {
+                bits |= Self::ENCODE_INT_SET_HIGH_BIT;
             }
 
-            Some(Self::new(Self::FLAG_I32, bits))
+            Some(Self::new(Self::FLAG_INT, bits))
         }
     }
 
-    const ENCODE_I64_GET_MIDDLE_BITS: u64 = 0x7FFF_FFFF_F800_0000;
-    const ENCODE_I64_GET_HIGH_BIT: u64 = 0x8000_0000_0000_0000;
+    /// Indicates that a [`Literal::I64`] is encoded.
+    ///
+    /// [`Literal::I64`]: crate::ast::Literal::I64
+    const ENCODE_INT_IS_I64: u32 = 1 << 28;
+    const ENCODE_INT_64_GET_MIDDLE_BITS: u64 = 0x7FFF_FFFF_F800_0000;
+    const ENCODE_INT_64_GET_HIGH_BIT: u64 = 0x8000_0000_0000_0000;
 
-    /// See [`ExprId::FLAG_I64`] for more details.
+    /// See [`ExprId::FLAG_INT`] for more details.
     pub(in crate::ast) const fn from_i64(value: i64) -> Option<Self> {
         let value = value as u64;
 
-        // Ensure bits 27 to 62 have the same value.
-        if (value & Self::ENCODE_I64_GET_MIDDLE_BITS) ^ Self::ENCODE_I64_GET_MIDDLE_BITS != 0 {
+        // Ensure bits 26 to 62 have the same value.
+        if (value & Self::ENCODE_INT_64_GET_MIDDLE_BITS) ^ Self::ENCODE_INT_64_GET_HIGH_BIT != 0 {
             None
         } else {
-            let mut bits = (value as u32) & Self::ENCODE_I32_GET_LOW_BITS;
+            let mut bits =
+                Self::ENCODE_INT_IS_I64 | ((value as u32) & Self::ENCODE_INT_GET_LOW_BITS);
 
-            if value & Self::ENCODE_I64_GET_MIDDLE_BITS != 0 {
-                bits |= Self::ENCODE_I32_SET_MIDDLE;
+            if value & Self::ENCODE_INT_64_GET_MIDDLE_BITS != 0 {
+                bits |= Self::ENCODE_INT_SET_MIDDLE;
             }
 
-            if value & Self::ENCODE_I64_GET_HIGH_BIT != 0 {
-                bits |= Self::ENCODE_I32_SET_HIGH_BIT;
+            if value & Self::ENCODE_INT_64_GET_HIGH_BIT != 0 {
+                bits |= Self::ENCODE_INT_SET_HIGH_BIT;
             }
 
-            Some(Self::new(Self::FLAG_I64, bits))
+            Some(Self::new(Self::FLAG_INT, bits))
         }
     }
 
@@ -273,31 +279,32 @@ impl From<ExprId> for DecodeExprId {
                 // Won't overflow, original index was also an `usize`.
                 Self::Index(encoded as usize)
             }
-            ExprId::FLAG_I32 => {
-                let mut value = encoded & ExprId::ENCODE_I32_GET_LOW_BITS;
+            ExprId::FLAG_INT => {
+                if encoded & ExprId::ENCODE_INT_IS_I64 != 0 {
+                    let mut value = (encoded & ExprId::ENCODE_INT_GET_LOW_BITS) as u64;
 
-                if encoded & ExprId::ENCODE_I32_SET_HIGH_BIT != 0 {
-                    value |= ExprId::ENCODE_I32_GET_HIGH_BIT;
+                    if encoded & ExprId::ENCODE_INT_SET_HIGH_BIT != 0 {
+                        value |= ExprId::ENCODE_INT_64_GET_HIGH_BIT;
+                    }
+
+                    if encoded & ExprId::ENCODE_INT_SET_MIDDLE != 0 {
+                        value |= ExprId::ENCODE_INT_64_GET_MIDDLE_BITS;
+                    }
+
+                    Self::Literal(Literal::I64(value as i64))
+                } else {
+                    let mut value = encoded & ExprId::ENCODE_INT_GET_LOW_BITS;
+
+                    if encoded & ExprId::ENCODE_INT_SET_HIGH_BIT != 0 {
+                        value |= ExprId::ENCODE_INT_32_GET_HIGH_BIT;
+                    }
+
+                    if encoded & ExprId::ENCODE_INT_SET_MIDDLE != 0 {
+                        value |= ExprId::ENCODE_INT_32_GET_MIDDLE_BITS;
+                    }
+
+                    Self::Literal(Literal::I32(value as i32))
                 }
-
-                if encoded & ExprId::ENCODE_I32_SET_MIDDLE != 0 {
-                    value |= ExprId::ENCODE_I32_GET_MIDDLE_BITS;
-                }
-
-                Self::Literal(Literal::I32(value as i32))
-            }
-            ExprId::FLAG_I64 => {
-                let mut value = (encoded & ExprId::ENCODE_I32_GET_LOW_BITS) as u64;
-
-                if encoded & ExprId::ENCODE_I32_SET_HIGH_BIT != 0 {
-                    value |= ExprId::ENCODE_I64_GET_HIGH_BIT;
-                }
-
-                if encoded & ExprId::ENCODE_I32_SET_MIDDLE != 0 {
-                    value |= ExprId::ENCODE_I64_GET_MIDDLE_BITS;
-                }
-
-                Self::Literal(Literal::I64(value as i64))
             }
             ExprId::FLAG_FLOAT => {
                 if encoded & ExprId::ENCODE_FLOAT_IS_F64 != 0 {
