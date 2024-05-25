@@ -180,11 +180,12 @@ impl<I: Address> HeapMemory<I> {
 fn slice_into<I, L>(memory: &[Cell<u8>], address: I, length: L) -> BoundsCheck<&[Cell<u8>]>
 where
     I: Address,
-    L: num_traits::AsPrimitive<usize>,
+    L: num_traits::PrimInt,
 {
-    memory
-        .get(address.as_()..)
-        .and_then(|start| start.get(..length.as_()))
+    address
+        .to_usize()
+        .and_then(|start| memory.get(start..))
+        .and_then(|start| start.get(..length.to_usize()?))
         .ok_or(BoundsCheckError)
 }
 
