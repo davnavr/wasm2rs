@@ -290,14 +290,18 @@ macro_rules! helpers {
             #[doc = ".\n\nIf the closure is too large, a heap allocation is used to ensure that"]
             #[doc = "it fits into [`RawFuncRefData`].\n\n"]
             #[doc = "# Panics\n\n"]
-            #[doc = "Panics if the `alloc` feature is not enabled when `size_of(C) >"]
-            #[doc = "size_of(RawFuncRefData) && align_of(C) > align_of(RawFuncRefData)`."]
+            #[doc = "Panics if the `alloc` feature is not enabled when\n"]
+            #[doc = "[`RawFuncRefData::can_store_inline::<C>()`] returns `false`.\n\n"]
+            #[doc = "[`RawFuncRefData::can_store_inline::<C>()`]: RawFuncRefData::can_store_inline()\n"]
             pub fn $from_closure<$($param,)* R, C>(closure: C) -> Self
             where
                 $($param: 'static,)*
                 C: Clone + Fn($($param),*) -> Result<R, E> + 'a,
                 R: 'static,
             {
+                #[cfg(feature = "alloc")]
+                use alloc::boxed::Box;
+
                 struct Debug {
                     type_name: fn() -> &'static str
                 }
@@ -309,51 +313,46 @@ macro_rules! helpers {
                 }
 
                 trait Constants<'a, $($param,)* R, E>: Sized {
+                    // These traits are automatically implemented by all (safe) function pointers.
                     type FuncPtr: Clone + Copy + Send + Sync + core::marker::Unpin
                         + core::panic::UnwindSafe + core::panic::RefUnwindSafe + 'static;
 
-                    const IS_INLINE: bool;
                     const SIGNATURE: FuncRefSignature;
                     const DEBUG: Debug;
                     const VTABLE: RawFuncRefVTable;
 
                     unsafe fn from_data(data: &RawFuncRefData) -> &Self {
-                        if Self::IS_INLINE {
-                            // SAFETY: `inline` had `Self` written into it.
-                            unsafe {
-                                &*(data.inline.as_ptr() as *const Self)
-                            }
-                        } else if cfg!(not(feature = "alloc")) {
-                            unreachable!()
-                        } else {
-                            // SAFETY: `IS_INLINE` is false here.
-                            // SAFETY: `pointer` originates from `Box::<Self>::into_raw`.
-                            unsafe {
-                                &*(data.pointer as *const Self)
-                            }
+                        if RawFuncRefData::can_store_inline::<Self>() {
+                            // SAFETY: check above ensures the closure was actually stored inline.
+                            return unsafe { data.as_ref_inline::<Self>() };
                         }
+
+                        #[cfg(not(feature = "alloc"))]
+                        unreachable!();
+
+                        #[cfg(feature = "alloc")]
+                        return {
+                            // SAFETY: check above ensures the closure was actually stored behind a pointer.
+                            let boxed_ptr: &Box<Self> = unsafe { data.as_by_ref::<Box<Self>>() };
+
+                            // `*const Box<T>` and `*const T` should both allow reading a `T`, but
+                            // just in case it is U.B., this gets the reference to `T` "properly".
+                            boxed_ptr.as_ref()
+                        };
                     }
 
                     fn into_data(closure: Self) -> RawFuncRefData {
-                        if Self::IS_INLINE {
-                            let mut data = RawFuncRefData::UNINIT;
-
-                            // SAFETY: `IS_INLINE` performs size and alignment check.
-                            unsafe {
-                                core::ptr::write(data.inline.as_mut_ptr() as *mut Self, closure);
-                            }
-
-                            data
-                        } else {
+                        match RawFuncRefData::try_from_inline(closure) {
+                            Ok(data) => data,
                             #[cfg(not(feature = "alloc"))]
-                            closure_requires_heap_allocation(core::alloc::Layout::new::<Self>());
-
+                            Err(_) => {
+                                closure_requires_heap_allocation(core::alloc::Layout::new::<Self>())
+                            }
                             #[cfg(feature = "alloc")]
-                            return {
-                                let boxed = alloc::boxed::Box::<Self>::new(closure);
-                                let pointer = alloc::boxed::Box::into_raw(boxed) as *const ();
-                                RawFuncRefData { pointer }
-                            };
+                            Err(closure) => {
+                                let boxed = Box::<Self>::new(closure);
+                                RawFuncRefData::from_mut_ptr::<Self>(Box::into_raw(boxed))
+                            },
                         }
                     }
                 }
@@ -367,12 +366,6 @@ macro_rules! helpers {
                 {
                     type FuncPtr = unsafe fn(&RawFuncRefData $(, $param)*) -> Result<R, E>;
 
-                    const IS_INLINE: bool = {
-                        let closure = core::alloc::Layout::new::<C>();
-                        let data = core::alloc::Layout::new::<RawFuncRefData>();
-                        closure.size() <= data.size() && closure.align() <= data.align()
-                    };
-
                     const SIGNATURE: FuncRefSignature = FuncRefSignature::of::<Self::FuncPtr>();
 
                     const DEBUG: Debug = Debug { type_name: core::any::type_name::<C> };
@@ -381,7 +374,7 @@ macro_rules! helpers {
                         let invoke: Self::FuncPtr = |data $(, $argument)*| {
                             // SAFETY: `data` refers to a valid `Self`.
                             let me = unsafe { Self::from_data(data) };
-                            me($($argument),*)
+                            (me)($($argument),*)
                         };
 
                         let clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef = |data| {
@@ -391,32 +384,29 @@ macro_rules! helpers {
                         };
 
                         let drop: unsafe fn(data: RawFuncRefData);
-                        if C::IS_INLINE {
-                            drop = |mut data| {
-                                // SAFETY: `IS_INLINE` is true here.
-                                // SAFETY: `inline` contains valid instance of `Self`.
-                                unsafe {
-                                    core::ptr::drop_in_place(data.inline.as_mut_ptr() as *mut C)
-                                }
+                        if RawFuncRefData::can_store_inline::<C>() {
+                            drop = |data| {
+                                // SAFETY: check above ensures closure was stored inline.
+                                // SAFETY: `inline` contains valid instance of `C`.
+                                let _ = unsafe { data.read::<C>() };
                             };
                         } else {
-                            #[cfg(not(feature = "alloc"))]
-                            {
-                                drop = |_| unreachable!();
+                            #[cfg(feature = "alloc")]
+                            unsafe fn drop_behind_box<C>(data: RawFuncRefData) {
+                                // SAFETY: check above ensures a `*mut C` was stored.
+                                let raw = unsafe { data.read::<*mut C>() };
+
+                                // SAFETY: the pointer originates from a previous `Box::into_raw` call.
+                                let _ = unsafe { Box::from_raw(raw) };
                             }
 
                             #[cfg(feature = "alloc")]
                             {
-                                drop = |data| {
-                                    // SAFETY: `IS_INLINE` is false here.
-                                    // SAFETY: `inline` contains `*mut Self` originating from `Box::into_raw`.
-                                    let boxed = unsafe {
-                                        alloc::boxed::Box::from_raw(data.pointer as *mut () as *mut C)
-                                    };
-
-                                    core::mem::drop(boxed);
-                                };
+                                drop = drop_behind_box::<C>;
                             }
+
+                            #[cfg(not(feature = "alloc"))]
+                            unreachable!();
                         };
 
                         let debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug = |_| {
@@ -433,7 +423,7 @@ macro_rules! helpers {
                     };
                 }
 
-                // SAFETY: `VTABLE` should be implemented correctly.
+                // SAFETY: `VTABLE` is implemented correctly.
                 unsafe {
                     Self::from_raw(RawFuncRef::new(C::into_data(closure), &C::VTABLE))
                 }
@@ -472,25 +462,37 @@ impl<E> Clone for FuncRef<'_, E> {
 
 impl<E> core::fmt::Debug for FuncRef<'_, E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match &self.func {
-            Some(func) => {
-                // SAFETY: ensured by implementor of `debug` in `RawFuncRef`
-                let debug = unsafe { (func.vtable().debug)(func.data()) };
+        if let Some(func) = &self.func {
+            // SAFETY: ensured by implementor of `debug` in `RawFuncRef`
+            let debug = unsafe { (func.vtable().debug)(func.data()) };
 
-                f.debug_struct("FuncRef")
-                    .field("function", debug)
-                    .field("signature", func.vtable().signature)
-                    .finish()
-            }
-            None => {
-                #[derive(Clone, Copy, Debug)]
-                struct Null;
+            f.debug_struct("FuncRef")
+                .field("function", debug)
+                .field("signature", func.vtable().signature)
+                .finish()
+        } else {
+            #[derive(Clone, Copy, Debug)]
+            struct Null;
 
-                f.debug_tuple("FuncRef").field(&Null).finish()
-            }
+            f.debug_tuple("FuncRef").field(&Null).finish()
         }
     }
 }
+
+impl<E> PartialEq for FuncRef<'_, E> {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.func, &other.func) {
+            (None, None) => true,
+            (Some(self_data), Some(other_data)) => {
+                core::ptr::eq(self_data.vtable(), other_data.vtable())
+                    && self_data.data().memcmp(other_data.data())
+            }
+            _ => false,
+        }
+    }
+}
+
+impl<E> Eq for FuncRef<'_, E> {}
 
 impl<E> Drop for FuncRef<'_, E> {
     fn drop(&mut self) {
@@ -500,4 +502,10 @@ impl<E> Drop for FuncRef<'_, E> {
             unsafe { (func.vtable().drop)(*func.data()) }
         }
     }
+}
+
+impl<E> wasm2rs_rt_core::table::TableElement for FuncRef<'_, E> {}
+
+impl<E> wasm2rs_rt_core::table::NullableTableElement for FuncRef<'_, E> {
+    const NULL: Self = <Self>::NULL;
 }

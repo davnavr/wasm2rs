@@ -5,7 +5,7 @@
 /// Trait for values that can be stored in [`Table`]s.
 ///
 /// [`Table`]: wasm2rs-rt-table::Table
-pub trait TableElement: Clone + PartialEq {}
+pub trait TableElement: Clone + Eq {}
 
 /// Trait for values that can be stored in [`Table`]s with a well defined [`NULL`] value.
 ///
