@@ -63,6 +63,9 @@ pub trait Address:
     const GROW_FAILED: Self;
 
     /// Equivalent to `value as Self`.
+    fn cast_from_u32(value: u32) -> Self;
+
+    /// Equivalent to `value as Self`.
     fn cast_from_usize(value: usize) -> Self;
 
     /// Equivalent to `value as Self`.
@@ -74,6 +77,10 @@ impl Address for u32 {
 
     const MAX_PAGE_COUNT: u32 = 65536; // crate::PAGE_SIZE * crate::PAGE_SIZE = u32::MAX + 1
     const GROW_FAILED: u32 = -1i32 as u32;
+
+    fn cast_from_u32(value: u32) -> Self {
+        value
+    }
 
     fn cast_from_usize(value: usize) -> u32 {
         value as u32
@@ -89,6 +96,10 @@ impl Address for u64 {
 
     const MAX_PAGE_COUNT: u64 = 281474976710656; // crate::PAGE_SIZE * MAX_PAGE_COUNT = u64::MAX + 1
     const GROW_FAILED: u64 = -1i64 as u64;
+
+    fn cast_from_u32(value: u32) -> Self {
+        value as u64
+    }
 
     fn cast_from_usize(value: usize) -> u64 {
         value as u64

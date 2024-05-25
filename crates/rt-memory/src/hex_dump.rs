@@ -26,7 +26,7 @@ impl<'a, I: Address, M: Memory<I>> From<&'a M> for HexDump<'a, I, M> {
 impl<'a, I: Address, M: Memory<I>> core::fmt::UpperHex for HexDump<'a, I, M> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let sixteen: I = <I as From<u8>>::from(16u8);
-        let size = self.memory.size();
+        let size: I = self.memory.size() * I::cast_from_u32(crate::PAGE_SIZE);
         let width = size.checked_ilog(sixteen).unwrap_or_default().max(7) as usize;
 
         write!(f, "{: <width$}", "Address")?;
