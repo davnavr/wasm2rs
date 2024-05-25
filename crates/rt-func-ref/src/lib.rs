@@ -302,23 +302,12 @@ macro_rules! helpers {
                 #[cfg(feature = "alloc")]
                 use alloc::boxed::Box;
 
-                struct Debug {
-                    type_name: fn() -> &'static str
-                }
-
-                impl core::fmt::Debug for Debug {
-                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-                        core::fmt::Debug::fmt(&(self.type_name)(), f)
-                    }
-                }
-
                 trait Constants<'a, $($param,)* R, E>: Sized {
                     // These traits are automatically implemented by all (safe) function pointers.
                     type FuncPtr: Clone + Copy + Send + Sync + core::marker::Unpin
                         + core::panic::UnwindSafe + core::panic::RefUnwindSafe + 'static;
 
                     const SIGNATURE: FuncRefSignature;
-                    const DEBUG: Debug;
                     const VTABLE: RawFuncRefVTable;
 
                     unsafe fn from_data(data: &RawFuncRefData) -> &Self {
@@ -368,8 +357,6 @@ macro_rules! helpers {
 
                     const SIGNATURE: FuncRefSignature = FuncRefSignature::of::<Self::FuncPtr>();
 
-                    const DEBUG: Debug = Debug { type_name: core::any::type_name::<C> };
-
                     const VTABLE: RawFuncRefVTable = {
                         let invoke: Self::FuncPtr = |data $(, $argument)*| {
                             // SAFETY: `data` refers to a valid `Self`.
@@ -377,13 +364,13 @@ macro_rules! helpers {
                             (me)($($argument),*)
                         };
 
-                        let clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef = |data| {
+                        let clone: unsafe fn(&RawFuncRefData) -> RawFuncRef = |data| {
                             // SAFETY: `data` refers to a valid `Self`.
                             let me = unsafe { Self::from_data(data) };
                             RawFuncRef::new(C::into_data(me.clone()), &C::VTABLE)
                         };
 
-                        let drop: unsafe fn(data: RawFuncRefData);
+                        let drop: unsafe fn(RawFuncRefData);
                         if RawFuncRefData::can_store_inline::<C>() {
                             drop = |data| {
                                 // SAFETY: check above ensures closure was stored inline.
@@ -409,8 +396,11 @@ macro_rules! helpers {
                             unreachable!();
                         };
 
-                        let debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug = |_| {
-                            &Self::DEBUG
+                        let debug: unsafe fn(&RawFuncRefData, &mut core::fmt::Formatter) -> core::fmt::Result = |data, f| {
+                            f.debug_struct("Closure")
+                                .field("type_name", &core::any::type_name::<C>())
+                                .field("data", data)
+                                .finish()
                         };
 
                         RawFuncRefVTable::new(
@@ -463,12 +453,20 @@ impl<E> Clone for FuncRef<'_, E> {
 impl<E> core::fmt::Debug for FuncRef<'_, E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if let Some(func) = &self.func {
-            // SAFETY: ensured by implementor of `debug` in `RawFuncRef`
-            let debug = unsafe { (func.vtable().debug)(func.data()) };
+            #[repr(transparent)]
+            struct Inner<'a>(&'a RawFuncRef);
+
+            impl core::fmt::Debug for Inner<'_> {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    // SAFETY: ensured by implementor of `debug` in `RawFuncRef`.
+                    unsafe { (self.0.vtable().debug)(self.0.data(), f) }
+                }
+            }
 
             f.debug_struct("FuncRef")
-                .field("function", debug)
+                .field("function", &Inner(func))
                 .field("signature", func.vtable().signature)
+                .field("vtable", &(func.vtable() as *const RawFuncRefVTable))
                 .finish()
         } else {
             #[derive(Clone, Copy, Debug)]

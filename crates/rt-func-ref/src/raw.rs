@@ -143,7 +143,9 @@ impl RawFuncRefData {
 
 impl core::fmt::Debug for RawFuncRefData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("RawFuncRefData").finish_non_exhaustive()
+        // SAFETY: All bit patterns for `pointer` are valid
+        let pointer = unsafe { self.pointer };
+        write!(f, "{pointer:0width$p}", width = INLINE_LEN * 2)
     }
 }
 
@@ -154,7 +156,8 @@ pub struct RawFuncRefVTable {
     pub(crate) signature: &'static crate::FuncRefSignature,
     pub(crate) clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef,
     pub(crate) drop: unsafe fn(data: RawFuncRefData),
-    pub(crate) debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug,
+    pub(crate) debug:
+        unsafe fn(data: &RawFuncRefData, f: *mut core::fmt::Formatter) -> core::fmt::Result,
 }
 
 impl RawFuncRefVTable {
@@ -201,14 +204,21 @@ impl RawFuncRefVTable {
         signature: &'static crate::FuncRefSignature,
         clone: unsafe fn(data: &RawFuncRefData) -> RawFuncRef,
         drop: unsafe fn(data: RawFuncRefData),
-        debug: unsafe fn(data: &RawFuncRefData) -> &dyn core::fmt::Debug,
+        debug: unsafe fn(data: &RawFuncRefData, f: &mut core::fmt::Formatter) -> core::fmt::Result,
     ) -> Self {
         Self {
             invoke,
             signature,
             clone,
             drop,
-            debug,
+            // Can't store `*mut core::fmt::Formatter` due to `const` requirements.
+            // SAFETY: `*mut Formatter` and `&mut Formatter` are ABI compatible.
+            debug: unsafe {
+                core::mem::transmute::<
+                    unsafe fn(&RawFuncRefData, &mut core::fmt::Formatter) -> core::fmt::Result,
+                    unsafe fn(&RawFuncRefData, *mut core::fmt::Formatter) -> core::fmt::Result,
+                >(debug)
+            },
         }
     }
 }
