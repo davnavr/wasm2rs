@@ -11,6 +11,8 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+pub mod nan;
+
 use core::fmt::Display;
 
 /// Error type used if an integer denominator is zero.

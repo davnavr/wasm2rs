@@ -4,7 +4,5 @@
 
 #![doc(hidden)]
 
-pub mod nan;
-
 #[path = "generated/include.wasm2.rs"]
 mod tests;
