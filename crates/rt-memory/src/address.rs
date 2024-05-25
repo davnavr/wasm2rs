@@ -14,14 +14,35 @@ mod private {
         + core::fmt::Display
         + core::fmt::UpperHex
         + core::fmt::LowerHex
+        + From<u8>
         + 'static
     {
+        fn checked_ilog(self, base: Self) -> Option<u32>;
     }
 
-    impl Integer for u32 {}
-    impl Integer for i32 {}
-    impl Integer for u64 {}
-    impl Integer for i64 {}
+    impl Integer for u32 {
+        fn checked_ilog(self, base: Self) -> Option<u32> {
+            <u32>::checked_ilog(self, base)
+        }
+    }
+
+    impl Integer for i32 {
+        fn checked_ilog(self, base: Self) -> Option<u32> {
+            <i32>::checked_ilog(self, base)
+        }
+    }
+
+    impl Integer for u64 {
+        fn checked_ilog(self, base: Self) -> Option<u32> {
+            <u64>::checked_ilog(self, base)
+        }
+    }
+
+    impl Integer for i64 {
+        fn checked_ilog(self, base: Self) -> Option<u32> {
+            <i64>::checked_ilog(self, base)
+        }
+    }
 }
 
 /// Trait for integer types that can be used as indices into linear memory.

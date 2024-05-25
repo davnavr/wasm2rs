@@ -22,6 +22,7 @@ mod address;
 mod empty;
 mod error;
 mod helpers;
+mod hex_dump;
 
 #[cfg(feature = "alloc")]
 mod heap;
@@ -30,6 +31,7 @@ pub use address::{Address, EffectiveAddress};
 pub use empty::EmptyMemory;
 pub use error::{AccessError, AllocationError, LimitsMismatchError};
 pub use helpers::*;
+pub use hex_dump::HexDump;
 #[doc(no_inline)]
 pub use wasm2rs_rt_core::{BoundsCheck, BoundsCheckError};
 
