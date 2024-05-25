@@ -8,7 +8,7 @@
 //! - [`wasm2rs_rt_core`], which contains code shared among other component crates. It's modules
 //!   are re-exported in the crate root.
 //! - [`wasm2rs_rt_func_ref`], which provides the implementation for WebAssembly function
-//!   references. It is re-exported as the [`func_ref`] module.
+//!   references. It contents are re-exported in the [`func_ref`] module.
 //! - [`wasm2rs_rt_math`], which contains functions for performing integer and floating-point
 //!   arithmetic. It is re-exported as the [`math`] module.
 //! - [`wasm2rs_rt_memory`], which provides the implementation for WebAssembly linear memory. It is
@@ -88,7 +88,6 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-pub use rt_func_ref as func_ref;
 pub use rt_math as math;
 pub use rt_memory as memory;
 pub use rt_stack as stack;
@@ -99,5 +98,6 @@ pub use wasm2rs_rt_core::{global, symbol, trace};
 pub use rt_simd as simd;
 
 pub mod embedder;
+pub mod func_ref;
 pub mod store;
 pub mod trap;
