@@ -531,16 +531,36 @@ pub(crate) enum Statement {
         kind: StoreKind,
         /// The dynamic address operand.
         ///
-        /// This is evaluated *before* the [`value`](Expr::MemoryStore::value) to store.
+        /// This is evaluated *first*.
         address: ExprId,
         /// The value to store.
         ///
-        /// This is evaluated *after* the [`address`](Expr::MemoryStore::address).
+        /// This is evaluated *after* the [`address`](Statement::MemoryStore::address).
         value: ExprId,
         /// An additional byte offset that is added to the `address`.
         ///
         /// This value must not exceed `u32::MAX` for 32-bit linear memories.
         offset: u64,
+        instruction_offset: u32,
+    },
+    /// Corresponds the [`memory.fill`]
+    ///
+    /// [`memory.fill`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory
+    MemoryFill {
+        /// The linear memory to fill.
+        memory: MemoryId,
+        /// The address to begin filling at.
+        ///
+        /// This is evaluated *first*.
+        address: ExprId,
+        /// The byte value used to fill the region of memory.
+        ///
+        /// This is evaluated *after* the [`address`](Statement::MemoryFill::address).
+        byte: ExprId,
+        /// The length, in bytes, of the region to fill.
+        ///
+        /// This is evaluated *after* the [`byte`](Statement::MemoryFill::byte).
+        length: ExprId,
         instruction_offset: u32,
     },
 }

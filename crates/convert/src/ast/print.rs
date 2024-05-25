@@ -759,6 +759,21 @@ fn write_indentation(
     }
 }
 
+/// Prints a Rust expression evaluating to something that can be passed to functions expecting a
+/// parameter implementing `wasm2rs_rt::memory::Memory`.
+fn print_memory(
+    out: &mut dyn crate::write::Write,
+    memory: crate::ast::MemoryId,
+    context: &crate::context::Context,
+) {
+    let memory_ident = context.memory_ident(memory);
+    if matches!(memory_ident, crate::context::MemoryIdent::Id(_)) {
+        out.write_str("&");
+    }
+
+    write!(out, "self.{memory_ident}");
+}
+
 pub(crate) fn print_statements(
     out: &mut dyn crate::write::Write,
     context: &Context,
@@ -1161,8 +1176,6 @@ pub(crate) fn print_statements(
             } => {
                 use crate::ast::StoreKind;
 
-                // TODO: Check if memory is imported.
-
                 out.write_str(paths::RT_MEM);
                 out.write_str("::");
                 out.write_str(match kind {
@@ -1175,13 +1188,8 @@ pub(crate) fn print_statements(
                 let memory64 = context.wasm.types.memory_at(memory.0).memory64;
                 out.write_str(if memory64 { "u64" } else { "u32" });
                 out.write_str(", _, _>(");
-                let memory_ident = context.wasm.memory_ident(memory);
-
-                if matches!(memory_ident, crate::context::MemoryIdent::Id(_)) {
-                    out.write_str("&");
-                }
-
-                write!(out, "self.{memory_ident}, {offset}, ",);
+                print_memory(out, memory, context.wasm);
+                write!(out, ", {offset}, ",);
                 address.print(out, false, context, Some(function));
                 out.write_str(", ");
 
@@ -1207,6 +1215,26 @@ pub(crate) fn print_statements(
                     _ => (),
                 }
 
+                out.write_str(", ");
+                print_frame(out, Some(function), instruction_offset, context.debug_info);
+                out.write_str(")?;");
+            }
+            Statement::MemoryFill {
+                memory,
+                address,
+                byte,
+                length,
+                instruction_offset,
+            } => {
+                out.write_str(paths::RT_MEM);
+                write!(out, "::fill::<{}, _, _, _>(", memory.0);
+                print_memory(out, memory, context.wasm);
+                out.write_str(", ");
+                address.print(out, false, context, Some(function));
+                out.write_str(", ");
+                byte.print(out, false, context, Some(function));
+                out.write_str(", ");
+                length.print(out, false, context, Some(function));
                 out.write_str(", ");
                 print_frame(out, Some(function), instruction_offset, context.debug_info);
                 out.write_str(")?;");

@@ -562,7 +562,20 @@ fn convert_impl(
                     delta,
                 })?;
             }
-            // Misc. memory instructions
+            Operator::MemoryFill { mem } => {
+                builder.needs_self();
+                builder.can_trap();
+                let length = builder.pop_wasm_operand();
+                let byte = builder.pop_wasm_operand();
+                let address = builder.pop_wasm_operand();
+                builder.emit_statement(crate::ast::Statement::MemoryFill {
+                    memory: crate::ast::MemoryId(mem),
+                    address,
+                    byte,
+                    length,
+                    instruction_offset: instruction_offset(),
+                })?;
+            }
             Operator::I32Const { value } => {
                 builder.push_wasm_operand(crate::ast::Literal::I32(value))?;
             }
