@@ -1107,11 +1107,12 @@ pub(crate) fn print_statements(
             Statement::BlockEnd { id, kind, results } => {
                 debug_assert!(!is_last);
 
-                if !results.is_empty() {
+                let is_loop = matches!(kind, crate::ast::BlockKind::Loop { .. });
+                if is_loop || !results.is_empty() {
                     write_indentation(out, indentation, indent_level);
                 }
 
-                if matches!(kind, crate::ast::BlockKind::Loop { .. }) {
+                if is_loop {
                     write!(out, "break {id}");
 
                     if !results.is_empty() {
@@ -1122,10 +1123,12 @@ pub(crate) fn print_statements(
                 if !results.is_empty() {
                     results.print(out, results.len() > 1, context, Some(function));
 
-                    if matches!(kind, crate::ast::BlockKind::Loop { .. }) {
+                    if is_loop {
                         out.write_str(";");
                     }
+                }
 
+                if is_loop || !results.is_empty() {
                     out.write_str("\n");
                 }
 
