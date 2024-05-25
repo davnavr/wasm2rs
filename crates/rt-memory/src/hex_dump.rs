@@ -39,19 +39,38 @@ impl<'a, I: Address, M: Memory<I>> core::fmt::UpperHex for HexDump<'a, I, M> {
         let mut address = I::ZERO;
         while address < size {
             let remaining = size - address;
-            let bytes = &mut bytes[..16usize.min(remaining.as_())];
-            if self.memory.copy_to_slice(address, bytes).is_err() {
+            let slice = &mut bytes[..16usize.min(remaining.as_())];
+            if self.memory.copy_to_slice(address, slice).is_err() {
                 break;
             }
 
-            write!(f, "{address:0width$X}")?;
+            write!(f, "{address:0width$X} ")?;
 
             for (i, b) in bytes.iter().enumerate() {
-                if i % 4 == 0 {
-                    f.write_str("  ")?;
+                if i > 0 {
+                    f.write_str(" ")?;
                 }
 
-                write!(f, "{b:02X}")?;
+                if i % 4 == 0 {
+                    f.write_str(" ")?;
+                }
+
+                if i < remaining.as_() {
+                    write!(f, "{b:02X}")?;
+                } else {
+                    f.write_str("  ")?;
+                }
+            }
+
+            f.write_str("  ")?;
+
+            // Write ASCII interpretation.
+            for b in bytes.iter() {
+                if b.is_ascii() && !b.is_ascii_control() {
+                    write!(f, "{}", *b as char)?;
+                } else {
+                    f.write_str(".")?;
+                }
             }
 
             writeln!(f)?;
