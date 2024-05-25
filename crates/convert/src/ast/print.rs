@@ -637,11 +637,14 @@ impl crate::ast::Expr {
                     LoadKind::F32 => out.write_str(" as u32)"),
                     LoadKind::F64 => out.write_str(" as u64)"),
                     LoadKind::AsI32 {
-                        storage_size: _,
+                        storage_size,
                         sign_extension,
                     } => {
                         if matches!(sign_extension, SignExtensionMode::Unsigned) {
-                            out.write_str(" as u32");
+                            out.write_str(match storage_size {
+                                crate::ast::I32StorageSize::I8 => " as u8",
+                                crate::ast::I32StorageSize::I16 => " as u16",
+                            });
                         }
 
                         out.write_str(" as i32");
@@ -651,11 +654,15 @@ impl crate::ast::Expr {
                         }
                     }
                     LoadKind::AsI64 {
-                        storage_size: _,
+                        storage_size,
                         sign_extension,
                     } => {
                         if matches!(sign_extension, SignExtensionMode::Unsigned) {
-                            out.write_str(" as u64");
+                            out.write_str(match storage_size {
+                                crate::ast::I64StorageSize::I8 => " as u8",
+                                crate::ast::I64StorageSize::I16 => " as u16",
+                                crate::ast::I64StorageSize::I32 => " as u32",
+                            });
                         }
 
                         out.write_str(" as i64");
