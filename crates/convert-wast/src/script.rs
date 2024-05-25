@@ -181,7 +181,58 @@ pub(crate) fn convert(
                 );
             }
             // WastDirective::Register
-            // WastDirective::Invoke
+            WastDirective::Invoke(wast::WastInvoke {
+                span,
+                module: None,
+                name,
+                args,
+            }) => {
+                write!(
+                    out,
+                    "\n    println!(\"{{:?}}\", current.{}(",
+                    wasm2rs_convert::ident::SafeIdent::from(name)
+                );
+
+                // Duplicated code.
+                for (i, arg) in args.into_iter().enumerate() {
+                    use wast::core::WastArgCore;
+
+                    if i > 0 {
+                        out.write_str(", ");
+                    }
+
+                    match arg {
+                        wast::WastArg::Core(core_arg) => match core_arg {
+                            WastArgCore::I32(n) => write!(out, "{n}i32"),
+                            WastArgCore::I64(n) => write!(out, "{n}i64"),
+                            WastArgCore::F32(z) => {
+                                write!(out, "f32::from_bits({:#010X}u32)", z.bits)
+                            }
+                            WastArgCore::F64(z) => {
+                                write!(out, "f64::from_bits({:#018X}u64)", z.bits)
+                            }
+                            WastArgCore::RefExtern(_)
+                            | WastArgCore::RefHost(_)
+                            | WastArgCore::RefNull(_) => out.write_str(
+                                "::core::todo!(\"reference type arguments not yet supported\")",
+                            ),
+                            WastArgCore::V128(_) => {
+                                out.write_str("todo!(\"V128 arguments not yet supported\")")
+                            }
+                        },
+                        wast::WastArg::Component(arg) => {
+                            let mut err = wast::Error::new(
+                                span,
+                                format!("compontent arguments are not supported: {arg:?}"),
+                            );
+                            err.set_text(script_text);
+                            return Err(anyhow::Error::new(err));
+                        }
+                    }
+                }
+
+                out.write_str("));\n");
+            }
             // // Quick and dirty code gen, better way is in old code, see /crates/spectest/test_case.rs
             WastDirective::AssertTrap {
                 span: assert_span,

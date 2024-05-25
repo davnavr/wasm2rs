@@ -29,6 +29,7 @@ test_spec: && test_spec_run
         -i ./tests/spec/testsuite/i64.wast \
         -i ./tests/spec/testsuite/int_exprs.wast \
         -i ./tests/spec/testsuite/int_literals.wast \
+        -i ./tests/spec/testsuite/memory_fill.wast \
         -i ./tests/spec/testsuite/traps.wast \
         --output-directory ./tests/spec/src/generated/
 
