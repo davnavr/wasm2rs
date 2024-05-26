@@ -26,6 +26,7 @@ test_spec run_flags='': && test_spec_run
     cargo run --features test-utils {{run_flags}} -- \
         test \
         -i ./crates/rt-spectest/tests/spec/testsuite/address.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/align.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/conversions.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/endianness.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/fac.wast \
