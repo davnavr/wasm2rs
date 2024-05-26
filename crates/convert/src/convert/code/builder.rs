@@ -36,29 +36,46 @@ impl Builder {
         &self.wasm_operand_stack
     }
 
+    /// Given `count` operands used as inputs into the given `loop`, this stores all of the
+    /// corresponding input [`Expr`]s into temporary local variables. Returns the list of
+    /// expressions corresponding to the initial inputs of the `loop`.
+    ///
+    /// This essentially replaces the top `count` [`Expr`]s on the stack with [`Expr::LoopInput`].
+    ///
+    /// [`Expr`]: crate::ast::Expr
+    /// [`Expr::LoopInput`]: crate::ast::Expr::LoopInput
     pub(super) fn wasm_operand_stack_move_loop_inputs(
         &mut self,
         r#loop: crate::ast::BlockId,
         count: usize,
     ) -> crate::Result<crate::ast::ExprListId> {
-        let inputs = self.wasm_operand_stack_pop_list(count)?;
-
         let operands_stack_height = self.wasm_operand_stack.len();
-        for (i, op) in self.wasm_operand_stack[operands_stack_height - count..]
-            .iter_mut()
-            .enumerate()
-        {
+        if cfg!(debug_assertions) && count > operands_stack_height {
+            anyhow::bail!(
+                "cannot move {count} loop inputs, operand stack height is {operands_stack_height}"
+            );
+        }
+
+        // Prevent loop inputs from being flushed.
+        self.spilled_wasm_operands += count;
+        self.flush_operands_to_temporaries()?;
+
+        let to_move = &mut self.wasm_operand_stack[operands_stack_height - count..];
+        let initial_inputs = self.ast_arena.allocate_many(to_move.iter().copied())?;
+
+        for (op, number) in to_move.iter_mut().zip(0u32..=u32::MAX) {
             *op = self
                 .ast_arena
                 .allocate(crate::ast::Expr::LoopInput(crate::ast::LoopInput {
                     r#loop,
-                    number: i as u32,
+                    number,
                 }))?;
         }
 
-        Ok(inputs)
+        Ok(initial_inputs)
     }
 
+    // Pops values from the operand stack until it has the given `height`.
     pub(super) fn wasm_operand_stack_truncate(&mut self, height: usize) -> crate::Result<()> {
         if !self.wasm_operand_stack.is_empty() {
             self.flush_operands_to_temporaries()?;
@@ -88,12 +105,13 @@ impl Builder {
         &mut self,
         count: usize,
     ) -> crate::Result<crate::ast::ExprListId> {
-        debug_assert!(
-            self.wasm_operand_stack.len() >= count,
-            "attempted to pop {count} values, but operand stack contained {} ({:?})",
-            self.wasm_operand_stack.len(),
-            self.wasm_operand_stack
-        );
+        if cfg!(debug_assertions) && count > self.wasm_operand_stack.len() {
+            anyhow::bail!(
+                "attempted to pop {count} values, but operand stack contained {} ({:?})",
+                self.wasm_operand_stack.len(),
+                self.wasm_operand_stack
+            );
+        }
 
         self.wasm_operand_stack_pop_to_height(self.wasm_operand_stack.len() - count)
     }

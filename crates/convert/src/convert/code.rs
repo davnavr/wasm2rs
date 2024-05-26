@@ -264,16 +264,6 @@ fn convert_impl(
                     results,
                     kind: crate::ast::BlockKind::Loop { inputs },
                 })?;
-
-                // Push the loops inputs back onto the stack
-                for number in 0u32..(input_count as u32) {
-                    builder.push_wasm_operand(crate::ast::Expr::LoopInput(
-                        crate::ast::LoopInput {
-                            r#loop: block_id,
-                            number,
-                        },
-                    ))?;
-                }
             }
             Operator::If { blockty } => {
                 let condition = builder.pop_wasm_operand();
@@ -714,7 +704,7 @@ fn convert_impl(
             _ => anyhow::bail!("translation of operation is not yet supported: {op:?}"),
         }
 
-        if !operators.eof() && cfg!(debug_assertions) {
+        if cfg!(debug_assertions) && !operators.eof() {
             // Ensure that the two operand stacks stay in sync
             let validator_height = validator.operand_stack_height() as usize;
             let builder_height = builder.wasm_operand_stack().len();
