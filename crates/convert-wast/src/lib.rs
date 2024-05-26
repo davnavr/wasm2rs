@@ -173,15 +173,16 @@ pub fn convert_to_output<'input, 'output>(
     inputs: &'input [TestFile],
     output: &(dyn Output<'output> + '_),
 ) -> Result<Vec<CowPath<'output>>, Vec<anyhow::Error>> {
-    use rayon::prelude::*;
-
+    #[cfg(feature = "rayon")]
     let string_pool = crossbeam_queue::ArrayQueue::<String>::new(rayon::current_num_threads());
 
+    #[cfg(feature = "rayon")]
     struct RentedString<'pool> {
         pool: &'pool crossbeam_queue::ArrayQueue<String>,
         string: String,
     }
 
+    #[cfg(feature = "rayon")]
     impl Drop for RentedString<'_> {
         fn drop(&mut self) {
             self.string.clear();
@@ -189,48 +190,76 @@ pub fn convert_to_output<'input, 'output>(
         }
     }
 
+    #[cfg(not(feature = "rayon"))]
+    let string_pool = std::cell::Cell::new(String::new());
+
+    #[cfg(not(feature = "rayon"))]
+    struct RentedString<'pool> {
+        pool: &'pool std::cell::Cell<String>,
+        string: String,
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    impl Drop for RentedString<'_> {
+        fn drop(&mut self) {
+            self.pool.replace(std::mem::take(&mut self.string));
+        }
+    }
+
     let conversion_allocations = wasm2rs_convert::Allocations::default();
-    let mut results = Vec::with_capacity(inputs.len());
+    let mut results = Vec::<anyhow::Result<_>>::with_capacity(inputs.len());
+
+    let translate_script = |test_file: &'input TestFile| -> anyhow::Result<CowPath<'output>> {
+        let mut input_buffer = RentedString {
+            pool: &string_pool,
+            #[cfg(feature = "rayon")]
+            string: string_pool.pop().unwrap_or_default(),
+            #[cfg(not(feature = "rayon"))]
+            string: string_pool.take(),
+        };
+
+        let mut input_read = std::fs::File::open(&test_file.input)
+            .with_context(|| format!("could not open input file {:?}", test_file.input))?;
+
+        std::io::Read::read_to_string(&mut input_read, &mut input_buffer.string)
+            .with_context(|| format!("could not open script file {:?}", test_file.input))?;
+
+        std::mem::drop(input_read);
+
+        let mut output_write = output
+            .create_script_file(&test_file.input)
+            .with_context(|| format!("could not create output file for {:?}", test_file.input))?;
+
+        script::convert(
+            &mut output_write.file,
+            output,
+            &test_file.input,
+            &input_buffer.string,
+            test_file.options,
+            &conversion_allocations,
+        )
+        .with_context(|| format!("could not translate script file {:?}", test_file.input))?;
+
+        Ok(output_write.path)
+    };
+
+    #[cfg(not(feature = "rayon"))]
+    {
+        results.extend(inputs.iter().map(translate_script));
+    }
 
     // This may not handle opening too many files at once correctly. However, the limit on
     // Linux (~1024) and Windows (~512) is far greater than the maximum number of threads typically
     // used by threadpools in `rayon`.
-    inputs
-        .par_iter()
-        .map(|test_file| -> anyhow::Result<CowPath<'output>> {
-            let mut input_buffer = RentedString {
-                pool: &string_pool,
-                string: string_pool.pop().unwrap_or_default(),
-            };
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
 
-            let mut input_read = std::fs::File::open(&test_file.input)
-                .with_context(|| format!("could not open input file {:?}", test_file.input))?;
-
-            std::io::Read::read_to_string(&mut input_read, &mut input_buffer.string)
-                .with_context(|| format!("could not open script file {:?}", test_file.input))?;
-
-            std::mem::drop(input_read);
-
-            let mut output_write =
-                output
-                    .create_script_file(&test_file.input)
-                    .with_context(|| {
-                        format!("could not create output file for {:?}", test_file.input)
-                    })?;
-
-            script::convert(
-                &mut output_write.file,
-                output,
-                &test_file.input,
-                &input_buffer.string,
-                test_file.options,
-                &conversion_allocations,
-            )
-            .with_context(|| format!("could not translate script file {:?}", test_file.input))?;
-
-            Ok(output_write.path)
-        })
-        .collect_into_vec(&mut results);
+        inputs
+            .par_iter()
+            .map(translate_script)
+            .collect_into_vec(&mut results);
+    }
 
     let mut errors = Vec::new();
     let mut successes = Vec::with_capacity(results.len());

@@ -5,10 +5,14 @@ version.workspace = true
 edition.workspace = true
 repository.workspace = true
 
+[features]
+default = ["rayon"]
+rayon = ["dep:rayon", "dep:crossbeam-queue"]
+
 [dependencies]
 anyhow = { workspace = true }
-crossbeam-queue = { workspace = true }
-rayon = { workspace = true }
+crossbeam-queue = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
 wasm2rs-convert = { path = "../convert", features = ["rayon", "zzz-internal-api"] }
 wast = { workspace = true }
 wasmparser = { workspace = true }
