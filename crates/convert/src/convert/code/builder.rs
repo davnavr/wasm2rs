@@ -75,6 +75,30 @@ impl Builder {
         Ok(initial_inputs)
     }
 
+    /// Flushes operands and returns a list containing the top `count` values in the operand stack,
+    /// **without** popping them.
+    ///
+    /// This is used when translating the `br_if` instruction.
+    pub(super) fn wasm_operand_stack_duplicate_many(
+        &mut self,
+        count: usize,
+    ) -> crate::Result<crate::ast::ExprListId> {
+        let operands_stack_height = self.wasm_operand_stack.len();
+        if cfg!(debug_assertions) && count > operands_stack_height {
+            anyhow::bail!(
+                "cannot duplicate {count} values, operand stack height is {operands_stack_height}"
+            );
+        }
+
+        self.flush_operands_to_temporaries()?;
+
+        Ok(self.ast_arena.allocate_many(
+            self.wasm_operand_stack[operands_stack_height - count..]
+                .iter()
+                .copied(),
+        )?)
+    }
+
     // Pops values from the operand stack until it has the given `height`.
     pub(super) fn wasm_operand_stack_truncate(&mut self, height: usize) -> crate::Result<()> {
         if !self.wasm_operand_stack.is_empty() {

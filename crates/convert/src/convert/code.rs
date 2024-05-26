@@ -70,13 +70,15 @@ fn convert_block_start(
     })
 }
 
+/// Calculates the destination of a branch instruction and the number of values that should be
+/// popped from the operand stack.
 fn calculate_branch_target(
     relative_depth: u32,
     function_type: &wasmparser::FuncType,
     validator: &FuncValidator,
-    builder: &mut builder::Builder,
+    builder: &builder::Builder,
     types: &wasmparser::types::Types,
-) -> crate::Result<(crate::ast::BranchTarget, crate::ast::ExprListId)> {
+) -> crate::Result<(crate::ast::BranchTarget, usize)> {
     let frame = validator
         .get_control_frame(relative_depth as usize)
         .unwrap();
@@ -101,7 +103,7 @@ fn calculate_branch_target(
         }
     };
 
-    Ok((target, builder.wasm_operand_stack_pop_list(popped_count)?))
+    Ok((target, popped_count))
 }
 
 #[derive(Debug)]
@@ -350,13 +352,15 @@ fn convert_impl(
                 }
             }
             Operator::Br { relative_depth } => {
-                let (target, values) = calculate_branch_target(
+                let (target, popped_count) = calculate_branch_target(
                     relative_depth,
                     func_type,
                     &validator,
                     &mut builder,
                     types,
                 )?;
+
+                let values = builder.wasm_operand_stack_pop_list(popped_count)?;
 
                 builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
                 builder.emit_statement(crate::ast::Statement::Branch {
@@ -367,7 +371,11 @@ fn convert_impl(
             }
             Operator::BrIf { relative_depth } => {
                 let condition = builder.pop_wasm_operand();
-                let (target, values) = calculate_branch_target(
+
+                // Allows values to be "reused" if the branch wasn't taken.
+                builder.flush_operands_to_temporaries()?;
+
+                let (target, popped_count) = calculate_branch_target(
                     relative_depth,
                     func_type,
                     &validator,
@@ -375,7 +383,9 @@ fn convert_impl(
                     types,
                 )?;
 
-                builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
+                // `br_if` doesn't "pop" the values if the branch wasn't taken.
+                let values = builder.wasm_operand_stack_duplicate_many(popped_count)?;
+
                 builder.emit_statement(crate::ast::Statement::Branch {
                     target,
                     values,

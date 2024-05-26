@@ -444,9 +444,11 @@ pub(crate) enum BlockKind<E = ExprId, L = ExprListId> {
     Block,
     Loop {
         /// The initial inputs to the loop before its first iteration.
-        inputs: L
+        inputs: L,
     },
-    If { condition: E },
+    If {
+        condition: E,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
