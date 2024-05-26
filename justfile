@@ -34,7 +34,9 @@ test_spec run_flags='': && test_spec_run
         -i ./crates/rt-spectest/tests/spec/testsuite/i64.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/int_exprs.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/int_literals.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/labels.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/memory_fill.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/switch.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/traps.wast \
         --output-directory ./crates/rt-spectest/tests/spec/converted/
 
