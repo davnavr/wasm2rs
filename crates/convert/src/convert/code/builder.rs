@@ -163,6 +163,10 @@ impl Builder {
         popped
     }
 
+    /// Returns a list pointer to the temporary variables that will store the results of the `block`.
+    ///
+    /// Callers must ensure [`Builder::flush_operands_to_temporaries()`] has been called before
+    /// calling this method.
     pub(super) fn get_block_results(
         &self,
         result_count: usize,
