@@ -16,14 +16,14 @@ pub enum TrapCause {
         #[allow(missing_docs)]
         error: crate::trap::UnreachableError,
     },
-    /// An attempt to convert a float value to an integer failed. This corresponds to a
-    /// [`math::ConversionToIntegerError`].
+    /// An attempt to convert a *NaN* float value to an integer failed. This corresponds to a
+    /// [`math::NanToIntegerError`].
     ///
-    /// [`math::ConversionToIntegerError`]: crate::math::ConversionToIntegerError
+    /// [`math::NanToIntegerError`]: crate::math::NanToIntegerError
     #[non_exhaustive]
     ConversionToInteger {
         #[allow(missing_docs)]
-        error: crate::math::ConversionToIntegerError,
+        error: crate::math::NanToIntegerError,
     },
     /// An integer operation attempted a division by zero. This corresponds to a
     /// [`math::DivisionByZeroError`].
@@ -266,9 +266,9 @@ impl Trap<crate::trap::UnreachableError> for TrapError {
     }
 }
 
-impl Trap<crate::math::ConversionToIntegerError> for TrapError {
+impl Trap<crate::math::NanToIntegerError> for TrapError {
     fn trap(
-        cause: crate::math::ConversionToIntegerError,
+        cause: crate::math::NanToIntegerError,
         frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
     ) -> Self {
         Self::new(TrapCause::ConversionToInteger { error: cause }, frame)
@@ -290,6 +290,22 @@ impl Trap<crate::math::IntegerOverflowError> for TrapError {
         frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
     ) -> Self {
         Self::new(TrapCause::IntegerOverflow { error: cause }, frame)
+    }
+}
+
+impl Trap<crate::math::FloatToIntegerError> for TrapError {
+    fn trap(
+        cause: crate::math::FloatToIntegerError,
+        frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
+    ) -> Self {
+        match cause {
+            rt_math::FloatToIntegerError::InvalidConversion => {
+                Self::trap(rt_math::NanToIntegerError, frame)
+            }
+            rt_math::FloatToIntegerError::Overflow => {
+                Self::trap(rt_math::IntegerOverflowError, frame)
+            }
+        }
     }
 }
 

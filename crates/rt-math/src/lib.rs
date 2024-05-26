@@ -24,10 +24,9 @@ pub struct DivisionByZeroError;
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct IntegerOverflowError;
 
-/// Error type used if an attempt to convert a floating point value to an integer would result in a
-/// value that is out of range.
+/// Error type used if an attempt was made to convert a *NaN* floating-point value to an integer.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct ConversionToIntegerError;
+pub struct NanToIntegerError;
 
 // Most of these error messages are taken from the WASM spec tests.
 impl Display for DivisionByZeroError {
@@ -42,7 +41,7 @@ impl Display for IntegerOverflowError {
     }
 }
 
-impl Display for ConversionToIntegerError {
+impl Display for NanToIntegerError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str("invalid conversion to integer")
     }
@@ -55,7 +54,7 @@ impl std::error::Error for DivisionByZeroError {}
 impl std::error::Error for IntegerOverflowError {}
 
 #[cfg(feature = "std")]
-impl std::error::Error for ConversionToIntegerError {}
+impl std::error::Error for NanToIntegerError {}
 
 /// Error type used when an integer division operation fails.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -64,6 +63,20 @@ pub enum IntegerDivisionError {
     DivisionByZero,
     /// See [`IntegerOverflowError`].
     Overflow,
+}
+
+impl From<DivisionByZeroError> for IntegerDivisionError {
+    fn from(error: DivisionByZeroError) -> Self {
+        let _ = error;
+        Self::DivisionByZero
+    }
+}
+
+impl From<IntegerOverflowError> for IntegerDivisionError {
+    fn from(error: IntegerOverflowError) -> Self {
+        let _ = error;
+        Self::Overflow
+    }
 }
 
 impl Display for IntegerDivisionError {
@@ -80,6 +93,49 @@ impl std::error::Error for IntegerDivisionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(match self {
             Self::DivisionByZero => &DivisionByZeroError,
+            Self::Overflow => &IntegerOverflowError,
+        })
+    }
+}
+
+/// Error type used when an attempt to convert a floating-point value to an integer would result in a
+/// value that is out of range, or the floating-point value was *NaN*.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum FloatToIntegerError {
+    /// See [`NanToIntegerError`].
+    InvalidConversion,
+    /// See [`IntegerOverflowError`].
+    Overflow,
+}
+
+impl From<NanToIntegerError> for FloatToIntegerError {
+    fn from(error: NanToIntegerError) -> Self {
+        let _ = error;
+        Self::InvalidConversion
+    }
+}
+
+impl From<IntegerOverflowError> for FloatToIntegerError {
+    fn from(error: IntegerOverflowError) -> Self {
+        let _ = error;
+        Self::Overflow
+    }
+}
+
+impl Display for FloatToIntegerError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InvalidConversion => Display::fmt(&NanToIntegerError, f),
+            Self::Overflow => Display::fmt(&IntegerOverflowError, f),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for FloatToIntegerError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::InvalidConversion => &NanToIntegerError,
             Self::Overflow => &IntegerOverflowError,
         })
     }
@@ -177,18 +233,22 @@ macro_rules! iXX_trunc_fXX {
                 "The result is then reinterpreted as an [`", stringify!($reinterpret), "`] value.",
                 "\n\n",
             )?
-            "[trapping]: ConversionToIntegerError\n",
+            "[trapping]: NanToIntegerError\n",
             "[`", $trunc_name,
             "`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-numeric"
         )]
         #[inline]
         pub fn $trunc(
             value: $float
-        ) -> Result<prefer_right!($int $(| $reinterpret)?), ConversionToIntegerError>
+        ) -> Result<prefer_right!($int $(| $reinterpret)?), FloatToIntegerError>
         {
             match <$int as num_traits::cast::NumCast>::from(value) {
                 Some(n) => Ok(n $(as $reinterpret)?),
-                None => Err(ConversionToIntegerError),
+                None => Err(if value.is_nan() {
+                    FloatToIntegerError::InvalidConversion
+                } else {
+                    FloatToIntegerError::Overflow
+                }),
             }
         }
     )*};
