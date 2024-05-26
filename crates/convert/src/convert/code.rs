@@ -76,7 +76,6 @@ fn calculate_branch_target(
     relative_depth: u32,
     function_type: &wasmparser::FuncType,
     validator: &FuncValidator,
-    builder: &builder::Builder,
     types: &wasmparser::types::Types,
 ) -> crate::Result<(crate::ast::BranchTarget, usize)> {
     let frame = validator
@@ -356,13 +355,8 @@ fn convert_impl(
                 }
             }
             Operator::Br { relative_depth } => {
-                let (target, popped_count) = calculate_branch_target(
-                    relative_depth,
-                    func_type,
-                    &validator,
-                    &mut builder,
-                    types,
-                )?;
+                let (target, popped_count) =
+                    calculate_branch_target(relative_depth, func_type, &validator, types)?;
 
                 let values = builder.wasm_operand_stack_pop_list(popped_count)?;
 
@@ -379,13 +373,8 @@ fn convert_impl(
                 // Allows values to be "reused" if the branch wasn't taken.
                 builder.flush_operands_to_temporaries()?;
 
-                let (target, popped_count) = calculate_branch_target(
-                    relative_depth,
-                    func_type,
-                    &validator,
-                    &mut builder,
-                    types,
-                )?;
+                let (target, popped_count) =
+                    calculate_branch_target(relative_depth, func_type, &validator, types)?;
 
                 // `br_if` doesn't "pop" the values if the branch wasn't taken.
                 let values = builder.wasm_operand_stack_duplicate_many(popped_count)?;
