@@ -781,6 +781,110 @@ fn print_memory(
     write!(out, "self.{memory_ident}");
 }
 
+fn print_loop_inputs(
+    out: &mut dyn crate::write::Write,
+    context: &Context,
+    function: crate::ast::FuncId,
+    indentation: Indentation,
+    indent_level: u32,
+    r#loop: crate::ast::BlockId,
+    values: crate::ast::ExprListId,
+) {
+    for (expr, number) in context.arena.get_list(values).iter().zip(0u32..=u32::MAX) {
+        write!(out, "{} = ", crate::ast::LoopInput { r#loop, number });
+
+        expr.print(out, false, context, Some(function));
+        out.write_str(";\n");
+        write_indentation(out, indentation, indent_level);
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BranchTableCase {
+    target: crate::ast::BranchTarget,
+    values: crate::ast::ExprListId,
+}
+
+// Contains code duplicated with cases for `Statement::Branch` in `print_statements()`
+fn print_branch_table_case(
+    out: &mut dyn crate::write::Write,
+    context: &Context,
+    function: crate::ast::FuncId,
+    indentation: Indentation,
+    indent_level: u32,
+    is_last: bool,
+    case: BranchTableCase,
+) {
+    match case.target {
+        crate::ast::BranchTarget::Return => {
+            let can_unwind = context
+                .wasm
+                .function_attributes
+                .unwind_kind(function)
+                .can_unwind();
+
+            if !is_last {
+                out.write_str("return ");
+
+                if !case.values.is_empty() || can_unwind {
+                    out.write_str(" ");
+                }
+            }
+
+            if can_unwind {
+                out.write_str("Ok(");
+            }
+
+            case.values.print(
+                out,
+                case.values.len() > 1 || (case.values.is_empty() && can_unwind),
+                context,
+                Some(function),
+            );
+
+            if can_unwind {
+                out.write_str(")");
+            }
+        }
+        crate::ast::BranchTarget::Block(block) => {
+            write!(out, "break {block}");
+
+            if !case.values.is_empty() {
+                out.write_str(" ");
+
+                case.values
+                    .print(out, case.values.len() > 1, context, Some(function));
+            }
+        }
+        crate::ast::BranchTarget::Loop(r#loop) => {
+            if !case.values.is_empty() {
+                out.write_str("{\n");
+                write_indentation(out, indentation, indent_level + 1);
+
+                print_loop_inputs(
+                    out,
+                    context,
+                    function,
+                    indentation,
+                    indent_level + 1,
+                    r#loop,
+                    case.values,
+                );
+            }
+
+            write!(out, "continue {}", r#loop);
+
+            if !case.values.is_empty() {
+                out.write_str("\n");
+                write_indentation(out, indentation, indent_level);
+                out.write_str("}");
+            }
+        }
+    }
+
+    out.write_str(",\n");
+}
+
 pub(crate) fn print_statements(
     out: &mut dyn crate::write::Write,
     context: &Context,
@@ -965,7 +1069,7 @@ pub(crate) fn print_statements(
                 }
             }
             Statement::Branch {
-                target: crate::ast::BranchTarget::Loop(target),
+                target: crate::ast::BranchTarget::Loop(r#loop),
                 values,
                 condition,
             } => {
@@ -975,26 +1079,69 @@ pub(crate) fn print_statements(
                     out.write_str(" { ");
                 }
 
-                for (i, expr) in context.arena.get_list(values).iter().enumerate() {
-                    write!(
-                        out,
-                        "{} = ",
-                        crate::ast::LoopInput {
-                            r#loop: target,
-                            number: i as u32
-                        }
-                    );
+                print_loop_inputs(
+                    out,
+                    context,
+                    function,
+                    indentation,
+                    indent_level,
+                    r#loop,
+                    values,
+                );
 
-                    expr.print(out, false, context, Some(function));
-                    out.write_str(";\n");
-                    write_indentation(out, indentation, indent_level);
-                }
-
-                write!(out, "continue {target};");
+                write!(out, "continue {};", r#loop);
 
                 if condition.is_some() {
                     out.write_str("}");
                 }
+            }
+            Statement::BranchTable {
+                values,
+                targets,
+                default_target,
+                comparand,
+            } => {
+                out.write_str("match ");
+                comparand.print(out, false, context, Some(function));
+                out.write_str(" {\n");
+
+                for (i, target) in context
+                    .arena
+                    .get_branch_targets(targets)
+                    .iter()
+                    .copied()
+                    .enumerate()
+                {
+                    write_indentation(out, indentation, indent_level + 1);
+                    write!(out, "{i} => ");
+                    print_branch_table_case(
+                        out,
+                        context,
+                        function,
+                        indentation,
+                        indent_level + 1,
+                        is_last,
+                        BranchTableCase { target, values },
+                    );
+                }
+
+                write_indentation(out, indentation, indent_level + 1);
+                out.write_str("_ => ");
+                print_branch_table_case(
+                    out,
+                    context,
+                    function,
+                    indentation,
+                    indent_level + 1,
+                    is_last,
+                    BranchTableCase {
+                        target: default_target,
+                        values,
+                    },
+                );
+
+                write_indentation(out, indentation, indent_level);
+                out.write_str("}");
             }
             Statement::DefineLocal(local, ty) => {
                 use crate::ast::ValType;

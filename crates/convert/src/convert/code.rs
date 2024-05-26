@@ -77,7 +77,7 @@ fn calculate_branch_target(
     function_type: &wasmparser::FuncType,
     validator: &FuncValidator,
     types: &wasmparser::types::Types,
-) -> crate::Result<(crate::ast::BranchTarget, usize)> {
+) -> (crate::ast::BranchTarget, usize) {
     let frame = validator
         .get_control_frame(relative_depth as usize)
         .unwrap();
@@ -102,7 +102,7 @@ fn calculate_branch_target(
         }
     };
 
-    Ok((target, popped_count))
+    (target, popped_count)
 }
 
 #[derive(Debug)]
@@ -356,11 +356,13 @@ fn convert_impl(
             }
             Operator::Br { relative_depth } => {
                 let (target, popped_count) =
-                    calculate_branch_target(relative_depth, func_type, &validator, types)?;
+                    calculate_branch_target(relative_depth, func_type, &validator, types);
 
                 let values = builder.wasm_operand_stack_pop_list(popped_count)?;
 
+                // Code after the `br` is unreachable.
                 builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
+
                 builder.emit_statement(crate::ast::Statement::Branch {
                     target,
                     values,
@@ -374,7 +376,7 @@ fn convert_impl(
                 builder.flush_operands_to_temporaries()?;
 
                 let (target, popped_count) =
-                    calculate_branch_target(relative_depth, func_type, &validator, types)?;
+                    calculate_branch_target(relative_depth, func_type, &validator, types);
 
                 // `br_if` doesn't "pop" the values if the branch wasn't taken.
                 let values = builder.wasm_operand_stack_duplicate_many(popped_count)?;
@@ -383,6 +385,32 @@ fn convert_impl(
                     target,
                     values,
                     condition: Some(condition),
+                })?;
+            }
+            Operator::BrTable { ref targets } => {
+                let comparand = builder.pop_wasm_operand();
+
+                let other_targets =
+                    builder.allocate_branch_targets(targets.targets().map(|relative_depth| {
+                        Ok(
+                            calculate_branch_target(relative_depth?, func_type, &validator, types)
+                                .0,
+                        )
+                    }))?;
+
+                // All other branch targets are assumed to have the same `popped_count`, or else
+                // validation would have failed.
+                let (default_target, popped_count) =
+                    calculate_branch_target(targets.default(), func_type, &validator, types);
+
+                let values = builder.wasm_operand_stack_pop_list(popped_count)?;
+
+                builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
+                builder.emit_statement(crate::ast::Statement::BranchTable {
+                    values,
+                    targets: other_targets,
+                    default_target,
+                    comparand,
                 })?;
             }
             Operator::Return => {
@@ -395,9 +423,11 @@ fn convert_impl(
 
                 let results = builder.wasm_operand_stack_pop_list(result_count)?;
 
+                // Code after the `return` is unreachable.
+                builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
+
                 // Any values that weren't popped are spilled into temporaries.
                 builder.emit_statement(crate::ast::Statement::r#return(results))?;
-                builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
             }
             Operator::Call { function_index } => {
                 let signature = types[types.core_function_at(function_index)].unwrap_func();

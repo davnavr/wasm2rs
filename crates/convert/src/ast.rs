@@ -458,6 +458,17 @@ pub(crate) enum BranchTarget {
     Loop(BlockId),
 }
 
+// TODO: Common format for lists, make a ListId struct used in ExprListId, BranchTargetList, and BlockResult
+
+/// Encodes a list of [`BranchTarget`]s.
+///
+/// Used in [`Statement::BranchTable`].
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BranchTargetList {
+    pub(in crate::ast) index: u32,
+    pub(in crate::ast) count: u32,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BlockResults {
     // TODO: make BlockResults 4 bytes
@@ -465,7 +476,7 @@ pub(crate) struct BlockResults {
     pub(crate) count: std::num::NonZeroU32,
 }
 
-// TODO: Consider having the list of statements be of variable width.
+// TODO: Consider having `Vec<Statement>` be "of variable width" by having multiple `Vec` in the `Arena`.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Statement {
     /// An expression that is evaluated, with the final results are discarded.
@@ -504,6 +515,17 @@ pub(crate) enum Statement {
         target: BranchTarget,
         values: ExprListId,
         condition: Option<ExprId>,
+    },
+    /// Corresponds to the [`br_table`] instruction. This represents a `match` statement whose arms
+    /// contain a `break`, `return`, or `continue` statement.
+    ///
+    /// [`br_table`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions
+    BranchTable {
+        values: ExprListId,
+        targets: BranchTargetList,
+        default_target: BranchTarget,
+        /// The integer expression (an `i32` or `i64`) used to select the target to branch to.
+        comparand: ExprId,
     },
     BlockStart {
         id: BlockId,

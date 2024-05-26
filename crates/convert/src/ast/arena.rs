@@ -99,6 +99,8 @@ impl std::fmt::Debug for ExprListId {
 #[derive(Debug)]
 pub(crate) struct Arena {
     arena: Vec<crate::ast::Expr>,
+    branch_targets: Vec<crate::ast::BranchTarget>,
+    //uncommon: Option<Box<ArenaUncommon>>, // contains stuff not used often
 }
 
 impl Default for Arena {
@@ -109,7 +111,10 @@ impl Default for Arena {
 
 impl Arena {
     pub(crate) const fn new() -> Self {
-        Self { arena: Vec::new() }
+        Self {
+            arena: Vec::new(),
+            branch_targets: Vec::new(),
+        }
     }
 
     fn allocate_inner(&mut self, expr: crate::ast::Expr) -> Result<ExprId, ArenaError> {
@@ -182,5 +187,30 @@ impl Arena {
         }
 
         ExprListId::new(start_index, self.arena.len() - start_len)
+    }
+
+    pub(crate) fn allocate_branch_targets<E: From<ArenaError>>(
+        &mut self,
+        targets: impl Iterator<Item = Result<crate::ast::BranchTarget, E>>,
+    ) -> Result<crate::ast::BranchTargetList, E> {
+        let start_len = self.branch_targets.len();
+        let start_index = u32::try_from(start_len).map_err(|_| ArenaError::IndexTooLarge)?;
+        self.branch_targets.reserve(targets.size_hint().0);
+        for result in targets {
+            self.branch_targets.push(result?);
+        }
+        let calculated_len = self.branch_targets.len() - start_len;
+
+        Ok(crate::ast::BranchTargetList {
+            index: start_index,
+            count: u32::try_from(calculated_len).map_err(|_| ArenaError::IndexTooLarge)?,
+        })
+    }
+
+    pub(crate) fn get_branch_targets(
+        &self,
+        targets: crate::ast::BranchTargetList,
+    ) -> &[crate::ast::BranchTarget] {
+        &self.branch_targets[targets.index as usize..][..targets.count as usize]
     }
 }

@@ -247,6 +247,13 @@ impl Builder {
         self.emit_statement_inner(statement.into())
     }
 
+    pub(super) fn allocate_branch_targets(
+        &mut self,
+        targets: impl Iterator<Item = crate::Result<crate::ast::BranchTarget>>,
+    ) -> crate::Result<crate::ast::BranchTargetList> {
+        self.ast_arena.allocate_branch_targets(targets)
+    }
+
     pub(super) fn finish(
         self,
     ) -> (
