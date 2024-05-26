@@ -25,6 +25,9 @@ test_compiler cargo='cargo': clippy_rt
 test_spec: && test_spec_run
     cargo run --features test-utils -- \
         test \
+        -i ./crates/rt-spectest/tests/spec/testsuite/address.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/conversions.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/endianness.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/forward.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/i64.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/int_exprs.wast \

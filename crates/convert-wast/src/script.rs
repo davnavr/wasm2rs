@@ -297,14 +297,15 @@ pub(crate) fn convert(
                     col.saturating_add(1)
                 );
 
-                writeln!(
+                write!(
                     out,
-                    "    assert!(result.matches_spec_failure(\"{}\"), \"incorrect trap in {}:{}:{}\");",
+                    "    assert!(result.matches_spec_failure(\"{}\"), \"incorrect trap in {}:{}:{}",
                     message.escape_default(),
                     script_path.display(),
                     line.saturating_add(1),
                     col.saturating_add(1)
                 );
+                out.write_str(", got {result:?}\");\n");
             }
             WastDirective::AssertReturn {
                 span: assert_span,
@@ -370,40 +371,149 @@ pub(crate) fn convert(
                 );
 
                 let many_results = results.len() > 1;
-                for (i, result) in results.into_iter().enumerate() {
-                    use wast::core::WastRetCore;
+                for (index, result) in results.into_iter().enumerate() {
+                    use wast::core::{NanPattern, WastRetCore};
 
-                    out.write_str("    assert_eq!(result");
-                    if many_results {
-                        write!(out, ".{i}");
-                    }
-                    out.write_str(", ");
+                    struct ResultVariable(Option<usize>);
 
-                    match result {
-                        wast::WastRet::Core(core_ret) => match core_ret {
-                            WastRetCore::I32(n) => write!(out, "{n}i32"),
-                            WastRetCore::I64(n) => write!(out, "{n}i64"),
-                            _ => {
-                                write!(out, "todo!(\"unsupported return {core_ret:?}\")")
+                    impl std::fmt::Display for ResultVariable {
+                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                            f.write_str("result")?;
+                            if let Some(index) = self.0 {
+                                write!(f, ".{index}")?;
                             }
-                        },
+                            Ok(())
+                        }
+                    }
+
+                    let actual = ResultVariable(if many_results { Some(index) } else { None });
+
+                    out.write_str("    assert!(");
+
+                    let result = match result {
+                        wast::WastRet::Core(core_ret) => {
+                            match core_ret {
+                                WastRetCore::I32(expected) => {
+                                    write!(out, "{actual} == {expected}i32")
+                                }
+                                WastRetCore::I64(expected) => {
+                                    write!(out, "{actual} == {expected}i64")
+                                }
+                                WastRetCore::F32(NanPattern::Value(expected)) => {
+                                    write!(out, "f32::to_bits({actual}) == {:#010X}", expected.bits)
+                                }
+                                WastRetCore::F64(NanPattern::Value(expected)) => {
+                                    write!(out, "f64::to_bits({actual}) == {:#010X}", expected.bits)
+                                }
+                                WastRetCore::F32(NanPattern::CanonicalNan) => write!(
+                                    out,
+                                    "::wasm2rs_rt::math::nan::is_canonical_f32({actual})"
+                                ),
+                                WastRetCore::F64(NanPattern::CanonicalNan) => write!(
+                                    out,
+                                    "::wasm2rs_rt::math::nan::is_canonical_f64({actual})"
+                                ),
+                                WastRetCore::F32(NanPattern::ArithmeticNan) => write!(
+                                    out,
+                                    "::wasm2rs_rt::math::nan::is_arithmetic_f32({actual})"
+                                ),
+                                WastRetCore::F64(NanPattern::ArithmeticNan) => write!(
+                                    out,
+                                    "::wasm2rs_rt::math::nan::is_arithmetic_f64({actual})"
+                                ),
+                                _ => {
+                                    let mut err = wast::Error::new(
+                                        assert_span,
+                                        format!("unsupported result: {core_ret:?}"),
+                                    );
+                                    err.set_text(script_text);
+                                    return Err(anyhow::Error::new(err));
+                                }
+                            }
+
+                            core_ret
+                        }
                         wast::WastRet::Component(ret) => {
                             let mut err = wast::Error::new(
-                                invoke_span,
-                                format!("compontent arguments are not supported: {ret:?}"),
+                                assert_span,
+                                format!("compontent results are not supported: {ret:?}"),
                             );
                             err.set_text(script_text);
                             return Err(anyhow::Error::new(err));
                         }
-                    }
+                    };
 
-                    writeln!(
+                    write!(
                         out,
-                        ", \"invalid result in {}:{}:{}\");",
+                        ", \"invalid result in {}:{}:{}",
                         script_path.display(),
                         line.saturating_add(1),
                         col.saturating_add(1)
                     );
+
+                    match result {
+                        WastRetCore::I32(expected) => {
+                            write!(out, ", expected {expected} ({expected:#010X}) got ");
+                            out.write_str("{actual} ({actual:#010X})\", actual=");
+                            write!(out, "{actual}");
+                        }
+                        WastRetCore::I64(expected) => {
+                            write!(out, ", expected {expected} ({expected:#018X})");
+                            out.write_str(" got {actual} ({actual:#018X})\", actual=");
+                            write!(out, "{actual}");
+                        }
+                        WastRetCore::F32(NanPattern::Value(expected)) => {
+                            write!(
+                                out,
+                                "expected {} ({:#010X}) got ",
+                                f32::from_bits(expected.bits),
+                                expected.bits
+                            );
+                            out.write_str("{} ({:#010X})\", ");
+                            write!(out, "{actual}, f32::to_bits({actual})");
+                        }
+                        WastRetCore::F64(NanPattern::Value(expected)) => {
+                            write!(
+                                out,
+                                "expected {} ({:#018X}) got ",
+                                f64::from_bits(expected.bits),
+                                expected.bits
+                            );
+                            out.write_str("{} ({:#018X})\", ");
+                            write!(out, "{actual}, f64::to_bits({actual})");
+                        }
+                        WastRetCore::F32(NanPattern::CanonicalNan) => {
+                            out.write_str(
+                                concat!(
+                                    "expected canonical NaN ({:#010X} or {:#010X}) got {} ({:#010X})\", ",
+                                    "::wasm2rs_rt::math::nan::F32_CANONICAL, ",
+                                    "::wasm2rs_rt::math::nan::F32_NEG_CANONICAL, ",
+                                )
+                            );
+                            write!(out, "{actual}, f32::to_bits({actual})");
+                        }
+                        WastRetCore::F64(NanPattern::CanonicalNan) => {
+                            out.write_str(
+                                concat!(
+                                    "expected canonical NaN ({:#018X} or {:#018X}) got {} ({:#018X})\", ",
+                                    "::wasm2rs_rt::math::nan::F64_CANONICAL, ",
+                                    "::wasm2rs_rt::math::nan::F64_NEG_CANONICAL, ",
+                                )
+                            );
+                            write!(out, "{actual}, f64::to_bits({actual})");
+                        }
+                        WastRetCore::F32(NanPattern::ArithmeticNan) => {
+                            out.write_str("expected arithmetic NaN got {} ({:#010X})\", ");
+                            write!(out, "{actual}, f32::to_bits({actual})");
+                        }
+                        WastRetCore::F64(NanPattern::ArithmeticNan) => {
+                            out.write_str("expected arithmetic NaN got {} ({:#018X})\", ");
+                            write!(out, "{actual}, f64::to_bits({actual})");
+                        }
+                        _ => out.write_str("\""),
+                    }
+
+                    writeln!(out, ");");
                 }
             }
             unsupported => {
