@@ -296,6 +296,8 @@ fn convert_impl(
             }
             Operator::End => {
                 if validator.control_stack_height() >= 1 {
+                    // Handles the `end` of a block.
+
                     let id = crate::ast::BlockId(validator.control_stack_height() - 1);
                     let result_count = resolve_block_type(types, current_frame.block_type)
                         .results()
@@ -335,6 +337,8 @@ fn convert_impl(
                 } else if current_frame.unreachable {
                     builder.wasm_operand_stack_truncate(current_frame.height)?;
                 } else {
+                    // `end` of the function.
+
                     let result_count = func_type.results().len();
 
                     debug_assert_eq!(
@@ -404,6 +408,7 @@ fn convert_impl(
 
                 // Any values that weren't popped are spilled into temporaries.
                 builder.emit_statement(crate::ast::Statement::r#return(results))?;
+                builder.wasm_operand_stack_truncate(validator.operand_stack_height() as usize)?;
             }
             Operator::Call { function_index } => {
                 let signature = types[types.core_function_at(function_index)].unwrap_func();
