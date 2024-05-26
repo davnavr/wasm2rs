@@ -2,7 +2,5 @@
 //!
 //! [WebAssembly test suite]: https://github.com/WebAssembly/testsuite
 
-#![doc(hidden)]
-
-#[path = "generated/include.wasm2.rs"]
-mod tests;
+#[path = "converted/include.wasm2.rs"]
+mod tests; // Tests must be generated before they are compiled.

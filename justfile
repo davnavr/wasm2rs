@@ -25,16 +25,16 @@ test_compiler cargo='cargo': clippy_rt
 test_spec: && test_spec_run
     cargo run --features test-utils -- \
         test \
-        -i ./tests/spec/testsuite/forward.wast \
-        -i ./tests/spec/testsuite/i64.wast \
-        -i ./tests/spec/testsuite/int_exprs.wast \
-        -i ./tests/spec/testsuite/int_literals.wast \
-        -i ./tests/spec/testsuite/memory_fill.wast \
-        -i ./tests/spec/testsuite/traps.wast \
-        --output-directory ./tests/spec/src/generated/
+        -i ./crates/rt-spectest/tests/spec/testsuite/forward.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/i64.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/int_exprs.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/int_literals.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/memory_fill.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/traps.wast \
+        --output-directory ./crates/rt-spectest/tests/spec/converted/
 
 test_spec_run:
-    cd ./tests/spec && cargo test
+    cargo test --package wasm2rs-rt-spectest
 
 # Generate documentation; requires Rust nightly.
 doc *FLAGS='--all-features':
