@@ -25,7 +25,16 @@ test_compiler cargo='cargo': clippy_rt
 test_spec run_flags='': && test_spec_run
     cargo run --features test-utils {{run_flags}} -- \
         test \
+        -i ./crates/rt-spectest/tests/spec/testsuite/address.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/conversions.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/endianness.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/fac.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/forward.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/i64.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/int_exprs.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/int_literals.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/memory_fill.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/traps.wast \
         --output-directory ./crates/rt-spectest/tests/spec/converted/
 
 test_spec_run:
