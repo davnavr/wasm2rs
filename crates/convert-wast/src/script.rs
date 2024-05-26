@@ -234,6 +234,7 @@ pub(crate) fn convert(
                 out.write_str("));\n");
             }
             // // Quick and dirty code gen, better way is in old code, see /crates/spectest/test_case.rs
+            // // This should check the statements to see if the exports and modules they refer to actually exist.
             WastDirective::AssertTrap {
                 span: assert_span,
                 exec:
@@ -515,6 +516,22 @@ pub(crate) fn convert(
 
                     writeln!(out, ");");
                 }
+            }
+            WastDirective::AssertExhaustion {
+                span: assert_span,
+                call: _,
+                message: _,
+            } => {
+                out.write_str("\n    #[warn(unused_variables)]\n");
+                let (line, col) = assert_span.linecol_in(script_text);
+                write!(
+                    out,
+                    "    let skipped_assertion = \
+                    eprintln!(\"skipped assertion in {}:{}:{}: stack overflow checking is not yet supported\");",
+                    script_path.display(),
+                    line.saturating_add(1),
+                    col.saturating_add(1)
+                );
             }
             unsupported => {
                 let mut err = wast::Error::new(
