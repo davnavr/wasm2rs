@@ -264,7 +264,7 @@ impl ExprId {
         } else {
             Some(Self::new(
                 Self::FLAG_FLOAT,
-                (bits >> Self::ENCODE_FLOAT_F64_SHIFT) as u32,
+                ((bits >> Self::ENCODE_FLOAT_F64_SHIFT) as u32) | Self::ENCODE_FLOAT_IS_F64,
             ))
         }
     }
