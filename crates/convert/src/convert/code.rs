@@ -693,6 +693,27 @@ fn convert_impl(
             }
             Operator::I64ExtendI32S => un_op!(I64ExtendI32S),
             Operator::I64ExtendI32U => un_op!(I64ExtendI32U),
+            //Operator::RefNull => {}
+            Operator::RefIsNull => {
+                let reference = builder.pop_wasm_operand();
+                builder.push_wasm_operand(crate::ast::Expr::RefIsNull(reference))?;
+            }
+            /* Operator::RefFunc { function_index } => {
+                let param_count = types[types.core_function_at(function_index)]
+                    .unwrap_func()
+                    .params()
+                    .len();
+                if param_count > crate::convert::FUNC_REF_MAX_PARAM_COUNT {
+                    anyhow::bail!(
+                        "could not convert `ref.func` at {op_offset:#X}, creating a function \
+                        reference taking {param_count} arguments is not supported"
+                    );
+                }
+
+                builder.push_wasm_operand(crate::ast::Expr::RefFunc(crate::ast::FuncId(
+                    function_index,
+                )))?;
+            } */
             Operator::I64TruncF32S => {
                 builder.can_trap();
                 un_op!(I64TruncF32S {

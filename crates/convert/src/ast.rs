@@ -124,7 +124,7 @@ impl From<wasmparser::ValType> for ValType {
             ValType::I64 => Self::I64,
             ValType::F32 => Self::F32,
             ValType::F64 => Self::F64,
-            _ => todo!("{ty:?} is not yet supported"),
+            _ => unimplemented!("{ty:?} is not yet supported"),
         }
     }
 }
@@ -135,6 +135,7 @@ pub(crate) enum Literal {
     I64(i64),
     F32(u32),
     F64(u64),
+    //RefNull(),
 }
 
 impl Literal {
@@ -386,6 +387,15 @@ pub(crate) enum Expr {
         c_1: ExprId,
         c_2: ExprId,
     },
+    /// Determines if the given expression is a `null` reference. Corresponds to the
+    /// [`ref.is_null`] instruction.
+    ///
+    /// [`ref.is_null`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
+    RefIsNull(ExprId),
+    /* /// Creates a reference to the given function. Corresponds to the [`ref.func`] instruction.
+    ///
+    /// [`ref.func`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
+    RefFunc(FuncId), */
     /// Gets the value of a local variable. Corresponds to the `local.get` instruction.
     ///
     /// [`local.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions

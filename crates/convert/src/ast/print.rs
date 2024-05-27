@@ -559,6 +559,24 @@ impl crate::ast::Expr {
                     }
                 }
             }
+            Self::RefIsNull(reference) => {
+                out.write_str("(");
+                reference.print(out, false, context, function);
+                out.write_str("embedder::rt::table::NullableTableElement::NULL) as i32");
+            }
+            /* Self::RefFunc(func) => {
+                let signature = context.wasm.function_signature(*func);
+
+                // Code translator ensures that the number of arguments is supported.
+                debug_assert!(signature.params().len() <= crate::convert::FUNC_REF_MAX_PARAM_COUNT);
+
+                // { let this = self.clone()
+                out.write_str(concat!(
+                    "embedder::rt::func_ref::FuncRef::from_closure_"
+                ));
+
+                todo!()
+            } */
             Self::GetLocal(local) => write!(out, "{local}"),
             Self::GetGlobal(global) => match context.wasm.global_kind(*global) {
                 crate::context::GlobalKind::Const => write!(out, "Self::{global:#}"),
@@ -748,6 +766,11 @@ impl crate::ast::Expr {
                 c_1,
                 c_2,
             } => comparison!(c_1 "!=" c_2),
+            // TODO: Write more simplified comparisons
+            Self::RefIsNull(reference) => {
+                reference.print(out, false, context, function);
+                out.write_str(" == embedder::rt::table::NullableTableElement::NULL");
+            }
             _ => {
                 self.print(out, true, context, function);
                 out.write_str(" != 0")
