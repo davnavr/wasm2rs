@@ -38,6 +38,7 @@ test_spec run_flags='': && test_spec_run
         -i ./crates/rt-spectest/tests/spec/testsuite/memory_fill.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/switch.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/traps.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/unreached-valid.wast \
         --output-directory ./crates/rt-spectest/tests/spec/converted/
 
 test_spec_run:
