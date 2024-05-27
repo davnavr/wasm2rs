@@ -1,12 +1,17 @@
 alias f := fmt
 alias d := doc
+alias t := test
 
-check: fmt clippy_tools clippy_rt
+check: fmt clippy_tools clippy_rt test
+
+test: test_compiler test_spec
+    cargo test --package wasm2rs-convert
 
 clippy_tools:
-    # cargo clippy --package wasm2rs-convert
-    # cargo clippy --package wasm2rs-convert --no-default-features
-    # cargo clippy --package wasm2rs-cli --all-features
+    cargo clippy --package wasm2rs-convert
+    cargo clippy --package wasm2rs-convert --no-default-features
+    cargo clippy --package wasm2rs-cli
+    cargo clippy --package wasm2rs-cli --all-features
 
 clippy_rt:
     cargo clippy --package "wasm2rs-rt*" --no-default-features
@@ -16,11 +21,11 @@ clippy_rt:
 fmt *FLAGS='':
     cargo fmt {{FLAGS}}
 
-test_compiler cargo='cargo': clippy_rt
-    cargo run -- convert -i ./tests/compiler/src/simple.wat
-    cargo run -- convert -i ./tests/compiler/src/memory.wat
-    cargo run -- convert -i ./tests/compiler/src/imports.wat
-    cd ./tests/compiler && {{cargo}} test
+test_compiler: clippy_rt
+    cargo run -- convert -i ./crates/rt-umbrella/tests/wat/simple.wat
+    cargo run -- convert -i ./crates/rt-umbrella/tests/wat/memory.wat
+    cargo run -- convert -i ./crates/rt-umbrella/tests/wat/imports.wat
+    cargo test --package wasm2rs-rt --test wat
 
 test_spec run_flags='': && test_spec_run
     cargo run --features test-utils {{run_flags}} -- \

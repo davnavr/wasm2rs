@@ -1,5 +1,7 @@
 //! Contains tests verifying the semantics of the output Rust source code of `wasm2rs`.
 
-pub mod imports;
-pub mod memory;
-pub mod simple;
+#![allow(private_interfaces)]
+
+mod imports;
+mod memory;
+mod simple;
