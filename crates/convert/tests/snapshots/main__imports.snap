@@ -17,24 +17,15 @@ $vis mod $module {
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::{trap::TrapWith as _, trace::UnwindWith as _};
 
-pub struct Instance {
+pub struct Module {
     pub imports: embedder::Imports,
     _g0: i32,
-}
+} // struct Module
 
-impl Instance {
+#[repr(transparent)]
+pub struct Instance(::core::option::Option<embedder::Module<Module>>);
 
-    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
-        let allocated = Self {
-            imports: store.imports,
-            _g0: Default::default(),
-        };
-        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
-        embedder::rt::memory::check_limits(module.imports.tests().memory(), 0, 1, <u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT)?;
-        let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
-        inst._g0 = inst.imports.tests().FORTY();
-        Ok(module)
-    }
+impl Module {
 
 fn _f1(&self) -> i32 {
     i32::wrapping_add(self._g0, 2i32)
@@ -45,12 +36,12 @@ pub fn funny_life_number(&self) -> ::core::result::Result<i32, embedder::Trap> {
 }
 
 pub fn two_equals_two(&self) -> ::core::result::Result<(), embedder::Trap> {
-    self.imports.tests().assert_equal(2i32, 2i32).unwind_with({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_2(5); &F })?;
+    self.imports.tests().assert_equal(2i32, 2i32).unwind_with({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_2(5); &F })?;
     Ok(())
 }
 
 pub fn write_5_to_5000(&self) -> ::core::result::Result<(), embedder::Trap> {
-    embedder::rt::memory::i32_store::<0, u32, _, _>(self.imports.tests().memory(), 0, 0x1388i32, 5i32, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_3(6); &F }))?;
+    embedder::rt::memory::i32_store::<0, u32, _, _>(self.imports.tests().memory(), 0, 0x1388i32, 5i32, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_3(6); &F }))?;
     Ok(())
 }
     const _SYM_FN_1: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(1, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[], results: &[embedder::rt::symbol::WasmValType::I32] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 146 }); sym.export_names = &["funny_life_number"]; sym };
@@ -60,7 +51,45 @@ pub fn write_5_to_5000(&self) -> ::core::result::Result<(), embedder::Trap> {
     const _SYM_FN_3: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(3, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[], results: &[] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 163 }); sym.export_names = &["write_5_to_5000"]; sym };
     const fn _frame_fn_3(o: u32) -> embedder::rt::trace::WasmFrame { embedder::rt::trace::WasmFrame::new(&Self::_SYM_FN_3, o) }
 
+} // impl Module
+
+impl Instance {
+    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
+        let allocated = Module {
+            imports: store.imports,
+            _g0: Default::default(),
+        };
+        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
+        embedder::rt::memory::check_limits(module.imports.tests().memory(), 0, 1, <u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT)?;
+        let mut inst: &mut Module = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
+        inst._g0 = inst.imports.tests().FORTY();
+        Ok(Self(Some(module)))
+    }
+
+    pub fn leak(module: Self) -> embedder::Module<Module> {
+        let mut module = ::core::mem::ManuallyDrop::new(module);
+        ::core::mem::take(&mut module.0).unwrap()
+    }
 } // impl Instance
+
+impl ::core::ops::Deref for Instance {
+    type Target = embedder::Module<Module>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref().unwrap()
+    }
+} // impl Deref
+
+impl ::core::ops::Drop for Instance {
+
+    fn drop(&mut self) {
+    if embedder::rt::thread::panicking() {
+        return;
+    }
+
+    let module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());
+    }
+} // impl Drop
 
 } // mod $module
 

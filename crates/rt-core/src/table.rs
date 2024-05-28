@@ -53,6 +53,7 @@ pub trait NullableTableElement: TableElement {
     /// value.
     ///
     /// [`Cell`]: core::cell::Cell
+    /// [`NULL`]: NullableTableElement::NULL
     fn with_cell_contents<F, R>(cell: &core::cell::Cell<Self>, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,

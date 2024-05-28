@@ -17,12 +17,15 @@ $vis mod $module {
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::{trap::TrapWith as _, trace::UnwindWith as _};
 
-pub struct Instance {
+pub struct Module {
     pub imports: embedder::Imports,
     _m: embedder::Memory0,
-}
+} // struct Module
 
-impl Instance {
+#[repr(transparent)]
+pub struct Instance(::core::option::Option<embedder::Module<Module>>);
+
+impl Module {
     const _DATA_0: &'static [u8] = b"\x01\x02\x03\x04";
 
 
@@ -31,28 +34,17 @@ impl Instance {
     }
 
 
-    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
-        let allocated = Self {
-            imports: store.imports,
-            _m: embedder::rt::store::AllocateMemory::allocate(store.memory0, 0, 1, <u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT)?,
-        };
-        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
-        let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
-        embedder::rt::memory::init::<0, _, _, embedder::Trap>(&inst._m, 0x4D2i32, 0, 4, Self::_DATA_0, None)?;
-        Ok(module)
-    }
-
 pub fn write_my_int(&self) -> ::core::result::Result<(), embedder::Trap> {
-    embedder::rt::memory::i32_store::<0, u32, _, _>(&self._m, 0, 0x1F4i32, 0x41i32, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_0(7); &F }))?;
+    embedder::rt::memory::i32_store::<0, u32, _, _>(&self._m, 0, 0x1F4i32, 0x41i32, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_0(7); &F }))?;
     Ok(())
 }
 
 pub fn read_my_int(&self) -> ::core::result::Result<i32, embedder::Trap> {
-    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0, 0x1F4i32, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_1(4); &F }))?)
+    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0, 0x1F4i32, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_1(4); &F }))?)
 }
 
 pub fn out_of_bounds_read(&self) -> ::core::result::Result<i32, embedder::Trap> {
-    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0, 0x00010000i32, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_2(5); &F }))?)
+    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0, 0x00010000i32, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_2(5); &F }))?)
 }
 
 pub fn grow_then_write(&self) -> ::core::result::Result<i32, embedder::Trap> {
@@ -61,8 +53,8 @@ pub fn grow_then_write(&self) -> ::core::result::Result<i32, embedder::Trap> {
     _l0 = embedder::rt::memory::size(&self._m);
     _l1 = i32::wrapping_add(i32::wrapping_mul(_l0, 0x00010000i32), 0x10i32);
     embedder::rt::memory::grow(&self._m, i32::wrapping_add(1i32, _l0));
-    embedder::rt::memory::i32_store::<0, u32, _, _>(&self._m, 0, _l1, 0xBABAi32, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_3(33); &F }))?;
-    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0, _l1, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_3(38); &F }))?)
+    embedder::rt::memory::i32_store::<0, u32, _, _>(&self._m, 0, _l1, 0xBABAi32, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_3(33); &F }))?;
+    Ok(embedder::rt::memory::i32_load::<0, u32, _, _>(&self._m, 0, _l1, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_3(38); &F }))?)
 }
     const _SYM_FN_0: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(0, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[], results: &[] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 111 }); sym.export_names = &["write_my_int"]; sym };
     const fn _frame_fn_0(o: u32) -> embedder::rt::trace::WasmFrame { embedder::rt::trace::WasmFrame::new(&Self::_SYM_FN_0, o) }
@@ -73,7 +65,44 @@ pub fn grow_then_write(&self) -> ::core::result::Result<i32, embedder::Trap> {
     const _SYM_FN_3: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(3, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[], results: &[embedder::rt::symbol::WasmValType::I32] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 142 }); sym.export_names = &["grow_then_write"]; sym };
     const fn _frame_fn_3(o: u32) -> embedder::rt::trace::WasmFrame { embedder::rt::trace::WasmFrame::new(&Self::_SYM_FN_3, o) }
 
+} // impl Module
+
+impl Instance {
+    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
+        let allocated = Module {
+            imports: store.imports,
+            _m: embedder::rt::store::AllocateMemory::allocate(store.memory0, 0, 1, <u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT)?,
+        };
+        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
+        let mut inst: &mut Module = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
+        embedder::rt::memory::init::<0, _, _, embedder::Trap>(&inst._m, 0x4D2i32, 0, 4, Module::_DATA_0, None)?;
+        Ok(Self(Some(module)))
+    }
+
+    pub fn leak(module: Self) -> embedder::Module<Module> {
+        let mut module = ::core::mem::ManuallyDrop::new(module);
+        ::core::mem::take(&mut module.0).unwrap()
+    }
 } // impl Instance
+
+impl ::core::ops::Deref for Instance {
+    type Target = embedder::Module<Module>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref().unwrap()
+    }
+} // impl Deref
+
+impl ::core::ops::Drop for Instance {
+
+    fn drop(&mut self) {
+    if embedder::rt::thread::panicking() {
+        return;
+    }
+
+    let module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());
+    }
+} // impl Drop
 
 } // mod $module
 

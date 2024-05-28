@@ -17,27 +17,19 @@ $vis mod $module {
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::{trap::TrapWith as _, trace::UnwindWith as _};
 
-pub struct Instance {
+pub struct Module {
     pub imports: embedder::Imports,
     _g1: embedder::rt::global::Global<i32>,
-}
+} // struct Module
 
-impl Instance {
+#[repr(transparent)]
+pub struct Instance(::core::option::Option<embedder::Module<Module>>);
+
+impl Module {
     const _G0: i32 = 0x400i32;
 
     pub fn counter(&self) -> &embedder::rt::global::Global<i32> {
         &self._g1
-    }
-
-    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
-        let allocated = Self {
-            imports: store.imports,
-            _g1: embedder::rt::global::Global::<_>::ZERO,
-        };
-        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
-        let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
-        *inst._g1.get_mut() = 0i32;
-        Ok(module)
     }
 
 fn _f0(mut _l0: i32) -> i32 {
@@ -64,7 +56,7 @@ pub fn block_me_up(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder:
 }
 
 fn _f3() -> ::core::result::Result<i32 /* ! */, embedder::Trap> {
-    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_3(1); &F })));
+    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_3(1); &F })));
 }
 
 pub fn unreachable_instruction(&self) -> ::core::result::Result<i32, embedder::Trap> {
@@ -121,14 +113,14 @@ fn _f7(mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
     '_b0: {
         let mut _b1_0 = _l0;
         '_b1: loop {
-            '_b2: { if embedder::rt::math::i32_rem_u(_b1_0, 2i32).trap_with(Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_7(21); &F }))? == 0 {
+            '_b2: { if embedder::rt::math::i32_rem_u(_b1_0, 2i32).trap_with(Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_7(21); &F }))? == 0 {
                 return Ok(());
             } } // '_b2
             _b1_0 = 1i32;
             continue '_b1;
         } // '_b1
     } // '_b0
-    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_7(33); &F })));
+    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_7(33); &F })));
 }
 
 pub fn halt_on_even(&self, mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
@@ -171,7 +163,7 @@ fn _f12(mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
         if _l0 == 3i32 { break '_b0;}
         return Ok(());
     } // '_b0
-    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, Some({ const F: embedder::rt::trace::WasmFrame = Instance::_frame_fn_12(12); &F })));
+    return ::core::result::Result::Err(embedder::rt::trap::Trap::trap(embedder::rt::trap::UnreachableError, Some({ const F: embedder::rt::trace::WasmFrame = Module::_frame_fn_12(12); &F })));
 }
 
 pub fn trap_on_three(&self, mut _l0: i32) -> ::core::result::Result<(), embedder::Trap> {
@@ -220,7 +212,44 @@ pub fn export_three_times_shame_on_us(&self, mut _l0: i32) -> ::core::result::Re
     const _SYM_FN_13: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(13, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[embedder::rt::symbol::WasmValType::I32], results: &[embedder::rt::symbol::WasmValType::I64] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 566 }); sym.export_names = &["export_once_shame_on_you", "export_twice_shame_on_me", "export_three_times_shame_on_us"]; sym };
     const fn _frame_fn_13(o: u32) -> embedder::rt::trace::WasmFrame { embedder::rt::trace::WasmFrame::new(&Self::_SYM_FN_13, o) }
 
+} // impl Module
+
+impl Instance {
+    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
+        let allocated = Module {
+            imports: store.imports,
+            _g1: embedder::rt::global::Global::<_>::ZERO,
+        };
+        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
+        let mut inst: &mut Module = embedder::rt::store::ModuleAllocation::get_mut(&mut module);
+        *inst._g1.get_mut() = 0i32;
+        Ok(Self(Some(module)))
+    }
+
+    pub fn leak(module: Self) -> embedder::Module<Module> {
+        let mut module = ::core::mem::ManuallyDrop::new(module);
+        ::core::mem::take(&mut module.0).unwrap()
+    }
 } // impl Instance
+
+impl ::core::ops::Deref for Instance {
+    type Target = embedder::Module<Module>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref().unwrap()
+    }
+} // impl Deref
+
+impl ::core::ops::Drop for Instance {
+
+    fn drop(&mut self) {
+    if embedder::rt::thread::panicking() {
+        return;
+    }
+
+    let module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());
+    }
+} // impl Drop
 
 } // mod $module
 

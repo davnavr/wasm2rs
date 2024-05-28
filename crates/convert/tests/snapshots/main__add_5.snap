@@ -17,19 +17,14 @@ $vis mod $module {
 use $(::$embedder_start::)? $($embedder_more)::+ as embedder;
 use embedder::rt::{trap::TrapWith as _, trace::UnwindWith as _};
 
-pub struct Instance {
+pub struct Module {
     pub imports: embedder::Imports,
-}
+} // struct Module
 
-impl Instance {
+#[repr(transparent)]
+pub struct Instance(::core::option::Option<embedder::Module<Module>>);
 
-    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {
-        let allocated = Self {
-            imports: store.imports,
-        };
-        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
-        Ok(module)
-    }
+impl Module {
 
 fn _f0(mut _l0: i32) -> i32 {
     i32::wrapping_add(_l0, 5i32)
@@ -41,7 +36,41 @@ pub fn add_five(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder::Tr
     const _SYM_FN_0: embedder::rt::symbol::WasmSymbol = { let mut sym = embedder::rt::symbol::WasmSymbol::new(0, &embedder::rt::symbol::WasmSymbolSignature { parameters: &[embedder::rt::symbol::WasmValType::I32], results: &[embedder::rt::symbol::WasmValType::I32] }, embedder::rt::symbol::WasmSymbolKind::Defined { offset: 38 }); sym.export_names = &["add_five"]; sym };
     const fn _frame_fn_0(o: u32) -> embedder::rt::trace::WasmFrame { embedder::rt::trace::WasmFrame::new(&Self::_SYM_FN_0, o) }
 
+} // impl Module
+
+impl Instance {
+    pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {
+        let allocated = Module {
+            imports: store.imports,
+        };
+        let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);
+        Ok(Self(Some(module)))
+    }
+
+    pub fn leak(module: Self) -> embedder::Module<Module> {
+        let mut module = ::core::mem::ManuallyDrop::new(module);
+        ::core::mem::take(&mut module.0).unwrap()
+    }
 } // impl Instance
+
+impl ::core::ops::Deref for Instance {
+    type Target = embedder::Module<Module>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref().unwrap()
+    }
+} // impl Deref
+
+impl ::core::ops::Drop for Instance {
+
+    fn drop(&mut self) {
+    if embedder::rt::thread::panicking() {
+        return;
+    }
+
+    let module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());
+    }
+} // impl Drop
 
 } // mod $module
 
