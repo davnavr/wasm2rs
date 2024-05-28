@@ -1238,7 +1238,7 @@ impl Convert<'_> {
         for func in context.declarative_func_elements.iter() {
             let param_count = context.function_signature(func.0).params().len();
 
-            writeln!(o, "{sp}{sp}let recursive = module.clone();");
+            writeln!(o, "{sp}{sp}let _rec = module.clone();");
             write!(
                 o,
                 "{sp}{sp}module.{}.set(embedder::rt::func_ref::FuncRef::<embedder::Trap>::from_closure_{}(move |",
@@ -1263,7 +1263,7 @@ impl Convert<'_> {
             }
 
             match context.function_attributes.call_kind(func.0) {
-                crate::context::CallKind::Method => o.write_str("recursive."),
+                crate::context::CallKind::Method => o.write_str("_rec."),
                 crate::context::CallKind::Function => o.write_str("Module::"),
             }
 
@@ -1433,12 +1433,12 @@ impl Convert<'_> {
         o.write_str("\nimpl ::core::ops::Drop for Instance {\n");
         writeln!(o, "\n{sp}fn drop(&mut self) {{");
 
-        writeln!(o, "{sp}if embedder::rt::thread::panicking() {{");
-        writeln!(o, "{sp}{sp}return;\n{sp}}}\n");
+        writeln!(o, "{sp}{sp}if embedder::rt::thread::panicking() {{");
+        writeln!(o, "{sp}{sp}{sp}return;\n{sp}{sp}}}\n");
 
         writeln!(
             o,
-            "{sp}let module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());"
+            "{sp}{sp}let _module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());"
         );
 
         // Any `FuncRef`'s within the module are replaced with `NULL` so there are no
@@ -1448,7 +1448,7 @@ impl Convert<'_> {
         for func in context.declarative_func_elements.iter() {
             writeln!(
                 o,
-                "{sp}{sp}*module.{func}.get_mut() = embedder::rt::func_ref::FuncRef::NULL;"
+                "{sp}{sp}*_module.{func}.get_mut() = embedder::rt::func_ref::FuncRef::NULL;"
             );
         }
 

@@ -243,11 +243,11 @@ impl ::core::ops::Deref for Instance {
 impl ::core::ops::Drop for Instance {
 
     fn drop(&mut self) {
-    if embedder::rt::thread::panicking() {
-        return;
-    }
+        if embedder::rt::thread::panicking() {
+            return;
+        }
 
-    let module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());
+        let _module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());
     }
 } // impl Drop
 
