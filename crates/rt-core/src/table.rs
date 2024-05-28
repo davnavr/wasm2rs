@@ -9,6 +9,8 @@ mod swap_guard;
 /// [`Table`]: wasm2rs-rt-table::Table
 pub trait TableElement: Clone + Eq {}
 
+impl TableElement for () {}
+
 /// Trait for values that can be stored in [`Table`]s with a well defined [`NULL`] value.
 ///
 /// [`Table`]: wasm2rs-rt-table::Table
@@ -57,5 +59,20 @@ pub trait NullableTableElement: TableElement {
     {
         let mut contents = swap_guard::Guard::access(cell);
         f(&mut contents)
+    }
+}
+
+impl NullableTableElement for () {
+    const NULL: () = ();
+
+    fn forget_null(_: ()) {}
+
+    fn clone_from_cell(_: &core::cell::Cell<()>) {}
+
+    fn with_cell_contents<F, R>(_: &core::cell::Cell<()>, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        f(&mut ())
     }
 }

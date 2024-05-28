@@ -12,6 +12,7 @@ pub mod self_contained {
 
     pub type Trap = crate::trap::TrapError;
     pub type Imports = ();
+    pub type ExternRef = ();
     pub type Memory0 = crate::memory::HeapMemory;
 
     /// Contains all of state needed by the allocated WebAssembly module.
