@@ -21,6 +21,7 @@ pub mod global;
 pub mod limit;
 pub mod symbol;
 pub mod table;
+pub mod thread;
 pub mod trace;
 pub mod trap;
 

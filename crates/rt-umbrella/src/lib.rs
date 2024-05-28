@@ -92,7 +92,7 @@ pub use rt_math as math;
 pub use rt_memory as memory;
 pub use rt_stack as stack;
 pub use rt_table as table;
-pub use wasm2rs_rt_core::{global, symbol, trace};
+pub use wasm2rs_rt_core::{global, symbol, thread, trace};
 
 #[cfg(feature = "feature-simd128")]
 pub use rt_simd as simd;
