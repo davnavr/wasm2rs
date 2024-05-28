@@ -713,9 +713,9 @@ fn convert_impl(
                     );
                 }
 
-                builder.push_wasm_operand(crate::ast::Expr::RefFunc(crate::ast::ElemFuncRef(
-                    crate::ast::FuncId(function_index),
-                )))?;
+                builder.push_wasm_operand(crate::ast::Literal::RefFunc(
+                    crate::ast::ElemFuncRef(crate::ast::FuncId(function_index)),
+                ))?;
             }
             Operator::I64TruncF32S => {
                 builder.can_trap();

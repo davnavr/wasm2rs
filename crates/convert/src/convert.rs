@@ -918,12 +918,11 @@ impl Convert<'_> {
         // Write constant globals.
         for global in context.constant_globals.iter() {
             match context.constant_expressions.get(global.initializer) {
-                crate::ast::Expr::Literal(literal) => writeln!(
-                    o,
-                    "{sp}const {:#}: {} = {literal};",
-                    global.id,
-                    literal.type_of()
-                ),
+                crate::ast::Expr::Literal(literal) => {
+                    write!(o, "{sp}const {:#}: {} = ", global.id, literal.type_of());
+                    literal.print(&mut o);
+                    o.write_str(";\n");
+                }
                 bad => unreachable!(
                     "expected global {} to be constant, but got {bad:?}",
                     global.id

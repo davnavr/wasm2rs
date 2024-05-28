@@ -68,21 +68,30 @@ impl std::fmt::Display for crate::ast::ValType {
             Self::I64 => f.write_str("i64"),
             Self::F32 => f.write_str("f32"),
             Self::F64 => f.write_str("f64"),
+            Self::FuncRef => {
+                f.write_str("embedder::rt::func_ref::FuncRef<'static, embedder::Trap>")
+            }
         }
     }
 }
 
-impl std::fmt::Display for crate::ast::Literal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl crate::ast::Literal {
+    pub(crate) fn print(&self, out: &mut dyn crate::write::Write) {
         match self {
-            Self::I32(i) if *i <= 9 => write!(f, "{i}i32"),
-            Self::I32(i) if *i <= 0xFFFF => write!(f, "{i:#X}i32"),
-            Self::I32(i) => write!(f, "{i:#010X}i32"),
-            Self::I64(i) if *i <= 9 => write!(f, "{i}i64"),
-            Self::I64(i) if *i <= 0xFFFF => write!(f, "{i:#X}i64"),
-            Self::I64(i) => write!(f, "{i:#018X}i64"),
-            Self::F32(z) => write!(f, "f32::from_bits({z:#010X})"),
-            Self::F64(z) => write!(f, "f64::from_bits({z:#018X})"),
+            Self::I32(i) if *i <= 9 => write!(out, "{i}i32"),
+            Self::I32(i) if *i <= 0xFFFF => write!(out, "{i:#X}i32"),
+            Self::I32(i) => write!(out, "{i:#010X}i32"),
+            Self::I64(i) if *i <= 9 => write!(out, "{i}i64"),
+            Self::I64(i) if *i <= 0xFFFF => write!(out, "{i:#X}i64"),
+            Self::I64(i) => write!(out, "{i:#018X}i64"),
+            Self::F32(z) => write!(out, "f32::from_bits({z:#010X})"),
+            Self::F64(z) => write!(out, "f64::from_bits({z:#018X})"),
+            Self::RefFunc(func) => {
+                write!(
+                    out,
+                    "embedder::rt::table::NullableTableElement::clone_from_cell(&self.{func})"
+                );
+            }
         }
     }
 }
@@ -273,7 +282,7 @@ impl crate::ast::Expr {
         }
 
         match self {
-            Self::Literal(literal) => write!(out, "{literal}"),
+            Self::Literal(literal) => literal.print(out),
             Self::UnaryOperator { kind, c_1 } => {
                 use crate::ast::UnOp;
 
@@ -563,12 +572,6 @@ impl crate::ast::Expr {
                 out.write_str("(");
                 reference.print(out, false, context, function);
                 out.write_str("embedder::rt::table::NullableTableElement::NULL) as i32");
-            }
-            Self::RefFunc(func) => {
-                write!(
-                    out,
-                    "embedder::rt::table::NullableTableElement::clone_from_cell(&self.{func})"
-                );
             }
             Self::GetLocal(local) => write!(out, "{local}"),
             Self::GetGlobal(global) => match context.wasm.global_kind(*global) {
@@ -935,7 +938,10 @@ pub(crate) fn print_statements(
                 debug_assert!(!is_last, "expected a terminator statement");
 
                 match context.arena.get(expr) {
-                    Expr::Literal(literal) => write!(out, "// {literal}"),
+                    Expr::Literal(literal) => {
+                        out.write_str("// ");
+                        literal.print(out);
+                    }
                     // No side effects or sub-expressions to evauluate.
                     Expr::GetGlobal(_)
                     | Expr::GetLocal(_)
@@ -1168,6 +1174,10 @@ pub(crate) fn print_statements(
                     ValType::I64 => out.write_str("0i64"),
                     ValType::F32 => out.write_str("0f32"),
                     ValType::F64 => out.write_str("0f64"),
+                    ValType::FuncRef => write!(
+                        out,
+                        "embedder::rt::func_ref::FuncRef::<'static, embedder::Trap>::NULL"
+                    ),
                 }
 
                 out.write_str(";");

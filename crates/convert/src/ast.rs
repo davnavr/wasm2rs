@@ -117,23 +117,26 @@ impl std::fmt::Display for MakeFrame {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum ValType {
     I32,
     I64,
     F32,
     F64,
+    FuncRef,
 }
 
 impl From<wasmparser::ValType> for ValType {
     fn from(ty: wasmparser::ValType) -> Self {
-        use wasmparser::ValType;
+        use wasmparser::{RefType, ValType};
 
         match ty {
             ValType::I32 => Self::I32,
             ValType::I64 => Self::I64,
             ValType::F32 => Self::F32,
             ValType::F64 => Self::F64,
+            //ValType::Ref(RefType::EXTERNREF) => Self::ExternRef,
+            ValType::Ref(RefType::FUNCREF) => Self::FuncRef,
             _ => unimplemented!("{ty:?} is not yet supported"),
         }
     }
@@ -145,7 +148,11 @@ pub(crate) enum Literal {
     I64(i64),
     F32(u32),
     F64(u64),
-    //RefNull(),
+    //RefNull(RefType),
+    /// A reference to the given function. Corresponds to the [`ref.func`] instruction.
+    ///
+    /// [`ref.func`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
+    RefFunc(ElemFuncRef),
 }
 
 impl Literal {
@@ -155,6 +162,7 @@ impl Literal {
             Self::I64(_) => ValType::I64,
             Self::F32(_) => ValType::F32,
             Self::F64(_) => ValType::F64,
+            Self::RefFunc(_) => ValType::FuncRef,
         }
     }
 }
@@ -397,17 +405,11 @@ pub(crate) enum Expr {
         c_1: ExprId,
         c_2: ExprId,
     },
-    // TODO: Should RefNull and RefFunc be Literals?
-    // RefNull
     /// Determines if the given expression is a `null` reference. Corresponds to the
     /// [`ref.is_null`] instruction.
     ///
     /// [`ref.is_null`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
     RefIsNull(ExprId),
-    /// Creates a reference to the given function. Corresponds to the [`ref.func`] instruction.
-    ///
-    /// [`ref.func`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
-    RefFunc(crate::ast::ElemFuncRef),
     /// Gets the value of a local variable. Corresponds to the `local.get` instruction.
     ///
     /// [`local.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
