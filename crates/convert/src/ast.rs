@@ -118,25 +118,42 @@ impl std::fmt::Display for MakeFrame {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum RefType {
+    Extern,
+    Func,
+}
+
+impl From<wasmparser::RefType> for RefType {
+    fn from(ty: wasmparser::RefType) -> Self {
+        use wasmparser::RefType;
+
+        match ty {
+            RefType::EXTERNREF => Self::Extern,
+            RefType::FUNCREF => Self::Func,
+            _ => unimplemented!("{ty:?} is not yet supported"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum ValType {
     I32,
     I64,
     F32,
     F64,
-    FuncRef,
+    Ref(RefType),
 }
 
 impl From<wasmparser::ValType> for ValType {
     fn from(ty: wasmparser::ValType) -> Self {
-        use wasmparser::{RefType, ValType};
+        use wasmparser::ValType;
 
         match ty {
             ValType::I32 => Self::I32,
             ValType::I64 => Self::I64,
             ValType::F32 => Self::F32,
             ValType::F64 => Self::F64,
-            //ValType::Ref(RefType::EXTERNREF) => Self::ExternRef,
-            ValType::Ref(RefType::FUNCREF) => Self::FuncRef,
+            ValType::Ref(ref_ty) => Self::Ref(ref_ty.into()),
             _ => unimplemented!("{ty:?} is not yet supported"),
         }
     }
@@ -144,11 +161,18 @@ impl From<wasmparser::ValType> for ValType {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Literal {
+    /// `i32.const`
     I32(i32),
+    /// `i64.const`
     I64(i64),
+    /// `f32.const`
     F32(u32),
+    /// `f64.const`
     F64(u64),
-    //RefNull(RefType),
+    /// Corresponds to the [`ref.null`] instruction.
+    ///
+    /// [`ref.null`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
+    RefNull(RefType),
     /// A reference to the given function. Corresponds to the [`ref.func`] instruction.
     ///
     /// [`ref.func`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
@@ -162,7 +186,8 @@ impl Literal {
             Self::I64(_) => ValType::I64,
             Self::F32(_) => ValType::F32,
             Self::F64(_) => ValType::F64,
-            Self::RefFunc(_) => ValType::FuncRef,
+            Self::RefNull(ref_ty) => ValType::Ref(*ref_ty),
+            Self::RefFunc(_) => ValType::Ref(RefType::Func),
         }
     }
 }

@@ -68,9 +68,23 @@ impl std::fmt::Display for crate::ast::ValType {
             Self::I64 => f.write_str("i64"),
             Self::F32 => f.write_str("f32"),
             Self::F64 => f.write_str("f64"),
-            Self::FuncRef => {
+            Self::Ref(crate::ast::RefType::Extern) => f.write_str("embedder::ExternRef"),
+            Self::Ref(crate::ast::RefType::Func) => {
                 f.write_str("embedder::rt::func_ref::FuncRef<'static, embedder::Trap>")
             }
+        }
+    }
+}
+
+fn print_null_ref(out: &mut dyn crate::write::Write, ref_ty: crate::ast::RefType) {
+    use crate::ast::RefType;
+
+    match ref_ty {
+        RefType::Extern => {
+            out.write_str("<embedder::ExternRef as embedder::table::NullableTableElement>::NULL")
+        }
+        RefType::Func => {
+            out.write_str("embedder::rt::func_ref::FuncRef::<'static, embedder::Trap>::NULL")
         }
     }
 }
@@ -86,6 +100,7 @@ impl crate::ast::Literal {
             Self::I64(i) => write!(out, "{i:#018X}i64"),
             Self::F32(z) => write!(out, "f32::from_bits({z:#010X})"),
             Self::F64(z) => write!(out, "f64::from_bits({z:#018X})"),
+            Self::RefNull(ref_ty) => print_null_ref(out, *ref_ty),
             Self::RefFunc(func) => {
                 write!(
                     out,
@@ -1174,10 +1189,7 @@ pub(crate) fn print_statements(
                     ValType::I64 => out.write_str("0i64"),
                     ValType::F32 => out.write_str("0f32"),
                     ValType::F64 => out.write_str("0f64"),
-                    ValType::FuncRef => write!(
-                        out,
-                        "embedder::rt::func_ref::FuncRef::<'static, embedder::Trap>::NULL"
-                    ),
+                    ValType::Ref(ref_ty) => print_null_ref(out, ref_ty),
                 }
 
                 out.write_str(";");

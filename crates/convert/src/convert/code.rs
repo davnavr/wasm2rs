@@ -693,7 +693,17 @@ fn convert_impl(
             }
             Operator::I64ExtendI32S => un_op!(I64ExtendI32S),
             Operator::I64ExtendI32U => un_op!(I64ExtendI32U),
-            //Operator::RefNull => {}
+            Operator::RefNull { hty } => {
+                use wasmparser::HeapType;
+
+                let ref_ty = match hty {
+                    HeapType::Extern => crate::ast::RefType::Extern,
+                    HeapType::Func => crate::ast::RefType::Func,
+                    _ => anyhow::bail!("unknown heap type {hty:?} in ref.null @ {op_offset:#X}"),
+                };
+
+                builder.push_wasm_operand(crate::ast::Literal::RefNull(ref_ty))?;
+            }
             Operator::RefIsNull => {
                 let reference = builder.pop_wasm_operand();
                 builder.push_wasm_operand(crate::ast::Expr::RefIsNull(reference))?;
