@@ -6,8 +6,10 @@ mod allocate_memory;
 
 pub use allocate_memory::{AllocateHeapMemory, AllocateMemory, AllocateMemoryError};
 
-#[allow(missing_docs)]
-pub trait ModuleAllocation: core::ops::Deref {
+/// Represents a WebAssembly [module instance].
+///
+/// [module instance]: https://webassembly.github.io/spec/core/exec/runtime.html#syntax-moduleinst
+pub trait ModuleAllocation: Clone + core::ops::Deref {
     /// Gets a mutable reference to the underlying value.
     ///
     /// # Panics
