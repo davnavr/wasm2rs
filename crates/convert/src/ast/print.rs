@@ -213,7 +213,7 @@ impl std::fmt::Display for FrameRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{{ const F: embedder::rt::trace::WasmFrame = Instance::{}({}); &F }}",
+            "{{ const F: embedder::rt::trace::WasmFrame = Module::{}({}); &F }}",
             self.maker, self.instruction_offset,
         )
     }

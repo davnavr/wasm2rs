@@ -868,7 +868,7 @@ impl Convert<'_> {
         // TODO: Option to specify #[derive(Debug)] impl
         writeln!(
             o,
-            "pub struct Instance {{\n{sp}pub imports: embedder::Imports,"
+            "pub struct Module {{\n{sp}pub imports: embedder::Imports,"
         );
 
         let defined_memories = ((context.memory_import_names.len() as u32)
@@ -911,9 +911,13 @@ impl Convert<'_> {
             );
         }
 
-        writeln!(o, "}}\n"); // struct Instance
+        o.write_str(concat!(
+            "} // struct Module\n\n",
+            "#[repr(transparent)]\n",
+            "pub struct Instance(::core::option::Option<embedder::Module<Module>>);\n\n"
+        ));
 
-        writeln!(o, "impl Instance {{");
+        writeln!(o, "impl Module {{");
 
         // Write constant globals.
         for global in context.constant_globals.iter() {
@@ -1032,272 +1036,6 @@ impl Convert<'_> {
             }
             write!(o, "\n{sp}}}\n");
         }
-
-        // Write function to instantiate the module.
-        writeln!(
-            o,
-            "\n{sp}pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {{"
-        );
-
-        writeln!(o, "{sp}{sp}let allocated = Self {{");
-        writeln!(o, "{sp}{sp}{sp}imports: store.imports,");
-
-        for global in context.instantiate_globals.iter() {
-            write!(o, "{sp}{sp}{sp}{global}: ");
-            if context.types.global_at(global.0).mutable {
-                o.write_str("embedder::rt::global::Global::<_>::ZERO");
-            } else {
-                o.write_str("Default::default()");
-            }
-            o.write_str(",\n");
-        }
-
-        // Technically speaking the limits of the imported memories and tables should be checked before
-        // linear memories are "allocated".
-
-        fn print_memory_limits(
-            out: &mut dyn crate::write::Write,
-            memory_type: &wasmparser::MemoryType,
-        ) {
-            write!(out, "{}, ", memory_type.initial);
-            match memory_type.maximum {
-                Some(maximum) => write!(out, "{maximum}"),
-                None if memory_type.memory64 => write!(
-                    out,
-                    "<u64 as embedder::rt::memory::Address>::MAX_PAGE_COUNT"
-                ),
-                None => write!(
-                    out,
-                    "<u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT"
-                ),
-            }
-        }
-
-        // Allocate the linear memories.
-        for memory_id in defined_memories {
-            let memory_type = context.types.memory_at(memory_id.0);
-            write!(
-                o,
-                "{sp}{sp}{sp}{}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, ",
-                crate::context::MemoryIdent::Id(memory_id),
-                memory_id.0,
-                memory_id.0);
-
-            print_memory_limits(&mut o, &memory_type);
-            o.write_str(")?,\n");
-        }
-
-        // Functions referred to in declarative element segments.
-        for func in context.declarative_func_elements.iter() {
-            writeln!(
-                o,
-                "{sp}{sp}{sp}{func}: ::core::cell::Cell::new(embedder::rt::func_ref::FuncRef::NULL),"
-            );
-        }
-
-        writeln!(o, "{sp}{sp}}};");
-
-        writeln!(
-            o,
-            "{sp}{sp}let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);"
-        );
-
-        // Allocate functions referred to in declarative element segments upfront.
-        for func in context.declarative_func_elements.iter() {
-            let param_count = context.function_signature(func.0).params().len();
-
-            writeln!(o, "{sp}{sp}let recursive = module.clone();");
-            write!(
-                o,
-                "{sp}{sp}module.{}.set(embedder::rt::func_ref::FuncRef::<embedder::Trap>::from_closure_{}(move |",
-                func,
-                param_count,
-            );
-
-            for i in 0..param_count {
-                if i > 0 {
-                    o.write_str(", ");
-                }
-
-                write!(o, "_{i}");
-            }
-
-            o.write_str("| ");
-
-            // Cannot use `crate::ast::print::print_stub` here.
-            let can_unwind = context.function_attributes.unwind_kind(func.0).can_unwind();
-            if !can_unwind {
-                o.write_str("Ok(");
-            }
-
-            match context.function_attributes.call_kind(func.0) {
-                crate::context::CallKind::Method => o.write_str("recursive."),
-                crate::context::CallKind::Function => o.write_str("Self::"),
-            }
-
-            write!(o, "{}(", context.function_ident(func.0));
-
-            for i in 0..param_count {
-                if i > 0 {
-                    o.write_str(", ");
-                }
-
-                write!(o, "_{i}");
-            }
-
-            if !can_unwind {
-                o.write_str(")");
-            }
-
-            o.write_str(")));\n");
-        }
-
-        // TODO: Check table import limits.
-
-        // Check imported linear memory limits.
-        for memory_id in
-            (0u32..(context.memory_import_names.len() as u32)).map(crate::ast::MemoryId)
-        {
-            let import = context.memory_import(memory_id).expect("memory import");
-            let memory_type = context.types.memory_at(memory_id.0);
-            write!(
-                o,
-                "{sp}{sp}embedder::rt::memory::check_limits(module.{}, {}, ",
-                crate::context::MemoryIdent::Import(import),
-                memory_id.0,
-            );
-
-            print_memory_limits(&mut o, &memory_type);
-            o.write_str(")?;\n");
-        }
-
-        let mut got_inst_mut = false;
-        let mut make_inst_mut = move |o: &mut crate::write::IoWrite| {
-            if !got_inst_mut {
-                got_inst_mut = true;
-                writeln!(o, "{sp}{sp}let mut inst: &mut Self = embedder::rt::store::ModuleAllocation::get_mut(&mut module);");
-            }
-        };
-
-        // Initialize the globals to their initial values.
-        if !context.instantiate_globals.is_empty() {
-            make_inst_mut(&mut o);
-        }
-
-        // This has to occur after `inst` is created in case there is self-referential stuff.
-        for global in context.instantiate_globals.iter().copied() {
-            write!(o, "{sp}{sp}");
-
-            let is_mutable = context.types.global_at(global.0).mutable;
-
-            if is_mutable {
-                o.write_str("*");
-            }
-
-            write!(o, "inst.{global}");
-
-            if is_mutable {
-                o.write_str(".get_mut()");
-            }
-
-            o.write_str(" = ");
-
-            if let Some(import) = context.global_import(global) {
-                write!(o, "inst.{import}()");
-            } else {
-                let init = context
-                    .defined_globals
-                    .get(&global)
-                    .expect("missing initializer expression for defined global");
-
-                init.print(
-                    &mut o,
-                    false,
-                    &crate::ast::print::Context {
-                        wasm: context,
-                        arena: &context.constant_expressions,
-                        debug_info: self.debug_info,
-                    },
-                    None,
-                );
-            }
-
-            o.write_str(";\n");
-        }
-
-        // TODO: Copy element segments.
-
-        // Copy active data segments.
-        if !context.active_data_segments.is_empty() {
-            make_inst_mut(&mut o);
-        }
-
-        for data_segment in context.active_data_segments.iter() {
-            // TODO: Fix, data segment initialization for imported memories is wrong.
-            // TODO: Helper that takes &mut [u8] of linear memory could be used for initializing
-            // data segments.
-            write!(
-                o,
-                "{sp}{sp}embedder::rt::memory::init::<{}, _, _, embedder::Trap>(&inst.{}, ",
-                data_segment.memory.0,
-                context.memory_ident(data_segment.memory)
-            );
-
-            data_segment.offset.print(
-                &mut o,
-                false,
-                &crate::ast::print::Context {
-                    wasm: context,
-                    arena: &context.constant_expressions,
-                    debug_info: self.debug_info,
-                },
-                None,
-            );
-
-            let data_length = context.data_segment_contents[data_segment.data.0 as usize].len();
-
-            writeln!(
-                o,
-                ", 0, {data_length}, Self::{}, None)?;",
-                data_segment.data
-            );
-        }
-
-        if let Some(start_function) = context.start_function {
-            writeln!(
-                o,
-                "{sp}{sp}core::todo!(\"call start function #{}\");",
-                start_function.0
-            );
-        }
-
-        writeln!(o, "{sp}{sp}Ok(module)");
-        writeln!(o, "{sp}}}");
-
-        // Write function to deallocate self-referential stuff.
-        // TODO: Should module be marked #[must_use] so that this function is called?
-        // This function leaves the module in a buggy state.
-        writeln!(
-            o,
-            "\n{sp}pub fn uninstantiate(module: embedder::Module<Self>) {{"
-        );
-
-        // Any `FuncRef`'s within the module are replaced with `NULL` so there are no
-        // cyclic references leading to `Rc<Self>` never being freed.
-
-        // Replace all function references originating from declarative element segments.
-        for func in context.declarative_func_elements.iter() {
-            writeln!(
-                o,
-                "{sp}{sp}module.{func}.replace(embedder::rt::func_ref::FuncRef::NULL);"
-            );
-        }
-
-        // TODO: Free all passive element segments.
-
-        // TODO: Free all tables containing FuncRefs.
-
-        writeln!(o, "{sp}}}");
 
         // Write function definitions and their bodies.
         let output = o.into_inner()?;
@@ -1423,8 +1161,304 @@ impl Convert<'_> {
             }
         }
 
-        o.write_str("\n} // impl Instance\n\n");
-        o.write_str("} // mod $module\n\n");
+        o.write_str("\n} // impl Module\n\n");
+
+        o.write_str("impl Instance {\n");
+
+        // Write function to instantiate the module.
+        writeln!(
+            o,
+            "{sp}pub fn instantiate(store: embedder::Store) -> ::core::result::Result<Self, embedder::Trap> {{"
+        );
+
+        writeln!(o, "{sp}{sp}let allocated = Module {{");
+        writeln!(o, "{sp}{sp}{sp}imports: store.imports,");
+
+        for global in context.instantiate_globals.iter() {
+            write!(o, "{sp}{sp}{sp}{global}: ");
+            if context.types.global_at(global.0).mutable {
+                o.write_str("embedder::rt::global::Global::<_>::ZERO");
+            } else {
+                o.write_str("Default::default()");
+            }
+            o.write_str(",\n");
+        }
+
+        // Technically speaking the limits of the imported memories and tables should be checked before
+        // linear memories are "allocated".
+
+        fn print_memory_limits(
+            out: &mut dyn crate::write::Write,
+            memory_type: &wasmparser::MemoryType,
+        ) {
+            write!(out, "{}, ", memory_type.initial);
+            match memory_type.maximum {
+                Some(maximum) => write!(out, "{maximum}"),
+                None if memory_type.memory64 => write!(
+                    out,
+                    "<u64 as embedder::rt::memory::Address>::MAX_PAGE_COUNT"
+                ),
+                None => write!(
+                    out,
+                    "<u32 as embedder::rt::memory::Address>::MAX_PAGE_COUNT"
+                ),
+            }
+        }
+
+        // Allocate the linear memories.
+        for memory_id in defined_memories {
+            let memory_type = context.types.memory_at(memory_id.0);
+            write!(
+                o,
+                "{sp}{sp}{sp}{}: embedder::rt::store::AllocateMemory::allocate(store.memory{}, {}, ",
+                crate::context::MemoryIdent::Id(memory_id),
+                memory_id.0,
+                memory_id.0);
+
+            print_memory_limits(&mut o, &memory_type);
+            o.write_str(")?,\n");
+        }
+
+        // Functions referred to in declarative element segments.
+        for func in context.declarative_func_elements.iter() {
+            writeln!(
+                o,
+                "{sp}{sp}{sp}{func}: ::core::cell::Cell::new(embedder::rt::func_ref::FuncRef::NULL),"
+            );
+        }
+
+        writeln!(o, "{sp}{sp}}};");
+
+        writeln!(
+            o,
+            "{sp}{sp}let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);"
+        );
+
+        // Allocate functions referred to in declarative element segments upfront.
+        for func in context.declarative_func_elements.iter() {
+            let param_count = context.function_signature(func.0).params().len();
+
+            writeln!(o, "{sp}{sp}let recursive = module.clone();");
+            write!(
+                o,
+                "{sp}{sp}module.{}.set(embedder::rt::func_ref::FuncRef::<embedder::Trap>::from_closure_{}(move |",
+                func,
+                param_count,
+            );
+
+            for i in 0..param_count {
+                if i > 0 {
+                    o.write_str(", ");
+                }
+
+                write!(o, "_{i}");
+            }
+
+            o.write_str("| ");
+
+            // Cannot use `crate::ast::print::print_stub` here.
+            let can_unwind = context.function_attributes.unwind_kind(func.0).can_unwind();
+            if !can_unwind {
+                o.write_str("Ok(");
+            }
+
+            match context.function_attributes.call_kind(func.0) {
+                crate::context::CallKind::Method => o.write_str("recursive."),
+                crate::context::CallKind::Function => o.write_str("Module::"),
+            }
+
+            write!(o, "{}(", context.function_ident(func.0));
+
+            for i in 0..param_count {
+                if i > 0 {
+                    o.write_str(", ");
+                }
+
+                write!(o, "_{i}");
+            }
+
+            if !can_unwind {
+                o.write_str(")");
+            }
+
+            o.write_str(")));\n");
+        }
+
+        // TODO: Check table import limits.
+
+        // Check imported linear memory limits.
+        for memory_id in
+            (0u32..(context.memory_import_names.len() as u32)).map(crate::ast::MemoryId)
+        {
+            let import = context.memory_import(memory_id).expect("memory import");
+            let memory_type = context.types.memory_at(memory_id.0);
+            write!(
+                o,
+                "{sp}{sp}embedder::rt::memory::check_limits(module.{}, {}, ",
+                crate::context::MemoryIdent::Import(import),
+                memory_id.0,
+            );
+
+            print_memory_limits(&mut o, &memory_type);
+            o.write_str(")?;\n");
+        }
+
+        let mut got_inst_mut = false;
+        let mut make_inst_mut = move |o: &mut crate::write::IoWrite| {
+            if !got_inst_mut {
+                got_inst_mut = true;
+                writeln!(o, "{sp}{sp}let mut inst: &mut Module = embedder::rt::store::ModuleAllocation::get_mut(&mut module);");
+            }
+        };
+
+        // Initialize the globals to their initial values.
+        if !context.instantiate_globals.is_empty() {
+            make_inst_mut(&mut o);
+        }
+
+        // This has to occur after `inst` is created in case there is self-referential stuff.
+        for global in context.instantiate_globals.iter().copied() {
+            write!(o, "{sp}{sp}");
+
+            let is_mutable = context.types.global_at(global.0).mutable;
+
+            if is_mutable {
+                o.write_str("*");
+            }
+
+            write!(o, "inst.{global}");
+
+            if is_mutable {
+                o.write_str(".get_mut()");
+            }
+
+            o.write_str(" = ");
+
+            if let Some(import) = context.global_import(global) {
+                write!(o, "inst.{import}()");
+            } else {
+                let init = context
+                    .defined_globals
+                    .get(&global)
+                    .expect("missing initializer expression for defined global");
+
+                init.print(
+                    &mut o,
+                    false,
+                    &crate::ast::print::Context {
+                        wasm: context,
+                        arena: &context.constant_expressions,
+                        debug_info: self.debug_info,
+                    },
+                    None,
+                );
+            }
+
+            o.write_str(";\n");
+        }
+
+        // TODO: Copy element segments.
+
+        // Copy active data segments.
+        if !context.active_data_segments.is_empty() {
+            make_inst_mut(&mut o);
+        }
+
+        for data_segment in context.active_data_segments.iter() {
+            // TODO: Fix, data segment initialization for imported memories is wrong.
+            // TODO: Helper that takes &mut [u8] of linear memory could be used for initializing
+            // data segments.
+            write!(
+                o,
+                "{sp}{sp}embedder::rt::memory::init::<{}, _, _, embedder::Trap>(&inst.{}, ",
+                data_segment.memory.0,
+                context.memory_ident(data_segment.memory)
+            );
+
+            data_segment.offset.print(
+                &mut o,
+                false,
+                &crate::ast::print::Context {
+                    wasm: context,
+                    arena: &context.constant_expressions,
+                    debug_info: self.debug_info,
+                },
+                None,
+            );
+
+            let data_length = context.data_segment_contents[data_segment.data.0 as usize].len();
+
+            writeln!(
+                o,
+                ", 0, {data_length}, Module::{}, None)?;",
+                data_segment.data
+            );
+        }
+
+        if let Some(start_function) = context.start_function {
+            writeln!(
+                o,
+                "{sp}{sp}core::todo!(\"call start function #{}\");",
+                start_function.0
+            );
+        }
+
+        writeln!(o, "{sp}{sp}Ok(Self(Some(module)))");
+        writeln!(o, "{sp}}}");
+
+        // Write function to get a new `Module`
+        writeln!(
+            o,
+            "\n{sp}pub fn leak(module: Self) -> embedder::Module<Module> {{"
+        );
+        writeln!(
+            o,
+            "{sp}{sp}let mut module = ::core::mem::ManuallyDrop::new(module);"
+        );
+        writeln!(
+            o,
+            "{sp}{sp}::core::mem::take(&mut module.0).unwrap()\n{sp}}}"
+        );
+
+        o.write_str("} // impl Instance\n");
+
+        o.write_str("\nimpl ::core::ops::Deref for Instance {\n");
+        write!(o, "{sp}type Target = embedder::Module<Module>;\n\n");
+        writeln!(o, "{sp}fn deref(&self) -> &Self::Target {{");
+        write!(
+            o,
+            "{sp}{sp}self.0.as_ref().unwrap()\n{sp}}}\n}} // impl Deref\n"
+        );
+
+        o.write_str("\nimpl ::core::ops::Drop for Instance {\n");
+        writeln!(o, "\n{sp}fn drop(&mut self) {{");
+
+        writeln!(o, "{sp}if embedder::rt::thread::panicking() {{");
+        writeln!(o, "{sp}{sp}return;\n{sp}}}\n");
+
+        writeln!(
+            o,
+            "{sp}let module = embedder::rt::store::ModuleAllocation::get_mut(self.0.as_mut().unwrap());"
+        );
+
+        // Any `FuncRef`'s within the module are replaced with `NULL` so there are no
+        // cyclic references leading to `Rc<Self>` never being freed.
+
+        // Replace all function references originating from declarative element segments.
+        for func in context.declarative_func_elements.iter() {
+            writeln!(
+                o,
+                "{sp}{sp}*module.{func}.get_mut() = embedder::rt::func_ref::FuncRef::NULL;"
+            );
+        }
+
+        // TODO: Free all passive element segments.
+
+        // TODO: Free all tables containing FuncRefs.
+
+        writeln!(o, "{sp}}}\n}} // impl Drop");
+
+        o.write_str("\n} // mod $module\n\n");
         writeln!(o, "{sp}}}"); // ($vis mod $module use $path)
         o.write_str("}\n"); // macro_rules!
 
