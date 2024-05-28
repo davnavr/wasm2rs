@@ -29,7 +29,6 @@ mod empty;
 mod error;
 mod helpers;
 //mod slice; // struct SliceTable<'a> // Lifetimes in wasm2rs modules are not yet supported
-mod swap_guard;
 
 pub use array::ArrayTable;
 pub use empty::{empty, EmptyTable};

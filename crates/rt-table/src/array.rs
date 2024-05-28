@@ -93,12 +93,11 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table for ArrayTable<E, M
     type Element = E;
 
     fn get(&self, idx: u32) -> BoundsCheck<E> {
-        let cell = self
-            .as_slice_of_cells()
-            .get(crate::index_to_usize(idx)?)
-            .ok_or(BoundsCheckError)?;
-
-        Ok(crate::swap_guard::Guard::access(cell).clone())
+        Ok(E::clone_from_cell(
+            self.as_slice_of_cells()
+                .get(crate::index_to_usize(idx)?)
+                .ok_or(BoundsCheckError)?,
+        ))
     }
 
     fn replace(&self, idx: u32, elem: E) -> BoundsCheck<E> {
@@ -144,7 +143,7 @@ impl<E: NullableTableElement, const MAX: usize> crate::Table for ArrayTable<E, M
     fn clone_into_slice(&self, idx: u32, dst: &mut [E]) -> BoundsCheck<()> {
         let slice = crate::index_into_slice(self.as_slice_of_cells(), idx, dst.len())?;
         for (dst, src) in dst.iter_mut().zip(slice) {
-            *dst = crate::swap_guard::Guard::access(src).clone();
+            *dst = E::clone_from_cell(src);
         }
 
         Ok(())
@@ -173,7 +172,7 @@ impl<E: NullableTableElement + core::fmt::Debug, const MAX: usize> core::fmt::De
         let mut list = f.debug_list();
 
         for cell in self.as_slice_of_cells() {
-            list.entry(&*crate::swap_guard::Guard::access(cell));
+            E::with_cell_contents(cell, |entry| list.entry(entry));
         }
 
         list.finish()

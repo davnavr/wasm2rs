@@ -1,4 +1,4 @@
-use crate::NullableTableElement;
+use crate::table::NullableTableElement;
 use core::cell::Cell;
 
 /// Takes a value from a [`Cell`], temporarily replacing it with [`E::NULL`],
@@ -7,13 +7,13 @@ use core::cell::Cell;
 /// [`E::NULL`]: NullableTableElement::NULL
 pub(crate) struct Guard<'a, E: NullableTableElement> {
     cell: &'a Cell<E>,
-    contents: core::mem::MaybeUninit<E>,
+    contents: E,
 }
 
 impl<'a, E: NullableTableElement> Guard<'a, E> {
     pub(crate) fn access(cell: &'a Cell<E>) -> Self {
         Self {
-            contents: core::mem::MaybeUninit::new(cell.replace(E::NULL)),
+            contents: cell.replace(E::NULL),
             cell,
         }
     }
@@ -23,17 +23,20 @@ impl<E: NullableTableElement> core::ops::Deref for Guard<'_, E> {
     type Target = E;
 
     fn deref(&self) -> &E {
-        // SAFETY: `contents` are only uninitialized in `drop()`.
-        unsafe { self.contents.assume_init_ref() }
+        &self.contents
+    }
+}
+
+impl<E: NullableTableElement> core::ops::DerefMut for Guard<'_, E> {
+    fn deref_mut(&mut self) -> &mut E {
+        &mut self.contents
     }
 }
 
 impl<E: NullableTableElement> Drop for Guard<'_, E> {
     /// Moves the value back into the [`Cell`].
     fn drop(&mut self) {
-        // SAFETY: `self.contents` is not read after this point.
-        // SAFETY: `self.contents` is still initialized at this point.
-        let moved_contents = unsafe { self.contents.assume_init_read() };
+        let moved_contents = core::mem::replace(&mut self.contents, E::NULL);
 
         E::forget_null(self.cell.replace(moved_contents));
     }

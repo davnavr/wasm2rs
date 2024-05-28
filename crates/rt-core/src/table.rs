@@ -1,6 +1,8 @@
 //! Provides traits used for types representing [WebAssembly table] elements.
 //!
-//! [WebAssembly table]:
+//! [WebAssembly table]: https://webassembly.github.io/spec/core/syntax/modules.html#syntax-table
+
+mod swap_guard;
 
 /// Trait for values that can be stored in [`Table`]s.
 ///
@@ -32,5 +34,28 @@ pub trait NullableTableElement: TableElement {
         if elem == Self::NULL {
             core::mem::forget(elem);
         }
+    }
+
+    /// Clones the value stored in the given [`Cell`].
+    ///
+    /// [`Cell`]: core::cell::Cell
+    fn clone_from_cell(cell: &core::cell::Cell<Self>) -> Self {
+        // TODO: Replace the duplicate code rt-table/swap_guard.rs
+        swap_guard::Guard::access(cell).clone()
+    }
+
+    /// Accesses the contents of the [`Cell`] with the given closure. When this method returns, the
+    /// element (which may have been modified or replaced) is written back into the [`Cell`].
+    ///
+    /// If the closure accesses the contents of the [`Cell`], they **may** observe a [`NULL`]
+    /// value.
+    ///
+    /// [`Cell`]: core::cell::Cell
+    fn with_cell_contents<F, R>(cell: &core::cell::Cell<Self>, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let mut contents = swap_guard::Guard::access(cell);
+        f(&mut contents)
     }
 }

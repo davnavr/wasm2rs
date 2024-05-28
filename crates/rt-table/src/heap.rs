@@ -221,11 +221,11 @@ impl<E: NullableTableElement> crate::Table for HeapTable<E> {
         // SAFETY: no `try_grow()` calls in this method.
         let elements = unsafe { self.as_slice_of_cells() };
 
-        let cell = elements
-            .get(crate::index_to_usize(idx)?)
-            .ok_or(BoundsCheckError)?;
-
-        Ok(crate::swap_guard::Guard::access(cell).clone())
+        Ok(E::clone_from_cell(
+            elements
+                .get(crate::index_to_usize(idx)?)
+                .ok_or(BoundsCheckError)?,
+        ))
     }
 
     fn replace(&self, idx: u32, elem: E) -> BoundsCheck<E> {
@@ -279,7 +279,7 @@ impl<E: NullableTableElement> crate::Table for HeapTable<E> {
 
         let src = crate::index_into_slice(elements, idx, dst.len())?;
         for (d, s) in dst.iter_mut().zip(src) {
-            *d = crate::swap_guard::Guard::access(s).clone();
+            *d = E::clone_from_cell(s);
         }
 
         Ok(())
@@ -344,7 +344,7 @@ impl<E: NullableTableElement + core::fmt::Debug> core::fmt::Debug for HeapTable<
         let elements = unsafe { self.as_slice_of_cells() };
 
         for cell in elements {
-            list.entry(&*crate::swap_guard::Guard::access(cell));
+            E::with_cell_contents(cell, |entry| list.entry(entry));
         }
 
         list.finish()
