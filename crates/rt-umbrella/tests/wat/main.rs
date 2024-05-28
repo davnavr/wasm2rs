@@ -4,4 +4,5 @@
 
 mod imports;
 mod memory;
+mod ref_func;
 mod simple;

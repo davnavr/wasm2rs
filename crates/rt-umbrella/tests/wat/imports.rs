@@ -67,7 +67,10 @@ fn imports() {
     assert_eq!(inst.two_equals_two(), Ok(()));
 
     inst.write_5_to_5000().unwrap();
-    assert_eq!(inst.imports.test_imports.private_memory.i32_load(5000), Ok(5));
+    assert_eq!(
+        inst.imports.test_imports.private_memory.i32_load(5000),
+        Ok(5)
+    );
 }
 
 #[test]
