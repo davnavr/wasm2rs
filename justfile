@@ -25,6 +25,7 @@ test_compiler: clippy_rt
     cargo run -- convert -i ./crates/rt-umbrella/tests/wat/simple.wat
     cargo run -- convert -i ./crates/rt-umbrella/tests/wat/memory.wat
     cargo run -- convert -i ./crates/rt-umbrella/tests/wat/imports.wat
+    cargo run -- convert -i ./crates/rt-umbrella/tests/wat/ref_func.wat
     cargo test --package wasm2rs-rt --test wat
 
 test_spec run_flags='': && test_spec_run
