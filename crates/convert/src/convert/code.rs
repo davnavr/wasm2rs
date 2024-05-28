@@ -698,11 +698,14 @@ fn convert_impl(
                 let reference = builder.pop_wasm_operand();
                 builder.push_wasm_operand(crate::ast::Expr::RefIsNull(reference))?;
             }
-            /* Operator::RefFunc { function_index } => {
+            Operator::RefFunc { function_index } => {
+                builder.needs_self();
+
                 let param_count = types[types.core_function_at(function_index)]
                     .unwrap_func()
                     .params()
                     .len();
+
                 if param_count > crate::convert::FUNC_REF_MAX_PARAM_COUNT {
                     anyhow::bail!(
                         "could not convert `ref.func` at {op_offset:#X}, creating a function \
@@ -710,10 +713,10 @@ fn convert_impl(
                     );
                 }
 
-                builder.push_wasm_operand(crate::ast::Expr::RefFunc(crate::ast::FuncId(
-                    function_index,
+                builder.push_wasm_operand(crate::ast::Expr::RefFunc(crate::ast::ElemFuncRef(
+                    crate::ast::FuncId(function_index),
                 )))?;
-            } */
+            }
             Operator::I64TruncF32S => {
                 builder.can_trap();
                 un_op!(I64TruncF32S {

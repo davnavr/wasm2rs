@@ -8,6 +8,8 @@ mod options;
 pub use allocations::Allocations;
 pub use options::{DataSegmentWriter, DebugInfo, StackOverflowChecks};
 
+pub(crate) const FUNC_REF_MAX_PARAM_COUNT: usize = 9;
+
 /// Provides options for converting a [WebAssembly binary module] into a [Rust source file].
 ///
 /// [WebAssembly binary module]: https://webassembly.github.io/spec/core/binary/index.html
@@ -86,6 +88,7 @@ fn validate_payloads(wasm: &[u8]) -> crate::Result<Module<'_>> {
             MUTABLE_GLOBAL,
             SATURATING_FLOAT_TO_INT,
             SIGN_EXTENSION,
+            REFERENCE_TYPES,
             MULTI_VALUE,
             BULK_MEMORY,
             FLOATS,
@@ -259,6 +262,7 @@ fn parse_sections<'wasm>(
         constant_globals: Vec::with_capacity(total_global_count / 2),
         data_segment_contents: Default::default(),
         active_data_segments: Default::default(),
+        declarative_func_elements: Default::default(),
     };
 
     debug_assert_eq!(
@@ -457,7 +461,35 @@ fn parse_sections<'wasm>(
         );
     }
 
-    // element sec
+    if let Some(element_section) = sections.elements {
+        for result in element_section.into_iter_with_offsets() {
+            use wasmparser::{ElementItems, ElementKind, RefType};
+
+            let (element_segment_offset, element_segment) = result?;
+
+            match element_segment.kind {
+                ElementKind::Declared => match element_segment.items {
+                    ElementItems::Functions(indices) => {
+                        context.declarative_func_elements.reserve(indices.count().try_into().unwrap_or_default());
+                        for idx in indices.into_iter() {
+                            context.declarative_func_elements.push(crate::ast::ElemFuncRef(crate::ast::FuncId(idx?)));
+                        }
+                    }
+                    ElementItems::Expressions(RefType::FUNCREF, _) => {
+                        anyhow::bail!("use crate::convert::constant to get RefFunc instructions from declarative data segment @ {element_segment_offset:#X}");
+                    }
+                    ElementItems::Expressions(RefType::EXTERNREF, _) => (),
+                    ElementItems::Expressions(unknown, _) => anyhow::bail!("unsupported reference type {unknown:?} in declarative data segment @ {element_segment_offset:#X}"),
+                },
+                ElementKind::Active { table_index: _, offset_expr: _ } => {
+                    anyhow::bail!("TODO: active element segment support");
+                }
+                ElementKind::Passive => {
+                    anyhow::bail!("TODO: passive element segment support");
+                }
+            }
+        }
+    }
 
     if let Some(data_section) = sections.data {
         let mut data_segment_contents = Vec::with_capacity(data_section.count() as usize);
@@ -869,7 +901,17 @@ impl Convert<'_> {
             writeln!(o, ",");
         }
 
-        writeln!(o, "}}\n");
+        // Could allow option to specify lazy loading for these function references rather than
+        // paying for the cost of construction upfront.
+        for elem in context.declarative_func_elements.iter() {
+            // Have to use cell so that it can be replaced with `NULL` later.
+            writeln!(
+                o,
+                "{sp}{elem}: ::core::cell::Cell<embedder::rt::func_ref::FuncRef<'static, embedder::Trap>>,",
+            );
+        }
+
+        writeln!(o, "}}\n"); // struct Instance
 
         writeln!(o, "impl Instance {{");
 
@@ -992,7 +1034,7 @@ impl Convert<'_> {
             write!(o, "\n{sp}}}\n");
         }
 
-        // Write module's `instantiate()` method.
+        // Write function to instantiate the module.
         writeln!(
             o,
             "\n{sp}pub fn instantiate(store: embedder::Store) -> ::core::result::Result<embedder::Module<Self>, embedder::Trap> {{"
@@ -1046,12 +1088,70 @@ impl Convert<'_> {
             o.write_str(")?,\n");
         }
 
+        // Functions referred to in declarative element segments.
+        for func in context.declarative_func_elements.iter() {
+            writeln!(
+                o,
+                "{sp}{sp}{sp}{func}: ::core::cell::Cell::new(embedder::rt::func_ref::FuncRef::NULL),"
+            );
+        }
+
         writeln!(o, "{sp}{sp}}};");
 
         writeln!(
             o,
             "{sp}{sp}let mut module = embedder::rt::store::AllocateModule::allocate(store.instance, allocated);"
         );
+
+        // Allocate functions referred to in declarative element segments upfront.
+        for func in context.declarative_func_elements.iter() {
+            let param_count = context.function_signature(func.0).params().len();
+
+            writeln!(o, "{sp}{sp}let recursive = module.clone();");
+            write!(
+                o,
+                "{sp}{sp}module.{}.set(embedder::rt::func_ref::FuncRef::<embedder::Trap>::from_closure_{}(move |",
+                func,
+                param_count,
+            );
+
+            for i in 0..param_count {
+                if i > 0 {
+                    o.write_str(", ");
+                }
+
+                write!(o, "_{i}");
+            }
+
+            o.write_str("| ");
+
+            // Cannot use `crate::ast::print::print_stub` here.
+            let can_unwind = context.function_attributes.unwind_kind(func.0).can_unwind();
+            if !can_unwind {
+                o.write_str("Ok(");
+            }
+
+            match context.function_attributes.call_kind(func.0) {
+                crate::context::CallKind::Method => o.write_str("recursive."),
+                crate::context::CallKind::Function => o.write_str("Self::"),
+            }
+
+            write!(o, "{}(", context.function_ident(func.0));
+
+            for i in 0..param_count {
+                if i > 0 {
+                    o.write_str(", ");
+                }
+
+                write!(o, "_{i}");
+            }
+
+            if !can_unwind {
+                o.write_str(")");
+            }
+
+            o.write_str(")));\n");
+        }
 
         // TODO: Check table import limits.
 
@@ -1167,12 +1267,37 @@ impl Convert<'_> {
         if let Some(start_function) = context.start_function {
             writeln!(
                 o,
-                "{sp}{sp}// TODO: call start function #{}",
+                "{sp}{sp}core::todo!(\"call start function #{}\");",
                 start_function.0
             );
         }
 
         writeln!(o, "{sp}{sp}Ok(module)");
+        writeln!(o, "{sp}}}");
+
+        // Write function to deallocate self-referential stuff.
+        // TODO: Should module be marked #[must_use] so that this function is called?
+        // This function leaves the module in a buggy state.
+        writeln!(
+            o,
+            "\n{sp}pub fn uninstantiate(module: embedder::Module<Self>) {{"
+        );
+
+        // Any `FuncRef`'s within the module are replaced with `NULL` so there are no
+        // cyclic references leading to `Rc<Self>` never being freed.
+
+        // Replace all function references originating from declarative element segments.
+        for func in context.declarative_func_elements.iter() {
+            writeln!(
+                o,
+                "{sp}{sp}module.{func}.replace(embedder::rt::func_ref::FuncRef::NULL);"
+            );
+        }
+
+        // TODO: Free all passive element segments.
+
+        // TODO: Free all tables containing FuncRefs.
+
         writeln!(o, "{sp}}}");
 
         // Write function definitions and their bodies.

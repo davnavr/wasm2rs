@@ -87,6 +87,16 @@ impl std::fmt::Display for BlockId {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[repr(transparent)]
+pub(crate) struct ElemFuncRef(pub(crate) crate::ast::FuncId);
+
+impl core::fmt::Display for ElemFuncRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_elem_decl_f{}", self.0 .0)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(transparent)]
 pub(crate) struct SymbolName(pub(crate) FuncId);
@@ -387,15 +397,17 @@ pub(crate) enum Expr {
         c_1: ExprId,
         c_2: ExprId,
     },
+    // TODO: Should RefNull and RefFunc be Literals?
+    // RefNull
     /// Determines if the given expression is a `null` reference. Corresponds to the
     /// [`ref.is_null`] instruction.
     ///
     /// [`ref.is_null`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
     RefIsNull(ExprId),
-    /* /// Creates a reference to the given function. Corresponds to the [`ref.func`] instruction.
+    /// Creates a reference to the given function. Corresponds to the [`ref.func`] instruction.
     ///
     /// [`ref.func`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-ref
-    RefFunc(FuncId), */
+    RefFunc(crate::ast::ElemFuncRef),
     /// Gets the value of a local variable. Corresponds to the `local.get` instruction.
     ///
     /// [`local.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions

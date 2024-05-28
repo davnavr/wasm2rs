@@ -243,16 +243,19 @@ pub(crate) struct Context<'wasm> {
     ///
     /// These are stored in ascending order.
     pub(crate) constant_globals: Vec<DefinedGlobal>,
+    /// Corresponds to the [**start**] component of the WebAssembly module.
+    ///
+    /// [**start**]: https://webassembly.github.io/spec/core/syntax/modules.html#start-function
+    pub(crate) start_function: Option<FuncId>,
     /// Specifies the contents of each WebAssembly data segment.
     pub(crate) data_segment_contents: Box<[&'wasm [u8]]>,
     /// Specifies the WebAssembly module's active data segments.
     ///
     /// These are stored in ascending *dataidx* order.
     pub(crate) active_data_segments: Vec<ActiveDataSegment>,
-    /// Corresponds to the [**start**] component of the WebAssembly module.
-    ///
-    /// [**start**]: https://webassembly.github.io/spec/core/syntax/modules.html#start-function
-    pub(crate) start_function: Option<FuncId>,
+    /// The concatenation of all the WebAssembly module's declarative data segments (containing
+    /// `funcref`s only).
+    pub(crate) declarative_func_elements: Vec<crate::ast::ElemFuncRef>,
 }
 
 impl<'wasm> Context<'wasm> {
