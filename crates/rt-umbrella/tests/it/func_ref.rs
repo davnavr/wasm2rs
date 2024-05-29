@@ -54,3 +54,23 @@ fn null_call() {
         "null function reference should not be invoked, got {result:?}"
     );
 }
+
+#[test]
+fn padding_bytes() {
+    let byte = 10u8;
+    let int = 32i32;
+
+    let closure = move || Ok(i32::from(byte) + int);
+
+    assert_eq!(core::mem::size_of_val(&closure), 8);
+
+    let func_ref = FuncRef::<TrapError>::from_closure_0(closure);
+
+    let cloned = func_ref.clone();
+
+    #[cfg(feature = "std")]
+    std::println!("{func_ref:?} vs {cloned:?}");
+
+    #[cfg(not(miri))] // VTABLE addresses are not equal under miri.
+    assert_eq!(func_ref, cloned);
+}

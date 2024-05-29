@@ -8,5 +8,5 @@ fn uninit() {
 
     //inst.callTheFunc();
 
-    wasm::Instance::uninstantiate(inst);
+    wasm::Instance::leak(inst);
 }

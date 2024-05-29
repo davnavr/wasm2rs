@@ -58,6 +58,19 @@ impl RawFuncRefData {
                 core::ptr::write(data.inline.as_mut_ptr() as *mut T, value);
             }
 
+            // If this code is uncommented, tests fail when run normally, and miri identifies U.B.
+            // See https://github.com/rust-lang/miri/issues/845
+            /* let value = core::mem::MaybeUninit::new(value);
+
+            // SAFETY: Should behave similarly to the conversion above.
+            unsafe {
+                core::ptr::copy_nonoverlapping::<u8>(
+                    value.as_ptr() as *const u8,
+                    data.inline.as_mut_ptr(),
+                    core::mem::size_of::<T>(),
+                );
+            } */
+
             Ok(data)
         } else {
             Err(value)
