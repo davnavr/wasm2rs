@@ -185,7 +185,7 @@ pub(crate) fn convert(
 
                 module_count += 1;
 
-                writeln!(out, "    let current = {{");
+                writeln!(out, "    let _current = {{");
                 out.write_str("        mod module {\n");
                 writeln!(
                     out,
@@ -244,7 +244,7 @@ pub(crate) fn convert(
             }) => {
                 write!(
                     out,
-                    "\n    println!(\"{{:?}}\", current.{}(",
+                    "\n    println!(\"{{:?}}\", _current.{}(",
                     wasm2rs_convert::ident::SafeIdent::from(name)
                 );
 
@@ -267,7 +267,7 @@ pub(crate) fn convert(
             } => {
                 write!(
                     out,
-                    "\n    let result = current.{}(",
+                    "\n    let result = _current.{}(",
                     wasm2rs_convert::ident::SafeIdent::from(name)
                 );
 
@@ -305,7 +305,7 @@ pub(crate) fn convert(
             } => {
                 write!(
                     out,
-                    "\n    let result = current.{}(",
+                    "\n    let result = _current.{}(",
                     wasm2rs_convert::ident::SafeIdent::from(name)
                 );
 
