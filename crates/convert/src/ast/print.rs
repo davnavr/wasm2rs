@@ -59,6 +59,7 @@ mod paths {
     pub(super) const RT_MATH: &str = "embedder::rt::math";
     pub(super) const RT_TRAP: &str = "embedder::rt::trap::Trap";
     pub(super) const RT_MEM: &str = "embedder::rt::memory";
+    pub(super) const RT_TABLE: &str = "embedder::rt::table";
 }
 
 impl std::fmt::Display for crate::ast::RefType {
@@ -607,6 +608,36 @@ impl crate::ast::Expr {
             },
             Self::Temporary(temp) => write!(out, "{temp}"),
             Self::LoopInput(input) => write!(out, "{input}"),
+            Self::TableGet {
+                table,
+                index,
+                instruction_offset,
+            } => {
+                out.write_str(paths::RT_TABLE);
+                write!(out, "::get::<{}, _, >(", table.0);
+                print_table(out, *table, context.wasm);
+                out.write_str(", ");
+                index.print(out, false, context, function);
+                out.write_str(", ");
+                print_frame(out, function, *instruction_offset, context.debug_info);
+                out.write_str(")?");
+            }
+            Self::TableSize(table) => {
+                out.write_str(paths::RT_TABLE);
+                out.write_str("::size(");
+                print_table(out, *table, context.wasm);
+                write!(out, ")?");
+            }
+            Self::TableGrow { table, delta } => {
+                write!(
+                    out,
+                    "{}::grow(&self.{}, ",
+                    paths::RT_TABLE,
+                    context.wasm.table_ident(*table)
+                );
+                delta.print(out, false, context, function);
+                out.write_str(")");
+            }
             Self::MemoryLoad {
                 memory,
                 kind,
@@ -724,7 +755,7 @@ impl crate::ast::Expr {
                     paths::RT_MEM,
                     context.wasm.memory_ident(*memory)
                 );
-                delta.print(out, nested, context, function);
+                delta.print(out, false, context, function);
                 out.write_str(")");
             }
             Self::Call {
@@ -804,6 +835,20 @@ fn write_indentation(
     for _ in 0..indent_level {
         out.write_str(indentation.to_str());
     }
+}
+
+fn print_table(
+    out: &mut dyn crate::write::Write,
+    table: crate::ast::TableId,
+    context: &crate::context::Context,
+) {
+    let table_ident = context.table_ident(table);
+
+    if matches!(table_ident, crate::context::TableIdent::Id(_)) {
+        out.write_str("&");
+    }
+
+    write!(out, "self.{table_ident}");
 }
 
 /// Prints a Rust expression evaluating to something that can be passed to functions expecting a
@@ -968,7 +1013,8 @@ pub(crate) fn print_statements(
                     | Expr::GetLocal(_)
                     | Expr::LoopInput(_)
                     | Expr::Temporary(_)
-                    | Expr::MemorySize(_) => (),
+                    | Expr::MemorySize(_)
+                    | Expr::TableSize(_) => (),
                     expr => {
                         const DISCARD: &str = "let _ = ";
 
@@ -989,7 +1035,8 @@ pub(crate) fn print_statements(
                             }
                             Expr::UnaryOperator { .. }
                             | Expr::BinaryOperator { .. }
-                            | Expr::MemoryLoad { .. } => out.write_str(DISCARD),
+                            | Expr::MemoryLoad { .. }
+                            | Expr::TableGet { .. } => out.write_str(DISCARD),
                             _ => (),
                         }
 
@@ -1366,6 +1413,43 @@ pub(crate) fn print_statements(
                 }
 
                 write!(out, " // {id}");
+            }
+            Statement::TableSet {
+                table,
+                index,
+                value,
+                instruction_offset,
+            } => {
+                out.write_str(paths::RT_TABLE);
+                write!(out, "::set::<{}, _, _>(", table.0);
+                print_table(out, table, context.wasm);
+                out.write_str(", ");
+                index.print(out, false, context, Some(function));
+                out.write_str(", ");
+                value.print(out, false, context, Some(function));
+                out.write_str(", ");
+                print_frame(out, Some(function), instruction_offset, context.debug_info);
+                out.write_str(")?;");
+            }
+            Statement::TableFill {
+                table,
+                index,
+                value,
+                length,
+                instruction_offset,
+            } => {
+                out.write_str(paths::RT_TABLE);
+                write!(out, "::fill::<{}, _, _>(", table.0);
+                print_table(out, table, context.wasm);
+                out.write_str(", ");
+                index.print(out, false, context, Some(function));
+                out.write_str(", ");
+                value.print(out, false, context, Some(function));
+                out.write_str(", ");
+                length.print(out, false, context, Some(function));
+                out.write_str(", ");
+                print_frame(out, Some(function), instruction_offset, context.debug_info);
+                out.write_str(")?;");
             }
             Statement::MemoryStore {
                 memory,

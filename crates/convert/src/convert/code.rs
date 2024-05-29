@@ -501,6 +501,64 @@ fn convert_impl(
                     value,
                 })?;
             }
+            Operator::TableGet { table } => {
+                let index = builder.pop_wasm_operand();
+                builder.needs_self();
+                builder.can_trap();
+                builder.push_wasm_operand(crate::ast::Expr::TableGet {
+                    table: crate::ast::TableId(table),
+                    index,
+                    instruction_offset: instruction_offset(),
+                })?;
+            }
+            Operator::TableSet { table } => {
+                builder.can_trap();
+                builder.needs_self();
+                let value = builder.pop_wasm_operand();
+                let index = builder.pop_wasm_operand();
+                builder.emit_statement(crate::ast::Statement::TableSet {
+                    table: crate::ast::TableId(table),
+                    index,
+                    value,
+                    instruction_offset: instruction_offset(),
+                })?;
+            }
+            Operator::TableSize { table } => {
+                builder.needs_self();
+                builder
+                    .push_wasm_operand(crate::ast::Expr::TableSize(crate::ast::TableId(table)))?;
+            }
+            Operator::TableGrow { table } => {
+                let delta = builder.pop_wasm_operand();
+                builder.needs_self();
+                builder.push_wasm_operand(crate::ast::Expr::TableGrow {
+                    table: crate::ast::TableId(table),
+                    delta,
+                })?;
+            }
+            Operator::TableFill { table } => {
+                builder.can_trap();
+                builder.needs_self();
+                let length = builder.pop_wasm_operand();
+                let value = builder.pop_wasm_operand();
+                let index = builder.pop_wasm_operand();
+                builder.emit_statement(crate::ast::Statement::TableFill {
+                    table: crate::ast::TableId(table),
+                    index,
+                    value,
+                    length,
+                    instruction_offset: instruction_offset(),
+                })?;
+            }
+            // Operator::TableCopy { dst_table, src_table } => {}
+            // Operator::TableInit { elem_index, table } => {}
+            Operator::ElemDrop { elem_index } => {
+                builder.needs_self();
+
+                // See https://webassembly.github.io/spec/core/exec/instructions.html#xref-syntax-instructions-syntax-instr-table-mathsf-elem-drop-x
+                // TODO: Right now, this is just a no-op, but this should probably actually free the element segment (replace with empty slice?)
+                let _ = elem_index;
+            }
             Operator::I32Load { memarg } => memory_load!(memarg => LoadKind::I32),
             Operator::I64Load { memarg } => memory_load!(memarg => LoadKind::I64),
             Operator::F32Load { memarg } => memory_load!(memarg => LoadKind::F32),

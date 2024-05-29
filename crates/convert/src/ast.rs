@@ -454,6 +454,29 @@ pub(crate) enum Expr {
     Temporary(TempId),
     /// Gets the value stored in a temporary loop input variable.
     LoopInput(LoopInput),
+    /// Corresponds to the [`table.get`] instruction, which gets an element within a table.
+    ///
+    /// [`table.get`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-table
+    TableGet {
+        /// The table that is being accessed.
+        table: TableId,
+        /// The dynamic index operand.
+        index: ExprId,
+        instruction_offset: u32,
+    },
+    /// Gets the current number of elements a table has. Corresponds to the [`table.size`] instruction.
+    ///
+    /// [`table.size`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-table
+    TableSize(TableId),
+    /// Corresponds to the [`table.grow`] instruction.
+    ///
+    /// [`table.grow`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-table
+    TableGrow {
+        /// The table memory to grow.
+        table: TableId,
+        /// The number of additional elements to allocate space for.
+        delta: ExprId,
+    },
     /// Corresponds the [**load** instructions] that read a value from linear memory.
     ///
     /// Note that alignment information from the original WebAssembly is discarded.
@@ -602,6 +625,44 @@ pub(crate) enum Statement {
         has_results: bool,
         kind: BlockKind<(), ()>,
     },
+    /// Corresponds to the [`table.set`] instruction.
+    ///
+    /// [`table.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-table
+    TableSet {
+        /// The table that is being accessed.
+        table: TableId,
+        /// The dynamic index operand.
+        ///
+        /// This is evaluated *first*.
+        index: ExprId,
+        /// The value to store.
+        ///
+        /// This is evaluated *after* the [`index`](Statement::TableSet::index).
+        value: ExprId,
+        instruction_offset: u32,
+    },
+    /// Corresponds to the [`table.fill`] instruction.
+    ///
+    /// [`table.fill`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-table
+    TableFill {
+        /// The table to fill.
+        table: TableId,
+        /// The index to begin filling at.
+        ///
+        /// This is evaluated *first*.
+        index: ExprId,
+        /// The value used to fill the region of elements within the table.
+        ///
+        /// This is evaluated *after* the [`index`](Statement::TableFill::index).
+        value: ExprId,
+        /// The length, in elements, of the region to fill.
+        ///
+        /// This is evaluated *after* the [`value`](Statement::TableFill::value).
+        length: ExprId,
+        instruction_offset: u32,
+    },
+    // TableCopy
+    // TableInit
     /// Corresponds the [**store** instructions] that store a value into linear memory.
     ///
     /// Note that alignment information from the original WebAssembly is discarded.
@@ -646,6 +707,8 @@ pub(crate) enum Statement {
         length: ExprId,
         instruction_offset: u32,
     },
+    // MemoryCopy
+    // MemoryInit
 }
 
 impl Statement {
