@@ -422,6 +422,28 @@ pub(crate) enum StoreKind {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Expr {
     Literal(Literal),
+    /// Represents the [`select`] instruction. Note that the code generator should ensure that
+    /// [`val_1`] and [`val_2`] have been evaluated before the [`condition`] in order to correctly
+    /// translate the semantics of the WebAssembly [`select`] instruction.
+    ///
+    /// [`select`]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-parametric
+    /// [`val_1`]: Expr::Select::val_1
+    /// [`val_2`]: Expr::Select::val_2
+    /// [`condition`]: Expr::Select::condition
+    Select {
+        /// The value chosen if the `condition` is truthy (not equal to `0`).
+        ///
+        /// This should be evaluated first.
+        val_1: ExprId,
+        /// The value chosen if the `condition` is false (equal to `0`).
+        ///
+        /// This should be evaluated after [`val_1`](Expr::Select::val_1).
+        val_2: ExprId,
+        /// The condition used to select a value.
+        ///
+        /// This should be evaluated after [`val_2`](Expr::Select::val_2).
+        condition: ExprId,
+    },
     /// Represents instructions of the form [*t.unop*] (`unop(c_1)`).
     ///
     /// [*t.unop*]: https://webassembly.github.io/spec/core/exec/instructions.html#exec-instr-numeric

@@ -306,6 +306,19 @@ impl crate::ast::Expr {
 
         match self {
             Self::Literal(literal) => literal.print(out),
+            Self::Select {
+                val_1,
+                val_2,
+                condition,
+            } => {
+                out.write_str("if ");
+                condition.print_bool(out, context, function);
+                out.write_str(" { ");
+                val_1.print(out, false, context, function);
+                out.write_str(" } else { ");
+                val_2.print(out, false, context, function);
+                out.write_str(" }");
+            }
             Self::UnaryOperator { kind, c_1 } => {
                 use crate::ast::UnOp;
 

@@ -517,6 +517,21 @@ fn convert_impl(
                 let expr = builder.pop_wasm_operand();
                 builder.emit_statement(expr)?;
             }
+            Operator::Select | Operator::TypedSelect { ty: _ } => {
+                let condition = builder.pop_wasm_operand();
+
+                // Ensures both values are evaluated regardless of which one is chosen.
+                builder.flush_operands_to_temporaries()?;
+                let val_2 = builder.pop_wasm_operand();
+                let val_1 = builder.pop_wasm_operand();
+
+                // Because `condition` was on top of the stack, it did not need to be flushed.
+                builder.push_wasm_operand(crate::ast::Expr::Select {
+                    val_1,
+                    val_2,
+                    condition,
+                })?;
+            }
             Operator::LocalGet { local_index } => {
                 builder.push_wasm_operand(crate::ast::Expr::GetLocal(crate::ast::LocalId(
                     local_index,
