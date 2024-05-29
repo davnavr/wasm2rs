@@ -301,9 +301,8 @@ pub(crate) struct Context<'wasm> {
     ///
     /// These are stored in ascending *dataidx* order.
     pub(crate) active_data_segments: Vec<ActiveDataSegment>,
-    /// The concatenation of all the WebAssembly module's declarative data segments (containing
-    /// `funcref`s only).
-    pub(crate) declarative_func_elements: Vec<crate::ast::ElemFuncRef>,
+    /// List of all of the `funcref`s referenced in all of the WebAssembly module's element segments.
+    pub(crate) referenced_func_elements: Vec<crate::ast::ElemFuncRef>,
 }
 
 impl<'wasm> Context<'wasm> {

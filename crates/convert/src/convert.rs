@@ -229,26 +229,46 @@ fn get_section_count<T>(section: &Option<wasmparser::SectionLimited<'_, T>>) -> 
 
 fn parse_func_element_segment_contents(
     arena: &mut crate::ast::Arena,
+    referenced_func_set: &mut std::collections::HashSet<crate::ast::FuncId>,
+    referenced_func_elements: &mut Vec<crate::ast::ElemFuncRef>,
     contents: wasmparser::ElementItems,
 ) -> crate::Result<crate::context::FuncElements> {
     match contents {
-        wasmparser::ElementItems::Functions(indices) => indices
-            .into_iter()
-            .map(|idx| Ok(crate::ast::ElemFuncRef(crate::ast::FuncId(idx?))))
-            .collect::<crate::Result<Vec<crate::ast::ElemFuncRef>>>()
-            .map(crate::context::FuncElements::Indices)
-            .context("while parsing function indices"),
+        wasmparser::ElementItems::Functions(indices) => {
+            let mut func_indices = Vec::with_capacity(indices.count() as usize);
+            for idx in indices.into_iter() {
+                let func = crate::ast::ElemFuncRef(crate::ast::FuncId(idx?));
+
+                func_indices.push(func);
+
+                if referenced_func_set.insert(func.0) {
+                    referenced_func_elements.push(func);
+                }
+            }
+
+            Ok(crate::context::FuncElements::Indices(func_indices))
+        }
         wasmparser::ElementItems::Expressions(wasmparser::RefType::FUNCREF, expressions) => {
             let expressions = expressions.into_iter_with_offsets();
             let mut elements = Vec::with_capacity(expressions.size_hint().0);
             for (i, result) in expressions.enumerate() {
                 let (expr_offset, expr) = result?;
 
-                elements.push(
+                let expr_id =
                     crate::convert::constant::create_ast(&expr, arena).with_context(|| {
                         format!("could not evaluate constant #{i} @ {expr_offset:#X}")
-                    })?,
-                )
+                    })?;
+
+                match arena.get(expr_id) {
+                    crate::ast::Expr::Literal(crate::ast::Literal::RefFunc(func))
+                        if referenced_func_set.insert(func.0) =>
+                    {
+                        referenced_func_elements.push(func)
+                    }
+                    _ => (),
+                }
+
+                elements.push(expr_id);
             }
 
             Ok(crate::context::FuncElements::Expressions(elements))
@@ -300,7 +320,7 @@ fn parse_sections<'wasm>(
         active_func_elements: Default::default(),
         data_segment_contents: Default::default(),
         active_data_segments: Default::default(),
-        declarative_func_elements: Default::default(),
+        referenced_func_elements: Default::default(),
     };
 
     debug_assert_eq!(
@@ -521,6 +541,14 @@ fn parse_sections<'wasm>(
     }
 
     if let Some(element_section) = sections.elements {
+        context
+            .referenced_func_elements
+            .reserve(element_section.count() as usize);
+
+        // TODO: Bit sets should probably be used in this function.
+        let mut referenced_func_set =
+            std::collections::HashSet::with_capacity(context.referenced_func_elements.capacity());
+
         for (result, elem_idx) in element_section
             .into_iter_with_offsets()
             .zip(0u32..=u32::MAX)
@@ -533,9 +561,12 @@ fn parse_sections<'wasm>(
             match element_segment.kind {
                 ElementKind::Declared => match element_segment.items {
                     ElementItems::Functions(indices) => {
-                        context.declarative_func_elements.reserve(indices.count().try_into().unwrap_or_default());
+                        context.referenced_func_elements.reserve(indices.count().try_into().unwrap_or_default());
                         for idx in indices.into_iter() {
-                            context.declarative_func_elements.push(crate::ast::ElemFuncRef(crate::ast::FuncId(idx?)));
+                            let func_id = crate::ast::FuncId(idx?);
+                            if referenced_func_set.insert(func_id) {
+                                context.referenced_func_elements.push(crate::ast::ElemFuncRef(func_id));
+                            }
                         }
                     }
                     ElementItems::Expressions(RefType::FUNCREF, _) => {
@@ -555,8 +586,7 @@ fn parse_sections<'wasm>(
                         )
                     })?;
 
-                    // TODO: Ensure ElemFuncRef codegen for active element segments too, but `declarative_func_elements` is not a set.
-                    let elements = parse_func_element_segment_contents(&mut context.constant_expressions, element_segment.items)
+                    let elements = parse_func_element_segment_contents(&mut context.constant_expressions, &mut referenced_func_set, &mut context.referenced_func_elements, element_segment.items)
                         .with_context(|| format!("while parsing active element segment {element_id} @ {element_segment_offset:#X}"))?;
 
                     context.active_func_elements.push(crate::context::ActiveFuncElements {
@@ -997,7 +1027,7 @@ impl Convert<'_> {
 
         // Could allow option to specify lazy loading for these function references rather than
         // paying for the cost of construction upfront.
-        for elem in context.declarative_func_elements.iter() {
+        for elem in context.referenced_func_elements.iter() {
             // Have to use cell so that it can be replaced with `NULL` later.
             writeln!(
                 o,
@@ -1407,7 +1437,7 @@ impl Convert<'_> {
         }
 
         // Functions referred to in declarative element segments.
-        for func in context.declarative_func_elements.iter() {
+        for func in context.referenced_func_elements.iter() {
             writeln!(
                 o,
                 "{sp}{sp}{sp}{func}: ::core::cell::Cell::new(embedder::rt::func_ref::FuncRef::NULL),"
@@ -1422,7 +1452,7 @@ impl Convert<'_> {
         );
 
         // Allocate functions referred to in declarative element segments upfront.
-        for func in context.declarative_func_elements.iter() {
+        for func in context.referenced_func_elements.iter() {
             let param_count = context.function_signature(func.0).params().len();
 
             writeln!(o, "{sp}{sp}let _rec = module.clone();");
@@ -1665,7 +1695,7 @@ impl Convert<'_> {
         // cyclic references leading to `Rc<Self>` never being freed.
 
         // Replace all function references originating from declarative element segments.
-        for func in context.declarative_func_elements.iter() {
+        for func in context.referenced_func_elements.iter() {
             writeln!(
                 o,
                 "{sp}{sp}*_module.{func}.get_mut() = embedder::rt::func_ref::FuncRef::NULL;"
