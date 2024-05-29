@@ -9,6 +9,9 @@ pub use rt_func_ref::{
 
 use crate::trap::Trap;
 
+// This can't do any tricks with `Cell::swap` and `FuncRef::NULL` since a `FuncRef` that reads from
+// the table would observe that `NULL` value. This means that a `clone()` call is unfortunately
+// required.
 macro_rules! call_indirect {
     ($(
         fn $description:literal $call:ident ($($argument:ident: $param:ident),*) => $handler:ident;
