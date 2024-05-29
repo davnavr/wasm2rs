@@ -54,8 +54,8 @@ impl Convert<'_> {
 #[derive(Default)]
 struct Sections<'a> {
     imports: Option<wasmparser::ImportSectionReader<'a>>,
-    tables: Option<wasmparser::TableSectionReader<'a>>,
-    memories: Option<wasmparser::MemorySectionReader<'a>>,
+    table_count: u32,  // tables: Option<wasmparser::TableSectionReader<'a>>,
+    memory_count: u32, // memories: Option<wasmparser::MemorySectionReader<'a>>,
     //tags: Option<wasmparser::TagSectionReader<'a>>,
     globals: Option<wasmparser::GlobalSectionReader<'a>>,
     exports: Option<wasmparser::ExportSectionReader<'a>>,
@@ -123,11 +123,11 @@ fn validate_payloads(wasm: &[u8]) -> crate::Result<Module<'_>> {
             }
             Payload::TableSection(section) => {
                 validator.table_section(&section)?;
-                sections.tables = Some(section);
+                sections.table_count = section.count();
             }
             Payload::MemorySection(section) => {
                 validator.memory_section(&section)?;
-                sections.memories = Some(section);
+                sections.memory_count = section.count();
             }
             Payload::TagSection(section) => {
                 validator.tag_section(&section)?;
@@ -247,14 +247,18 @@ fn parse_sections<'wasm>(
         // These will be filled in later.
         imported_modules: Default::default(),
         func_import_modules: Default::default(),
+        table_import_modules: Default::default(),
         memory_import_modules: Default::default(),
         global_import_modules: Default::default(),
         func_import_names: Default::default(),
+        table_import_names: Default::default(),
         memory_import_names: Default::default(),
         global_import_names: Default::default(),
         function_export_names: Default::default(),
         global_export_names: std::collections::HashMap::new(),
+        table_export_names: std::collections::HashMap::new(),
         memory_export_names: std::collections::HashMap::new(),
+        table_exports: Vec::<crate::ast::TableId>::new(),
         memory_exports: Vec::<crate::ast::MemoryId>::new(),
         global_exports: Vec::<crate::ast::GlobalId>::new(),
         instantiate_globals: Vec::<crate::ast::GlobalId>::new(),
@@ -282,21 +286,24 @@ fn parse_sections<'wasm>(
             .reserve((import_section.count() as usize).min(2));
 
         let func_import_count = total_function_count - (sections.code_count as usize);
-        let memory_import_count =
-            total_memory_count - (get_section_count(&sections.memories) as usize);
+        let table_import_count = context.types.table_count() - (sections.table_count as usize);
+        let memory_import_count = total_memory_count - (sections.memory_count as usize);
         let global_import_count =
             total_global_count - (get_section_count(&sections.globals) as usize);
 
         let mut func_import_modules = Vec::with_capacity(func_import_count);
+        let mut table_import_modules = Vec::with_capacity(table_import_count);
         let mut memory_import_modules = Vec::with_capacity(memory_import_count);
         let mut global_import_modules = Vec::with_capacity(global_import_count);
         let mut func_import_names = Vec::with_capacity(func_import_count);
+        let mut table_import_names = Vec::with_capacity(table_import_count);
         let mut memory_import_names = Vec::with_capacity(memory_import_count);
         let mut global_import_names = Vec::with_capacity(global_import_count);
 
         // Non-mutable global imports are stored as a field.
         context.instantiate_globals.reserve(global_import_count / 2);
 
+        let mut table_idx = crate::ast::TableId(0);
         let mut memory_idx = crate::ast::MemoryId(0);
         let mut global_idx = crate::ast::GlobalId(0);
 
@@ -325,45 +332,57 @@ fn parse_sections<'wasm>(
                 crate::context::ImportedModule(idx)
             };
 
-            let safe_import_name = crate::context::WasmStr(import.name);
+            let import_name = crate::context::WasmStr(import.name);
             match import.ty {
                 TypeRef::Func(_) => {
                     // TODO: set call kind for imported functions
                     // call_kinds.push(crate::context::CallKind::WithEmbedder);
 
-                    func_import_names.push(safe_import_name);
+                    func_import_names.push(import_name);
                     func_import_modules.push(module_idx);
                 }
+                TypeRef::Table(_) => {
+                    table_import_names.push(import_name);
+                    table_import_modules.push(module_idx);
+                    table_idx.0 += 1;
+                }
                 TypeRef::Memory(_) => {
-                    memory_import_names.push(safe_import_name);
+                    memory_import_names.push(import_name);
                     memory_import_modules.push(module_idx);
                     memory_idx.0 += 1;
                 }
                 TypeRef::Global(global_type) => {
-                    global_import_names.push(safe_import_name);
+                    global_import_names.push(import_name);
                     global_import_modules.push(module_idx);
                     if !global_type.mutable {
                         context.instantiate_globals.push(global_idx);
                     }
                     global_idx.0 += 1;
                 }
-                TypeRef::Tag(_) => anyhow::bail!("tag imports are not yet supported"),
-                bad => anyhow::bail!("TODO: Unsupported import {bad:?} @ {import_offset:#X}"),
+                TypeRef::Tag(_) => {
+                    anyhow::bail!("tag imports are not yet supported @ {import_offset:#X}")
+                } // bad => anyhow::bail!("unsupported import {bad:?} @ {import_offset:#X}"),
             }
         }
 
         // Don't need to store the capacity of these `Vec`s.
         context.func_import_modules = func_import_modules.into_boxed_slice();
+        context.table_import_modules = table_import_modules.into_boxed_slice();
         context.memory_import_modules = memory_import_modules.into_boxed_slice();
         context.global_import_modules = global_import_modules.into_boxed_slice();
 
         context.func_import_names = func_import_names.into_boxed_slice();
+        context.table_import_names = table_import_names.into_boxed_slice();
         context.memory_import_names = memory_import_names.into_boxed_slice();
         context.global_import_names = global_import_names.into_boxed_slice();
 
         debug_assert_eq!(
             context.func_import_modules.len(),
             context.func_import_names.len()
+        );
+        debug_assert_eq!(
+            context.table_import_modules.len(),
+            context.table_import_names.len()
         );
         debug_assert_eq!(
             context.memory_import_modules.len(),
@@ -436,6 +455,11 @@ fn parse_sections<'wasm>(
                     let func_idx = crate::ast::FuncId(export.index);
                     export_lookup_insert(&mut context.function_export_names, func_idx, export_name);
                 }
+                ExternalKind::Table => {
+                    let table_idx = crate::ast::TableId(export.index);
+                    context.table_exports.push(table_idx);
+                    export_lookup_insert(&mut context.table_export_names, table_idx, export_name);
+                }
                 ExternalKind::Memory => {
                     let mem_idx = crate::ast::MemoryId(export.index);
                     context.memory_exports.push(mem_idx);
@@ -446,8 +470,9 @@ fn parse_sections<'wasm>(
                     context.global_exports.push(global_idx);
                     export_lookup_insert(&mut context.global_export_names, global_idx, export_name);
                 }
-                ExternalKind::Tag => anyhow::bail!("tag exports are not yet supported"),
-                bad => anyhow::bail!("TODO: Unsupported export {bad:?} @ {export_offset:#X}"),
+                ExternalKind::Tag => {
+                    anyhow::bail!("tag exports are not yet supported @ {export_offset:#X}")
+                } // bad => anyhow::bail!("unsupported export {bad:?} @ {export_offset:#X}"),
             }
         }
 
@@ -871,6 +896,18 @@ impl Convert<'_> {
             "pub struct Module {{\n{sp}pub imports: embedder::Imports,"
         );
 
+        let defined_tables = (context.table_import_names.len()..context.types.table_count())
+            .map(|idx| crate::ast::TableId(idx as u32));
+
+        for table_id in defined_tables.clone() {
+            writeln!(
+                o,
+                "{sp}{}: embedder::Table{},",
+                crate::context::TableIdent::Id(table_id),
+                table_id.0,
+            );
+        }
+
         let defined_memories = ((context.memory_import_names.len() as u32)
             ..context.types.memory_count())
             .map(crate::ast::MemoryId);
@@ -934,8 +971,8 @@ impl Convert<'_> {
             }
         }
 
-        // Element segments cannot be writen as a constant, since FuncRef requires an already
-        // instantiated module.
+        // Element segments cannot be writen as an associated constant, since FuncRef requires an
+        // already instantiated module.
 
         // Write the data segments contents.
         for (data, data_id) in context
@@ -967,12 +1004,39 @@ impl Convert<'_> {
             o.write_str(";\n\n");
         }
 
+        // Write exported tables.
+        let exported_tables = context.table_exports.iter().flat_map(|id| {
+            context
+                .table_export_names
+                .get(id)
+                .expect("table export name")
+                .iter()
+                .zip(std::iter::repeat(*id))
+        });
+
+        for (export, table_id) in exported_tables {
+            write!(
+                o,
+                "\n{sp}pub fn {}(&self) -> &embedder::Table{} {{\n{sp}{sp}",
+                crate::ident::SafeIdent::from(*export),
+                table_id.0
+            );
+
+            let identifier = context.table_ident(table_id);
+
+            if matches!(identifier, crate::context::TableIdent::Id(_)) {
+                o.write_str("&");
+            }
+
+            writeln!(o, "self.{identifier}\n{sp}}}\n");
+        }
+
         // Write exported memories.
         let exported_memories = context.memory_exports.iter().flat_map(|id| {
             context
                 .memory_export_names
                 .get(id)
-                .expect("memory export did not have a name")
+                .expect("memory export name")
                 .iter()
                 .zip(std::iter::repeat(*id))
         });
@@ -999,7 +1063,7 @@ impl Convert<'_> {
             context
                 .global_export_names
                 .get(id)
-                .expect("memory export did not have a name")
+                .expect("global export name")
                 .iter()
                 .zip(std::iter::repeat(*id))
         });
@@ -1205,7 +1269,25 @@ impl Convert<'_> {
             }
         }
 
-        // Allocate the linear memories.
+        // TODO: Check limits for allocated defined tables/linear memories.
+
+        // Allocate the defined tables.
+        for table_id in defined_tables {
+            let table_type = context.types.table_at(table_id.0);
+
+            writeln!(
+                o,
+                "{sp}{sp}{sp}{}: embedder::rt::store::AllocateTable::<{}>::allocate_null(store.memory{}, {}, {}, {})?,",
+                crate::context::TableIdent::Id(table_id),
+                crate::ast::RefType::from(table_type.element_type),
+                table_id.0,
+                table_id.0,
+                table_type.initial,
+                table_type.maximum.unwrap_or(u32::MAX.into()),
+            );
+        }
+
+        // Allocate the defined linear memories.
         for memory_id in defined_memories {
             let memory_type = context.types.memory_at(memory_id.0);
             write!(
@@ -1284,7 +1366,19 @@ impl Convert<'_> {
             o.write_str(")));\n");
         }
 
-        // TODO: Check table import limits.
+        // Check imported table limits.
+        for table_id in (0u32..(context.table_import_names.len() as u32)).map(crate::ast::TableId) {
+            let import = context.table_import(table_id).expect("table import");
+            let table_type = context.types.table_at(table_id.0);
+            writeln!(
+                o,
+                "{sp}{sp}embedder::rt::table::check_limits(module.{}, {}, {}, {})?;",
+                crate::context::TableIdent::Import(import),
+                table_id.0,
+                table_type.initial,
+                table_type.maximum.unwrap_or(u32::MAX.into())
+            );
+        }
 
         // Check imported linear memory limits.
         for memory_id in

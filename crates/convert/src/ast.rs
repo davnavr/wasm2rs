@@ -15,6 +15,13 @@ pub(crate) use expr_id::{DecodeExprId, ExprId};
 #[repr(transparent)]
 pub(crate) struct FuncId(pub(crate) u32);
 
+/// Represents a WebAssembly [*tableidx*], an index to a table.
+///
+/// [*tableidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[repr(transparent)]
+pub(crate) struct TableId(pub(crate) u32);
+
 /// Represents a WebAssembly [*memidx*], an index to a linear memory.
 ///
 /// [*memidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices

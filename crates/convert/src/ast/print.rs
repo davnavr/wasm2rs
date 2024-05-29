@@ -61,6 +61,15 @@ mod paths {
     pub(super) const RT_MEM: &str = "embedder::rt::memory";
 }
 
+impl std::fmt::Display for crate::ast::RefType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Extern => f.write_str("embedder::ExternRef"),
+            Self::Func => f.write_str("embedder::rt::func_ref::FuncRef<'static, embedder::Trap>"),
+        }
+    }
+}
+
 impl std::fmt::Display for crate::ast::ValType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -68,10 +77,7 @@ impl std::fmt::Display for crate::ast::ValType {
             Self::I64 => f.write_str("i64"),
             Self::F32 => f.write_str("f32"),
             Self::F64 => f.write_str("f64"),
-            Self::Ref(crate::ast::RefType::Extern) => f.write_str("embedder::ExternRef"),
-            Self::Ref(crate::ast::RefType::Func) => {
-                f.write_str("embedder::rt::func_ref::FuncRef<'static, embedder::Trap>")
-            }
+            Self::Ref(ref_ty) => std::fmt::Display::fmt(ref_ty, f),
         }
     }
 }

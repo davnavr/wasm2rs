@@ -1,6 +1,6 @@
 //! Types describing a WebAssembly module and the mapping of WebAssembly constructs to Rust.
 
-use crate::ast::{FuncId, GlobalId, MemoryId};
+use crate::ast::{FuncId, GlobalId, MemoryId, TableId};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum CallKind {
@@ -150,6 +150,21 @@ impl std::fmt::Display for FunctionIdent<'_, '_> {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) enum TableIdent<'ctx, 'wasm> {
+    Id(TableId),
+    Import(Import<'ctx, 'wasm>),
+}
+
+impl std::fmt::Display for TableIdent<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Id(TableId(id)) => write!(f, "_tbl_{id}"),
+            Self::Import(import) => write!(f, "{import}()"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum MemoryIdent<'ctx, 'wasm> {
     Id(MemoryId),
     Import(Import<'ctx, 'wasm>),
@@ -204,22 +219,32 @@ pub(crate) struct Context<'wasm> {
     pub(crate) imported_modules: Vec<WasmStr<'wasm>>,
     /// Specifies the module each imported function originated from.
     pub(crate) func_import_modules: Box<[ImportedModule]>,
+    /// Specifies the module each imported table originated from.
+    pub(crate) table_import_modules: Box<[ImportedModule]>,
     /// Specifies the module each imported memory originated from.
     pub(crate) memory_import_modules: Box<[ImportedModule]>,
     /// Specifies the module each imported global originated from.
     pub(crate) global_import_modules: Box<[ImportedModule]>,
     /// Specifies the name of each WebAssembly function import.
     pub(crate) func_import_names: Box<[WasmStr<'wasm>]>, // TODO: Maybe store (BoxedIdent, WasmStr)?
+    /// Specifies the name of each WebAssembly table import.
+    pub(crate) table_import_names: Box<[WasmStr<'wasm>]>,
     /// Specifies the name of each WebAssembly memory import.
     pub(crate) memory_import_names: Box<[WasmStr<'wasm>]>,
     /// Specifies the name of each WebAssembly global import.
     pub(crate) global_import_names: Box<[WasmStr<'wasm>]>,
     /// Lookup table for each exported WebAssembly function.
     pub(crate) function_export_names: ExportLookup<'wasm, FuncId>,
+    /// Lookup table for each exported WebAssembly table.
+    pub(crate) table_export_names: ExportLookup<'wasm, TableId>,
     /// Lookup table for each exported WebAssembly memory.
     pub(crate) memory_export_names: ExportLookup<'wasm, MemoryId>,
     /// Lookup table for each exported WebAssembly global.
     pub(crate) global_export_names: ExportLookup<'wasm, GlobalId>,
+    /// Specifies which WebAssembly tables are exported.
+    ///
+    /// These are in the order they were specified in the WebAssembly export section.
+    pub(crate) table_exports: Vec<TableId>,
     /// Specifies which WebAssembly memories are exported.
     ///
     /// These are in the order they were specified in the WebAssembly export section.
@@ -287,13 +312,19 @@ impl<'wasm> Context<'wasm> {
     pub(crate) fn function_ident(&self, f: FuncId) -> FunctionIdent<'_, 'wasm> {
         self.function_import(f)
             .map(FunctionIdent::Import)
-            .unwrap_or_else(|| FunctionIdent::Name(self.function_name(f)))
+            .unwrap_or_else(move || FunctionIdent::Name(self.function_name(f)))
+    }
+
+    pub(crate) fn table_ident(&self, t: TableId) -> TableIdent<'_, 'wasm> {
+        self.table_import(t)
+            .map(TableIdent::Import)
+            .unwrap_or_else(move || TableIdent::Id(t))
     }
 
     pub(crate) fn memory_ident(&self, m: MemoryId) -> MemoryIdent<'_, 'wasm> {
         self.memory_import(m)
             .map(MemoryIdent::Import)
-            .unwrap_or_else(|| MemoryIdent::Id(m))
+            .unwrap_or_else(move || MemoryIdent::Id(m))
     }
 
     // TODO: fn table_ident, global_ident
@@ -319,6 +350,14 @@ impl<'wasm> Context<'wasm> {
             f.0 as usize,
             &self.func_import_modules,
             &self.func_import_names,
+        )
+    }
+
+    pub(crate) fn table_import(&self, t: TableId) -> Option<Import<'_, 'wasm>> {
+        self.import_lookup(
+            t.0 as usize,
+            &self.table_import_modules,
+            &self.table_import_names,
         )
     }
 
