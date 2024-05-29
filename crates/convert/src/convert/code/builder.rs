@@ -210,12 +210,14 @@ impl Builder {
             .iter_mut()
             .enumerate()
         {
-            if !matches!(self.ast_arena.get(*value), crate::ast::Expr::Temporary(_)) {
+            let expr = self.ast_arena.get(*value);
+            if !matches!(expr, crate::ast::Expr::Temporary(_)) {
                 let id = crate::ast::TempId((i + self.spilled_wasm_operands) as u32);
                 self.buffer.push(crate::ast::Statement::Temporary {
                     temporary: id,
                     value: *value,
                 });
+
                 *value = self.ast_arena.allocate(crate::ast::Expr::Temporary(id))?;
             }
         }

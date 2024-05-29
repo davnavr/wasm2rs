@@ -606,7 +606,7 @@ pub(crate) struct BranchTargetList {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BlockResults {
-    // TODO: make BlockResults 4 bytes
+    // TODO: make start and count combined to be 4 bytes.
     pub(crate) start: TempId,
     pub(crate) count: std::num::NonZeroU32,
 }
@@ -688,6 +688,8 @@ pub(crate) enum Statement {
     BlockStart {
         id: BlockId,
         results: Option<BlockResults>,
+        // This is just to get type annotations working, would be nicer to not use `wasmparser` types here.
+        r#type: wasmparser::BlockType,
         kind: BlockKind,
     },
     Else {

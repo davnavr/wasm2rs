@@ -45,7 +45,7 @@ pub fn add_fifteen(&self, mut _l0: i32) -> ::core::result::Result<i32, embedder:
 }
 
 fn _f2(mut _l0: i32) -> i32 {
-    let (_t0, _t1) = '_b0: {
+    let (_t0, _t1): (i32, i32) = '_b0: {
         (_l0, _l0)
     }; // '_b0
     i32::wrapping_add(_t0, _t1)
@@ -64,7 +64,7 @@ pub fn unreachable_instruction(&self) -> ::core::result::Result<i32, embedder::T
 }
 
 fn _f4(mut _l0: i32) -> i32 {
-    let _t0 = '_b0: { if _l0 == 0x2Ai32 {
+    let _t0: i32 = '_b0: { if _l0 == 0x2Ai32 {
         0x42424242i32
     } else {
         0xDEADi32
@@ -89,9 +89,9 @@ fn _f6(mut _l0: i32) -> i64 {
         return 1i64;
     } } // '_b0
     _l1 = 1i64;
-    let _t0 = '_b0: loop {
+    let _t0: i64 = '_b0: loop {
         _l1 = i64::wrapping_mul(_l0 as u32 as i64, _l1);
-        let _t0 = '_b1: { if 1i64 == _l0 as u32 as i64 {
+        let _t0: i64 = '_b1: { if 1i64 == _l0 as u32 as i64 {
             _l1
         } else {
             _l0 = i32::wrapping_sub(_l0, 1i32);

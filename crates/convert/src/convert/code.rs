@@ -58,18 +58,18 @@ fn convert_block_start(
     types: &wasmparser::types::Types,
     validator: &FuncValidator,
 ) -> crate::Result<()> {
-    let block_type = resolve_block_type(types, block_type);
+    let func_type = resolve_block_type(types, block_type);
 
     // Ensures that `get_block_results` does not duplicate any temporaries.
     builder.flush_operands_to_temporaries()?;
 
-    let results =
-        builder.get_block_results(block_type.results().len(), block_type.params().len())?;
+    let results = builder.get_block_results(func_type.results().len(), func_type.params().len())?;
 
     builder.emit_statement(crate::ast::Statement::BlockStart {
         id: get_block_id(validator),
         results,
         kind,
+        r#type: block_type,
     })
 }
 
@@ -267,6 +267,7 @@ fn convert_impl(
                     id: block_id,
                     results,
                     kind: crate::ast::BlockKind::Loop { inputs },
+                    r#type: blockty,
                 })?;
             }
             Operator::If { blockty } => {

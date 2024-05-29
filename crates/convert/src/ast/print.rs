@@ -1370,7 +1370,12 @@ pub(crate) fn print_statements(
                 value.print(out, false, context, Some(function));
                 out.write_str(");")
             }
-            Statement::BlockStart { id, results, kind } => {
+            Statement::BlockStart {
+                id,
+                results,
+                kind,
+                r#type,
+            } => {
                 debug_assert!(!is_last);
 
                 if let crate::ast::BlockKind::Loop { inputs } = kind {
@@ -1391,9 +1396,19 @@ pub(crate) fn print_statements(
                 }
 
                 if let Some(results) = results {
+                    let result_types = match r#type {
+                        wasmparser::BlockType::Empty => unreachable!(),
+                        wasmparser::BlockType::Type(ref ty) => std::slice::from_ref(ty),
+                        wasmparser::BlockType::FuncType(func_ty) => context.wasm.types
+                            [context.wasm.types.core_type_at(func_ty).unwrap_sub()]
+                        .unwrap_func()
+                        .results(),
+                    };
+
                     out.write_str("let ");
 
-                    if results.count.get() > 1 {
+                    let has_many = results.count.get() > 1;
+                    if has_many {
                         out.write_str("(");
                     }
 
@@ -1405,7 +1420,28 @@ pub(crate) fn print_statements(
                         write!(out, "{}", crate::ast::TempId(results.start.0 + i));
                     }
 
-                    if results.count.get() > 1 {
+                    if has_many {
+                        out.write_str(")");
+                    }
+
+                    // Write type annotations
+
+                    out.write_str(": ");
+
+                    if has_many {
+                        out.write_str("(");
+                    }
+
+                    debug_assert_eq!(results.count.get(), result_types.len() as u32);
+                    for (i, result_ty) in result_types.iter().copied().enumerate() {
+                        if i > 0 {
+                            out.write_str(", ");
+                        }
+
+                        write!(out, "{}", crate::ast::ValType::from(result_ty));
+                    }
+
+                    if has_many {
                         out.write_str(")");
                     }
 
