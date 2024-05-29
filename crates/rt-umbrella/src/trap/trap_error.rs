@@ -42,6 +42,15 @@ pub enum TrapCause {
         #[allow(missing_docs)]
         error: crate::math::IntegerOverflowError,
     },
+    /// A table access was out of bounds. This corresponds to a [`table::AccessError`].
+    ///
+    /// [`table::AccessError`]: crate::table::AccessError
+    #[non_exhaustive]
+    TableBoundsCheck {
+        #[allow(missing_docs)]
+        #[cfg(feature = "alloc")]
+        access: crate::table::AccessError,
+    },
     /// Instantiating a module failed because a table could not be allocated. This
     /// corresponds to a [`store::AllocateTableError`].
     ///
@@ -135,6 +144,10 @@ impl core::fmt::Display for TrapCause {
             Self::IntegerDivisionByZero { error } => core::fmt::Display::fmt(error, f),
             Self::IntegerOverflow { error } => core::fmt::Display::fmt(error, f),
             #[cfg(feature = "alloc")]
+            Self::TableBoundsCheck { access } => core::fmt::Display::fmt(access, f),
+            #[cfg(not(feature = "alloc"))]
+            Self::TableBoundsCheck {} => f.write_str("table access was out of bounds"),
+            #[cfg(feature = "alloc")]
             Self::TableAllocationFailure { error } => core::fmt::Display::fmt(error, f),
             #[cfg(not(feature = "alloc"))]
             Self::TableAllocationFailure {} => f.write_str("table allocation failure"),
@@ -176,6 +189,8 @@ impl core::fmt::Display for TrapCause {
 impl std::error::Error for TrapCause {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            #[cfg(feature = "alloc")]
+            Self::TableBoundsCheck { access } => Some(access),
             #[cfg(feature = "alloc")]
             Self::MemoryBoundsCheck { access } => Some(access),
             #[cfg(feature = "alloc")]
@@ -338,6 +353,15 @@ impl Trap<crate::math::IntegerDivisionError> for TrapError {
                 Self::trap(rt_math::IntegerOverflowError, frame)
             }
         }
+    }
+}
+
+impl Trap<crate::table::AccessError> for TrapError {
+    fn trap(
+        cause: crate::table::AccessError,
+        frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
+    ) -> Self {
+        Self::new(TrapCause::TableBoundsCheck { access: cause }, frame)
     }
 }
 
