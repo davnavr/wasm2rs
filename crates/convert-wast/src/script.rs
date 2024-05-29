@@ -422,6 +422,18 @@ pub(crate) fn convert(
                                     out,
                                     "::wasm2rs_rt::math::nan::is_arithmetic_f64({actual})"
                                 ),
+                                WastRetCore::RefNull(_) => write!(
+                                    out,
+                                    "{actual} == wasm2rs_rt::table::NullableTableElement::NULL"
+                                ),
+                                WastRetCore::RefExtern(None) => write!(
+                                    out,
+                                    "{actual}.0.is_some()"
+                                ),
+                                WastRetCore::RefExtern(Some(expected)) => write!(
+                                    out,
+                                    "{actual} == ::wasm2rs_rt_spectest::HostRef(Some({expected}u32))"
+                                ),
                                 _ => {
                                     let mut err = wast::Error::new(
                                         assert_span,
@@ -510,6 +522,18 @@ pub(crate) fn convert(
                         WastRetCore::F64(NanPattern::ArithmeticNan) => {
                             out.write_str("expected arithmetic NaN got {} ({:#018X})\", ");
                             write!(out, "{actual}, f64::to_bits({actual})");
+                        }
+                        WastRetCore::RefNull(_) => {
+                            out.write_str("expected null, got {}\", ");
+                            write!(out, "{actual}");
+                        }
+                        WastRetCore::RefExtern(None) => {
+                            out.write_str("expected non-null externref\"");
+                        }
+                        WastRetCore::RefExtern(Some(expected)) => {
+                            write!(out, "expected HostRef(Some({expected})), got ");
+                            out.write_str("{}\", ");
+                            write!(out, "{actual}");
                         }
                         _ => out.write_str("\""),
                     }
