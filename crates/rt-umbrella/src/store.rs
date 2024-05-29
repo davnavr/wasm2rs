@@ -3,8 +3,10 @@
 //! [WebAssembly allocation]: https://webassembly.github.io/spec/core/exec/modules.html#allocation
 
 mod allocate_memory;
+mod allocate_table;
 
 pub use allocate_memory::{AllocateHeapMemory, AllocateMemory, AllocateMemoryError};
+pub use allocate_table::{AllocateHeapTable, AllocateTable, AllocateTableError};
 
 /// Represents a WebAssembly [module instance].
 ///

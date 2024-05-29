@@ -42,6 +42,16 @@ pub enum TrapCause {
         #[allow(missing_docs)]
         error: crate::math::IntegerOverflowError,
     },
+    /// Instantiating a module failed because a table could not be allocated. This
+    /// corresponds to a [`store::AllocateTableError`].
+    ///
+    /// [`store::AllocateTableError`]: crate::store::AllocateTableError
+    #[non_exhaustive]
+    TableAllocationFailure {
+        #[allow(missing_docs)]
+        #[cfg(feature = "alloc")]
+        error: crate::store::AllocateTableError,
+    },
     /// A memory access was out of bounds. This corresponds to a [`memory::AccessError`].
     ///
     /// [`memory::AccessError`]: crate::memory::AccessError
@@ -125,6 +135,10 @@ impl core::fmt::Display for TrapCause {
             Self::IntegerDivisionByZero { error } => core::fmt::Display::fmt(error, f),
             Self::IntegerOverflow { error } => core::fmt::Display::fmt(error, f),
             #[cfg(feature = "alloc")]
+            Self::TableAllocationFailure { error } => core::fmt::Display::fmt(error, f),
+            #[cfg(not(feature = "alloc"))]
+            Self::TableAllocationFailure {} => f.write_str("table allocation failure"),
+            #[cfg(feature = "alloc")]
             Self::MemoryBoundsCheck { access } => core::fmt::Display::fmt(access, f),
             #[cfg(not(feature = "alloc"))]
             Self::MemoryBoundsCheck {} => f.write_str("memory access was out of bounds"),
@@ -164,6 +178,8 @@ impl std::error::Error for TrapCause {
         match self {
             #[cfg(feature = "alloc")]
             Self::MemoryBoundsCheck { access } => Some(access),
+            #[cfg(feature = "alloc")]
+            Self::TableAllocationFailure { error } => Some(error),
             #[cfg(feature = "alloc")]
             Self::MemoryAllocationFailure { error } => Some(error),
             #[cfg(feature = "alloc")]
@@ -322,6 +338,15 @@ impl Trap<crate::math::IntegerDivisionError> for TrapError {
                 Self::trap(rt_math::IntegerOverflowError, frame)
             }
         }
+    }
+}
+
+impl Trap<crate::store::AllocateTableError> for TrapError {
+    fn trap(
+        cause: crate::store::AllocateTableError,
+        frame: Option<&'static wasm2rs_rt_core::trace::WasmFrame>,
+    ) -> Self {
+        Self::new(TrapCause::TableAllocationFailure { error: cause }, frame)
     }
 }
 
