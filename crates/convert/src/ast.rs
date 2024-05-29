@@ -608,9 +608,9 @@ pub(crate) enum Statement {
     DefineLocal(LocalId, ValType),
     /// Defines a temporary local variable used to store intermediate results.
     Temporary { temporary: TempId, value: ExprId },
-    /// Assigns to a local variable. Corresponds to the [`local.set`] instruction.
+    /// Assigns to a local variable. Corresponds to the [`local.set` or `local.tee`] instructions.
     ///
-    /// [`local.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
+    /// [`local.set` or ]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
     SetLocal { local: LocalId, value: ExprId },
     /// Assigns to a mutable global variable. Corresponds to the [`global.set`] instruction.
     ///

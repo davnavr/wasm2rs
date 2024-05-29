@@ -544,7 +544,12 @@ fn convert_impl(
                     value,
                 })?;
             }
-            //Operator::LocalTee
+            Operator::LocalTee { local_index } => {
+                let local = crate::ast::LocalId(local_index);
+                let value = builder.pop_wasm_operand();
+                builder.emit_statement(crate::ast::Statement::SetLocal { local, value })?;
+                builder.push_wasm_operand(crate::ast::Expr::GetLocal(local))?;
+            }
             Operator::GlobalGet { global_index } => {
                 builder.needs_self(); // TODO: If global is const, don't need `self`.
                 builder.push_wasm_operand(crate::ast::Expr::GetGlobal(crate::ast::GlobalId(

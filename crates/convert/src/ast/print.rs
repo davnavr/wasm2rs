@@ -609,6 +609,7 @@ impl crate::ast::Expr {
                 reference.print(out, false, context, function);
                 out.write_str("embedder::rt::table::NullableTableElement::NULL) as i32");
             }
+            // TODO: GetLocal, Temporary, and LoopInput need to indicate if clone() is required.
             Self::GetLocal(local) => write!(out, "{local}"),
             Self::GetGlobal(global) => match context.wasm.global_kind(*global) {
                 crate::context::GlobalKind::Const => write!(out, "Self::{global:#}"),
