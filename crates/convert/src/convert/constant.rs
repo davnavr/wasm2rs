@@ -28,11 +28,26 @@ pub(in crate::convert) fn create_ast(
             Operator::F64Const { value: z } => {
                 value = Some(arena.allocate(Literal::F64(z.bits()))?);
             }
-            Operator::RefNull { hty: _ } | Operator::RefFunc { function_index: _ } => {
-                anyhow::bail!("references in constant expressions are currently not supported")
+            Operator::RefNull { hty } => {
+                use wasmparser::HeapType;
+
+                let ref_ty = match hty {
+                    HeapType::Extern => crate::ast::RefType::Extern,
+                    HeapType::Func => crate::ast::RefType::Func,
+                    _ => anyhow::bail!("ref.null for {hty:?} is not supported @ {op_offset:#X}"),
+                };
+
+                value = Some(arena.allocate(Literal::RefNull(ref_ty))?);
+            }
+            Operator::RefFunc { function_index } => {
+                value = Some(arena.allocate(Literal::RefFunc(crate::ast::ElemFuncRef(
+                    crate::ast::FuncId(function_index),
+                )))?);
             }
             Operator::GlobalGet { global_index: _ } => {
-                anyhow::bail!("global.get within a constant expression is not yet supported")
+                anyhow::bail!(
+                    "global.get within a constant expression is not yet supported@ {op_offset:#X}"
+                )
             }
             Operator::End => {
                 if let Some(value) = value {

@@ -46,7 +46,21 @@ impl std::fmt::Display for GlobalId {
     }
 }
 
-/// Represents a WebAssembly [*dataidx*], an index to a {data segment}.
+/// Represents a WebAssembly [*elemidx*], an index to a [element segment].
+///
+/// [*elemidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
+/// [element segment]: https://webassembly.github.io/spec/core/syntax/modules.html#element-segments
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[repr(transparent)]
+pub(crate) struct ElementId(pub(crate) u32);
+
+impl std::fmt::Display for ElementId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_elem_{}", self.0)
+    }
+}
+
+/// Represents a WebAssembly [*dataidx*], an index to a [data segment].
 ///
 /// [*dataidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 /// [data segment]: https://webassembly.github.io/spec/core/syntax/modules.html#data-segments

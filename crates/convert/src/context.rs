@@ -195,12 +195,30 @@ pub(crate) enum GlobalKind<'ctx, 'wasm> {
     },
 }
 
+#[derive(Debug)]
+pub(crate) enum FuncElements {
+    Indices(Vec<crate::ast::ElemFuncRef>),
+    Expressions(Vec<crate::ast::ExprId>),
+}
+
+#[derive(Debug)]
+pub(crate) struct ActiveFuncElements {
+    pub(crate) table: crate::ast::TableId,
+    pub(crate) id: crate::ast::ElementId,
+    /// Evaluates to an index specifying where into the [table] the element segment's contents are
+    /// copied.
+    ///
+    /// [table]: ActiveFuncElements::table
+    pub(crate) offset: crate::ast::ExprId,
+    pub(crate) elements: FuncElements,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ActiveDataSegment {
     pub(crate) data: crate::ast::DataId,
     pub(crate) memory: MemoryId,
-    /// Evaluates to an address specifying where into the linear memory the data segment's
-    /// contents are copied.
+    /// Evaluates to an address specifying where into the linear memory the data segment's contents
+    /// are copied.
     pub(crate) offset: crate::ast::ExprId,
 }
 
@@ -272,6 +290,11 @@ pub(crate) struct Context<'wasm> {
     ///
     /// [**start**]: https://webassembly.github.io/spec/core/syntax/modules.html#start-function
     pub(crate) start_function: Option<FuncId>,
+    /// Specifies the WebAssembly module's active element segments that copy [`funcref`]s to a
+    /// table.
+    ///
+    /// These are stored in ascending *elemidx* order.
+    pub(crate) active_func_elements: Vec<ActiveFuncElements>,
     /// Specifies the contents of each WebAssembly data segment.
     pub(crate) data_segment_contents: Box<[&'wasm [u8]]>,
     /// Specifies the WebAssembly module's active data segments.

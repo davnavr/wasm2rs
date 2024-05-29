@@ -6,6 +6,7 @@ mod constant;
 mod options;
 
 pub use allocations::Allocations;
+use anyhow::Context;
 pub use options::{DataSegmentWriter, DebugInfo, StackOverflowChecks};
 
 pub(crate) const FUNC_REF_MAX_PARAM_COUNT: usize = 9;
@@ -226,6 +227,38 @@ fn get_section_count<T>(section: &Option<wasmparser::SectionLimited<'_, T>>) -> 
     section.as_ref().map(|sec| sec.count()).unwrap_or(0)
 }
 
+fn parse_func_element_segment_contents(
+    arena: &mut crate::ast::Arena,
+    contents: wasmparser::ElementItems,
+) -> crate::Result<crate::context::FuncElements> {
+    match contents {
+        wasmparser::ElementItems::Functions(indices) => indices
+            .into_iter()
+            .map(|idx| Ok(crate::ast::ElemFuncRef(crate::ast::FuncId(idx?))))
+            .collect::<crate::Result<Vec<crate::ast::ElemFuncRef>>>()
+            .map(crate::context::FuncElements::Indices)
+            .context("while parsing function indices"),
+        wasmparser::ElementItems::Expressions(wasmparser::RefType::FUNCREF, expressions) => {
+            let expressions = expressions.into_iter_with_offsets();
+            let mut elements = Vec::with_capacity(expressions.size_hint().0);
+            for (i, result) in expressions.enumerate() {
+                let (expr_offset, expr) = result?;
+
+                elements.push(
+                    crate::convert::constant::create_ast(&expr, arena).with_context(|| {
+                        format!("could not evaluate constant #{i} @ {expr_offset:#X}")
+                    })?,
+                )
+            }
+
+            Ok(crate::context::FuncElements::Expressions(elements))
+        }
+        wasmparser::ElementItems::Expressions(unknown, _) => {
+            anyhow::bail!("expected funcref, got {unknown:?} in element segment")
+        }
+    }
+}
+
 fn parse_sections<'wasm>(
     types: wasmparser::types::Types,
     function_attributes: crate::context::FunctionAttributes,
@@ -264,6 +297,7 @@ fn parse_sections<'wasm>(
         instantiate_globals: Vec::<crate::ast::GlobalId>::new(),
         defined_globals: std::collections::HashMap::new(),
         constant_globals: Vec::with_capacity(total_global_count / 2),
+        active_func_elements: Default::default(),
         data_segment_contents: Default::default(),
         active_data_segments: Default::default(),
         declarative_func_elements: Default::default(),
@@ -487,11 +521,15 @@ fn parse_sections<'wasm>(
     }
 
     if let Some(element_section) = sections.elements {
-        for result in element_section.into_iter_with_offsets() {
+        for (result, elem_idx) in element_section
+            .into_iter_with_offsets()
+            .zip(0u32..=u32::MAX)
+        {
             use wasmparser::{ElementItems, ElementKind, RefType};
 
             let (element_segment_offset, element_segment) = result?;
 
+            let element_id = crate::ast::ElementId(elem_idx);
             match element_segment.kind {
                 ElementKind::Declared => match element_segment.items {
                     ElementItems::Functions(indices) => {
@@ -501,13 +539,32 @@ fn parse_sections<'wasm>(
                         }
                     }
                     ElementItems::Expressions(RefType::FUNCREF, _) => {
-                        anyhow::bail!("use crate::convert::constant to get RefFunc instructions from declarative data segment @ {element_segment_offset:#X}");
+                        anyhow::bail!("TODO: use crate::convert::constant to get RefFunc instructions from declarative data segment @ {element_segment_offset:#X}");
                     }
                     ElementItems::Expressions(RefType::EXTERNREF, _) => (),
                     ElementItems::Expressions(unknown, _) => anyhow::bail!("unsupported reference type {unknown:?} in declarative data segment @ {element_segment_offset:#X}"),
                 },
-                ElementKind::Active { table_index: _, offset_expr: _ } => {
-                    anyhow::bail!("TODO: active element segment support");
+                ElementKind::Active { table_index, offset_expr } => {
+                    let offset = crate::convert::constant::create_ast(
+                        &offset_expr,
+                        &mut context.constant_expressions,
+                    )
+                    .with_context(|| {
+                        format!(
+                            "invalid offset expression for {element_id} @ {element_segment_offset:#X}"
+                        )
+                    })?;
+
+                    // TODO: Ensure ElemFuncRef codegen for active element segments too, but `declarative_func_elements` is not a set.
+                    let elements = parse_func_element_segment_contents(&mut context.constant_expressions, element_segment.items)
+                        .with_context(|| format!("while parsing active element segment {element_id} @ {element_segment_offset:#X}"))?;
+
+                    context.active_func_elements.push(crate::context::ActiveFuncElements {
+                        table: crate::ast::TableId(table_index.unwrap_or(0)),
+                        id: element_id,
+                        offset,
+                        elements,
+                    })
                 }
                 ElementKind::Passive => {
                     anyhow::bail!("TODO: passive element segment support");
@@ -971,8 +1028,56 @@ impl Convert<'_> {
             }
         }
 
-        // Element segments cannot be writen as an associated constant, since FuncRef requires an
-        // already instantiated module.
+        let constant_print_context = &crate::ast::print::Context {
+            wasm: context,
+            arena: &context.constant_expressions,
+            debug_info: self.debug_info,
+        };
+
+        // Functions to produce the contents of active element segments.
+        for element_segment in context.active_func_elements.iter() {
+            let len = match &element_segment.elements {
+                crate::context::FuncElements::Indices(indices) => indices.len(),
+                crate::context::FuncElements::Expressions(expressions) => expressions.len(),
+            };
+
+            write!(
+                o,
+                "{sp}fn {}(&self) -> [embedder::rt::func_ref::FuncRef<'static, embedder::Trap>; {len}] {{ [",
+                element_segment.id
+            );
+
+            match &element_segment.elements {
+                crate::context::FuncElements::Indices(indices) => {
+                    for (i, func) in indices.iter().copied().enumerate() {
+                        if i > 0 {
+                            o.write_str(", ");
+                        }
+
+                        write!(
+                            o,
+                            "embedder::rt::table::NullableTableElement::clone_from_cell(&self.{func})"
+                        );
+                    }
+                }
+                crate::context::FuncElements::Expressions(expressions) => {
+                    for (i, expr_id) in expressions.iter().copied().enumerate() {
+                        if i > 0 {
+                            o.write_str(", ");
+                        }
+
+                        context.constant_expressions.get(expr_id).print(
+                            &mut o,
+                            false,
+                            constant_print_context,
+                            None,
+                        );
+                    }
+                }
+            };
+
+            o.write_str(" ] }\n");
+        }
 
         // Write the data segments contents.
         for (data, data_id) in context
@@ -1436,22 +1541,43 @@ impl Convert<'_> {
                     .get(&global)
                     .expect("missing initializer expression for defined global");
 
-                init.print(
-                    &mut o,
-                    false,
-                    &crate::ast::print::Context {
-                        wasm: context,
-                        arena: &context.constant_expressions,
-                        debug_info: self.debug_info,
-                    },
-                    None,
-                );
+                init.print(&mut o, false, constant_print_context, None);
             }
 
             o.write_str(";\n");
         }
 
-        // TODO: Copy element segments.
+        // Copy active element segments (function references only).
+        if !context.active_func_elements.is_empty() {
+            make_inst_mut(&mut o);
+        }
+
+        for element_segment in context.active_func_elements.iter() {
+            write!(
+                o,
+                "{sp}{sp}embedder::rt::table::init::<{}, _, _>(",
+                element_segment.table.0
+            );
+
+            let table_ident = context.table_ident(element_segment.table);
+
+            if matches!(table_ident, crate::context::TableIdent::Id(_)) {
+                o.write_str("&");
+            }
+
+            write!(o, "inst.{table_ident}, ");
+            element_segment
+                .offset
+                .print(&mut o, false, constant_print_context, None);
+            o.write_str(", 0, ");
+
+            let len = match &element_segment.elements {
+                crate::context::FuncElements::Indices(indices) => indices.len(),
+                crate::context::FuncElements::Expressions(expressions) => expressions.len(),
+            };
+
+            writeln!(o, "{len}, &inst.{}(), None)?;", element_segment.id);
+        }
 
         // Copy active data segments.
         if !context.active_data_segments.is_empty() {
