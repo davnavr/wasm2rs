@@ -59,6 +59,61 @@ impl<T> ResultExt<T> for Result<T, wast::Error> {
     }
 }
 
+fn print_arguments(
+    out: &mut wasm2rs_convert::write::IoWrite,
+    args: Vec<wast::WastArg>,
+    span: wast::token::Span,
+    script_text: &str,
+) -> anyhow::Result<()> {
+    use wasm2rs_convert::write::Write;
+
+    for (i, arg) in args.into_iter().enumerate() {
+        use wast::core::WastArgCore;
+
+        if i > 0 {
+            out.write_str(", ");
+        }
+
+        match arg {
+            wast::WastArg::Core(core_arg) => match core_arg {
+                WastArgCore::I32(n) => write!(out, "{n}i32"),
+                WastArgCore::I64(n) => write!(out, "{n}i64"),
+                WastArgCore::F32(z) => {
+                    write!(out, "f32::from_bits({:#010X}u32)", z.bits)
+                }
+                WastArgCore::F64(z) => {
+                    write!(out, "f64::from_bits({:#018X}u64)", z.bits)
+                }
+                WastArgCore::RefExtern(n) => {
+                    write!(out, "::wasm2rs_rt_spectest::HostRef(Some({n}usize))")
+                }
+                WastArgCore::RefNull(_) => {
+                    out.write_str("::wasm2rs_rt::table::NullableTableElement::NULL")
+                }
+                bad => {
+                    let mut err = wast::Error::new(
+                        span,
+                        format!("unsupported argument: {bad:?}"),
+                    );
+
+                    err.set_text(script_text);
+                    return Err(anyhow::Error::new(err));
+                }
+            },
+            wast::WastArg::Component(arg) => {
+                let mut err = wast::Error::new(
+                    span,
+                    format!("compontent arguments are not supported: {arg:?}"),
+                );
+                err.set_text(script_text);
+                return Err(anyhow::Error::new(err));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Converts the `.wast` script into Rust source code.
 ///
 /// Currently, this is implemented as a very naive source-to-source conversion with basically no
@@ -193,43 +248,7 @@ pub(crate) fn convert(
                     wasm2rs_convert::ident::SafeIdent::from(name)
                 );
 
-                // Duplicated code.
-                for (i, arg) in args.into_iter().enumerate() {
-                    use wast::core::WastArgCore;
-
-                    if i > 0 {
-                        out.write_str(", ");
-                    }
-
-                    match arg {
-                        wast::WastArg::Core(core_arg) => match core_arg {
-                            WastArgCore::I32(n) => write!(out, "{n}i32"),
-                            WastArgCore::I64(n) => write!(out, "{n}i64"),
-                            WastArgCore::F32(z) => {
-                                write!(out, "f32::from_bits({:#010X}u32)", z.bits)
-                            }
-                            WastArgCore::F64(z) => {
-                                write!(out, "f64::from_bits({:#018X}u64)", z.bits)
-                            }
-                            WastArgCore::RefExtern(_)
-                            | WastArgCore::RefHost(_)
-                            | WastArgCore::RefNull(_) => out.write_str(
-                                "::core::todo!(\"reference type arguments not yet supported\")",
-                            ),
-                            WastArgCore::V128(_) => {
-                                out.write_str("todo!(\"V128 arguments not yet supported\")")
-                            }
-                        },
-                        wast::WastArg::Component(arg) => {
-                            let mut err = wast::Error::new(
-                                span,
-                                format!("compontent arguments are not supported: {arg:?}"),
-                            );
-                            err.set_text(script_text);
-                            return Err(anyhow::Error::new(err));
-                        }
-                    }
-                }
+                print_arguments(&mut out, args, span, script_text)?;
 
                 out.write_str("));\n");
             }
@@ -252,42 +271,7 @@ pub(crate) fn convert(
                     wasm2rs_convert::ident::SafeIdent::from(name)
                 );
 
-                for (i, arg) in args.into_iter().enumerate() {
-                    use wast::core::WastArgCore;
-
-                    if i > 0 {
-                        out.write_str(", ");
-                    }
-
-                    match arg {
-                        wast::WastArg::Core(core_arg) => match core_arg {
-                            WastArgCore::I32(n) => write!(out, "{n}i32"),
-                            WastArgCore::I64(n) => write!(out, "{n}i64"),
-                            WastArgCore::F32(z) => {
-                                write!(out, "f32::from_bits({:#010X}u32)", z.bits)
-                            }
-                            WastArgCore::F64(z) => {
-                                write!(out, "f64::from_bits({:#018X}u64)", z.bits)
-                            }
-                            WastArgCore::RefExtern(_)
-                            | WastArgCore::RefHost(_)
-                            | WastArgCore::RefNull(_) => out.write_str(
-                                "::core::todo!(\"reference type arguments not yet supported\")",
-                            ),
-                            WastArgCore::V128(_) => {
-                                out.write_str("todo!(\"V128 arguments not yet supported\")")
-                            }
-                        },
-                        wast::WastArg::Component(arg) => {
-                            let mut err = wast::Error::new(
-                                invoke_span,
-                                format!("compontent arguments are not supported: {arg:?}"),
-                            );
-                            err.set_text(script_text);
-                            return Err(anyhow::Error::new(err));
-                        }
-                    }
-                }
+                print_arguments(&mut out, args, invoke_span, script_text)?;
 
                 let (line, col) = assert_span.linecol_in(script_text);
                 writeln!(
@@ -325,42 +309,7 @@ pub(crate) fn convert(
                     wasm2rs_convert::ident::SafeIdent::from(name)
                 );
 
-                for (i, arg) in args.into_iter().enumerate() {
-                    use wast::core::WastArgCore;
-
-                    if i > 0 {
-                        out.write_str(", ");
-                    }
-
-                    match arg {
-                        wast::WastArg::Core(core_arg) => match core_arg {
-                            WastArgCore::I32(n) => write!(out, "{n}i32"),
-                            WastArgCore::I64(n) => write!(out, "{n}i64"),
-                            WastArgCore::F32(z) => {
-                                write!(out, "f32::from_bits({:#010X}u32)", z.bits)
-                            }
-                            WastArgCore::F64(z) => {
-                                write!(out, "f64::from_bits({:#018X}u64)", z.bits)
-                            }
-                            WastArgCore::RefExtern(_)
-                            | WastArgCore::RefHost(_)
-                            | WastArgCore::RefNull(_) => out.write_str(
-                                "::core::todo!(\"reference type arguments not yet supported\")",
-                            ),
-                            WastArgCore::V128(_) => {
-                                out.write_str("todo!(\"V128 arguments not yet supported\")")
-                            }
-                        },
-                        wast::WastArg::Component(arg) => {
-                            let mut err = wast::Error::new(
-                                invoke_span,
-                                format!("compontent arguments are not supported: {arg:?}"),
-                            );
-                            err.set_text(script_text);
-                            return Err(anyhow::Error::new(err));
-                        }
-                    }
-                }
+                print_arguments(&mut out, args, invoke_span, script_text)?;
 
                 let (line, col) = assert_span.linecol_in(script_text);
                 writeln!(
@@ -432,7 +381,7 @@ pub(crate) fn convert(
                                 ),
                                 WastRetCore::RefExtern(Some(expected)) => write!(
                                     out,
-                                    "{actual} == ::wasm2rs_rt_spectest::HostRef(Some({expected}u32))"
+                                    "{actual} == ::wasm2rs_rt_spectest::HostRef(Some({expected}usize))"
                                 ),
                                 _ => {
                                     let mut err = wast::Error::new(
@@ -478,7 +427,7 @@ pub(crate) fn convert(
                         WastRetCore::F32(NanPattern::Value(expected)) => {
                             write!(
                                 out,
-                                "expected {} ({:#010X}) got ",
+                                ", expected {} ({:#010X}) got ",
                                 f32::from_bits(expected.bits),
                                 expected.bits
                             );
@@ -488,7 +437,7 @@ pub(crate) fn convert(
                         WastRetCore::F64(NanPattern::Value(expected)) => {
                             write!(
                                 out,
-                                "expected {} ({:#018X}) got ",
+                                ", expected {} ({:#018X}) got ",
                                 f64::from_bits(expected.bits),
                                 expected.bits
                             );
@@ -498,7 +447,7 @@ pub(crate) fn convert(
                         WastRetCore::F32(NanPattern::CanonicalNan) => {
                             out.write_str(
                                 concat!(
-                                    "expected canonical NaN ({:#010X} or {:#010X}) got {} ({:#010X})\", ",
+                                    ", expected canonical NaN ({:#010X} or {:#010X}) got {} ({:#010X})\", ",
                                     "::wasm2rs_rt::math::nan::F32_CANONICAL, ",
                                     "::wasm2rs_rt::math::nan::F32_NEG_CANONICAL, ",
                                 )
@@ -508,7 +457,7 @@ pub(crate) fn convert(
                         WastRetCore::F64(NanPattern::CanonicalNan) => {
                             out.write_str(
                                 concat!(
-                                    "expected canonical NaN ({:#018X} or {:#018X}) got {} ({:#018X})\", ",
+                                    ", expected canonical NaN ({:#018X} or {:#018X}) got {} ({:#018X})\", ",
                                     "::wasm2rs_rt::math::nan::F64_CANONICAL, ",
                                     "::wasm2rs_rt::math::nan::F64_NEG_CANONICAL, ",
                                 )
@@ -516,23 +465,23 @@ pub(crate) fn convert(
                             write!(out, "{actual}, f64::to_bits({actual})");
                         }
                         WastRetCore::F32(NanPattern::ArithmeticNan) => {
-                            out.write_str("expected arithmetic NaN got {} ({:#010X})\", ");
+                            out.write_str(", expected arithmetic NaN got {} ({:#010X})\", ");
                             write!(out, "{actual}, f32::to_bits({actual})");
                         }
                         WastRetCore::F64(NanPattern::ArithmeticNan) => {
-                            out.write_str("expected arithmetic NaN got {} ({:#018X})\", ");
+                            out.write_str(", expected arithmetic NaN got {} ({:#018X})\", ");
                             write!(out, "{actual}, f64::to_bits({actual})");
                         }
                         WastRetCore::RefNull(_) => {
-                            out.write_str("expected null, got {}\", ");
+                            out.write_str(", expected null, got {:?}\", ");
                             write!(out, "{actual}");
                         }
                         WastRetCore::RefExtern(None) => {
-                            out.write_str("expected non-null externref\"");
+                            out.write_str(", expected non-null externref\"");
                         }
                         WastRetCore::RefExtern(Some(expected)) => {
-                            write!(out, "expected HostRef(Some({expected})), got ");
-                            out.write_str("{}\", ");
+                            write!(out, ", expected HostRef(Some({expected})), got ");
+                            out.write_str("{:?}\", ");
                             write!(out, "{actual}");
                         }
                         _ => out.write_str("\""),
