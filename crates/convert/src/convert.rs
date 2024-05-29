@@ -1382,7 +1382,7 @@ impl Convert<'_> {
 
             writeln!(
                 o,
-                "{sp}{sp}{sp}{}: embedder::rt::store::AllocateTable::<{}>::allocate_null(store.memory{}, {}, {}, {})?,",
+                "{sp}{sp}{sp}{}: embedder::rt::store::AllocateTable::<{}>::allocate_null(store.table{}, {}, {}, {})?,",
                 crate::context::TableIdent::Id(table_id),
                 crate::ast::RefType::from(table_type.element_type),
                 table_id.0,
