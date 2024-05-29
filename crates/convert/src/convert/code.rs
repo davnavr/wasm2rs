@@ -451,13 +451,7 @@ fn convert_impl(
                     })?;
                 } else {
                     // Multiple results are translated into Rust tuples, which need to be destructured.
-                    let results =
-                        std::num::NonZeroU32::new(result_count as u32).map(|result_count| {
-                            (
-                                crate::ast::TempId(builder.wasm_operand_stack().len() as u32),
-                                result_count,
-                            )
-                        });
+                    let results = builder.call_statement_results(result_count)?;
 
                     builder.emit_statement(crate::ast::Statement::Call {
                         callee,
@@ -469,7 +463,56 @@ fn convert_impl(
                     builder.push_block_results(result_count)?;
                 }
             }
-            //Operator::CallIndirect
+            Operator::CallIndirect {
+                type_index,
+                table_index,
+                table_byte: _,
+            } => {
+                let table = crate::ast::TableId(table_index);
+                let callee = builder.pop_wasm_operand();
+
+                // Duplicated code from Operator::Call
+                let signature = types[types.core_type_at(type_index).unwrap_sub()].unwrap_func();
+                let result_count = signature.results().len();
+                let param_count = signature.params().len();
+
+                if param_count > crate::convert::FUNC_REF_MAX_PARAM_COUNT {
+                    anyhow::bail!(
+                        "`call_indirect` instruction at {:#X} accepts {param_count} arguments, \
+                        only a maximum of {} arguments are supported",
+                        instruction_offset(),
+                        crate::convert::FUNC_REF_MAX_PARAM_COUNT,
+                    );
+                }
+
+                let arguments = builder.wasm_operand_stack_pop_list(param_count)?;
+
+                builder.can_trap(); // Index could be out of bounds.
+                builder.needs_self();
+
+                if result_count == 1 {
+                    builder.push_wasm_operand(crate::ast::Expr::CallIndirect {
+                        result_type: crate::ast::ValType::from(signature.results()[0]),
+                        table,
+                        callee,
+                        arguments,
+                        offset: instruction_offset(),
+                    })?;
+                } else {
+                    let results = builder.call_statement_results(result_count)?;
+
+                    builder.emit_statement(crate::ast::Statement::CallIndirect {
+                        type_idx: type_index,
+                        table,
+                        callee,
+                        arguments,
+                        results,
+                        offset: instruction_offset(),
+                    })?;
+
+                    builder.push_block_results(result_count)?;
+                }
+            }
             Operator::Drop => {
                 let expr = builder.pop_wasm_operand();
                 builder.emit_statement(expr)?;

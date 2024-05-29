@@ -56,6 +56,7 @@ impl Default for Indentation {
 /// Rust paths to embedder or runtime support code, typically implemented in `wasm2rs-rt`.
 mod paths {
     //pub(super) const TRAP: &str = "embedder::Trap";
+    pub(super) const RT_FUNC_REF: &str = "embedder::rt::func_ref";
     pub(super) const RT_MATH: &str = "embedder::rt::math";
     pub(super) const RT_TRAP: &str = "embedder::rt::trap::Trap";
     pub(super) const RT_MEM: &str = "embedder::rt::memory";
@@ -774,6 +775,34 @@ impl crate::ast::Expr {
 
                 print_call_expr(out, *callee, *arguments, context, function, *offset)
             }
+            Self::CallIndirect {
+                result_type,
+                table,
+                callee,
+                arguments,
+                offset,
+            } => {
+                out.write_str(paths::RT_FUNC_REF);
+                write!(out, "::call_indirect_{}::<{}", arguments.len(), table.0);
+
+                for _ in 0..arguments.len() {
+                    out.write_str(", _");
+                }
+
+                write!(out, ", {result_type}, _, _>(");
+                print_table(out, *table, context.wasm);
+                out.write_str(", ");
+                callee.print(out, false, context, function);
+
+                for arg in context.arena.get_list(*arguments) {
+                    out.write_str(", ");
+                    arg.print(out, false, context, function);
+                }
+
+                out.write_str(", ");
+                print_frame(out, function, *offset, context.debug_info);
+                out.write_str(")?");
+            }
         }
     }
 
@@ -970,6 +999,33 @@ fn print_branch_table_case(
     out.write_str(",\n");
 }
 
+fn print_call_statement_results(
+    out: &mut dyn crate::write::Write,
+    results: Option<(crate::ast::TempId, std::num::NonZeroU32)>,
+) {
+    if let Some((results, result_count)) = results {
+        out.write_str("let ");
+
+        if result_count.get() > 1 {
+            out.write_str("(");
+        }
+
+        for i in 0..result_count.get() {
+            if i > 0 {
+                out.write_str(", ");
+            }
+
+            write!(out, "{}", crate::ast::TempId(results.0 + i));
+        }
+
+        if result_count.get() > 1 {
+            out.write_str(")");
+        }
+
+        out.write_str(" = ");
+    }
+}
+
 pub(crate) fn print_statements(
     out: &mut dyn crate::write::Write,
     context: &Context,
@@ -1051,30 +1107,60 @@ pub(crate) fn print_statements(
                 results,
                 offset,
             } => {
-                if let Some((results, result_count)) = results {
-                    out.write_str("let ");
-
-                    if result_count.get() > 1 {
-                        out.write_str("(");
-                    }
-
-                    for i in 0..result_count.get() {
-                        if i > 0 {
-                            out.write_str(", ");
-                        }
-
-                        write!(out, "{}", crate::ast::TempId(results.0 + i));
-                    }
-
-                    if result_count.get() > 1 {
-                        out.write_str(")");
-                    }
-
-                    out.write_str(" = ");
-                }
-
+                print_call_statement_results(out, results);
                 print_call_expr(out, callee, arguments, context, Some(function), offset);
                 out.write_str(";");
+            }
+            Statement::CallIndirect {
+                type_idx,
+                table,
+                callee,
+                arguments,
+                results,
+                offset,
+            } => {
+                print_call_statement_results(out, results);
+                out.write_str(paths::RT_FUNC_REF);
+                write!(out, "::call_indirect_{}::<{}", arguments.len(), table.0);
+
+                let signature = context.wasm.types
+                    [context.wasm.types.core_type_at(type_idx).unwrap_sub()]
+                .unwrap_func();
+                for param in signature.params().iter().copied() {
+                    write!(out, ", {}", crate::ast::ValType::from(param));
+                }
+
+                out.write_str(", ");
+
+                if signature.results().len() != 1 {
+                    out.write_str("(");
+                }
+
+                for (i, result) in signature.results().iter().copied().enumerate() {
+                    if i > 0 {
+                        out.write_str(", ");
+                    }
+
+                    write!(out, "{}", crate::ast::ValType::from(result));
+                }
+
+                if signature.results().len() != 1 {
+                    out.write_str(")");
+                }
+
+                write!(out, ", _, _>(");
+                print_table(out, table, context.wasm);
+                out.write_str(", ");
+                callee.print(out, false, context, Some(function));
+
+                for arg in context.arena.get_list(arguments) {
+                    out.write_str(", ");
+                    arg.print(out, false, context, Some(function));
+                }
+
+                out.write_str(", ");
+                print_frame(out, Some(function), offset, context.debug_info);
+                out.write_str(")?");
             }
             Statement::Branch {
                 target: crate::ast::BranchTarget::Return,

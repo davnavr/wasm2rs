@@ -510,9 +510,29 @@ pub(crate) enum Expr {
         delta: ExprId,
     },
     /// Represents a call to a function that takes any number of arguments, and returns exactly one
-    /// value.
+    /// value. Corresponds to the [`call`] instruction.
+    ///
+    /// [`call`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions
     Call {
         callee: FuncId,
+        arguments: ExprListId,
+        offset: u32,
+    },
+    /// Represents an indirect call to a function that takes any number of arguments, and returns
+    /// exactly one value. Corresponds to the [`call_indirect`] instruction.
+    ///
+    /// [`call_indirect`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions
+    CallIndirect {
+        result_type: ValType,
+        /// The table containing the `funcref` to invoke.
+        table: TableId,
+        /// The index into the table indicate the `funcref` to invoke.
+        ///
+        /// This is evaluated first.
+        callee: ExprId,
+        /// The arguments to pass to the `funcref`.
+        ///
+        /// This is evaluated *after* the [`callee`](Expr::CallIndirect::callee) index.
         arguments: ExprListId,
         offset: u32,
     },
@@ -574,8 +594,31 @@ pub(crate) enum Statement {
     ///
     /// [`global.set`]: https://webassembly.github.io/spec/core/syntax/instructions.html#variable-instructions
     SetGlobal { global: GlobalId, value: ExprId },
+    /// Represents a call to a function that takes any number of arguments, and returns no values
+    /// or more than one value. Corresponds to the [`call`] instruction.
+    ///
+    /// [`call`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions
     Call {
         callee: FuncId,
+        arguments: ExprListId,
+        results: Option<(TempId, std::num::NonZeroU32)>,
+        offset: u32,
+    },
+    /// Represents an indirect call to a function that takes any number of arguments, and returns
+    /// no values or more than one value. Corresponds to the [`call_indirect`] instruction.
+    ///
+    /// [`call_indirect`]: https://webassembly.github.io/spec/core/syntax/instructions.html#control-instructions
+    CallIndirect {
+        type_idx: u32,
+        /// The table containing the `funcref` to invoke.
+        table: TableId,
+        /// The index into the table indicate the `funcref` to invoke.
+        ///
+        /// This is evaluated first.
+        callee: ExprId,
+        /// The arguments to pass to the `funcref`.
+        ///
+        /// This is evaluated *after* the [`callee`](Statement::CallIndirect::callee) index.
         arguments: ExprListId,
         results: Option<(TempId, std::num::NonZeroU32)>,
         offset: u32,

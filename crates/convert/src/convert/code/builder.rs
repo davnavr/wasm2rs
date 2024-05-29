@@ -244,6 +244,21 @@ impl Builder {
         Ok(())
     }
 
+    pub(super) fn call_statement_results(
+        &mut self,
+        result_count: usize,
+    ) -> crate::Result<Option<(crate::ast::TempId, std::num::NonZeroU32)>> {
+        self.flush_operands_to_temporaries()?;
+        Ok(
+            std::num::NonZeroU32::new(result_count as u32).map(|result_count| {
+                (
+                    crate::ast::TempId(self.wasm_operand_stack().len() as u32),
+                    result_count,
+                )
+            }),
+        )
+    }
+
     pub(super) fn emit_statement(
         &mut self,
         statement: impl Into<crate::ast::Statement>,
