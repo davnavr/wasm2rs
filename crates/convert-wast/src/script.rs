@@ -91,10 +91,7 @@ fn print_arguments(
                     out.write_str("::wasm2rs_rt::table::NullableTableElement::NULL")
                 }
                 bad => {
-                    let mut err = wast::Error::new(
-                        span,
-                        format!("unsupported argument: {bad:?}"),
-                    );
+                    let mut err = wast::Error::new(span, format!("unsupported argument: {bad:?}"));
 
                     err.set_text(script_text);
                     return Err(anyhow::Error::new(err));
@@ -197,7 +194,7 @@ pub(crate) fn convert(
 
                 writeln!(
                     out,
-                    "            wasm!(mod module use ::wasm2rs_rt::embedder::self_contained);"
+                    "            wasm!(mod module use ::wasm2rs_rt_spectest::embedder::self_contained);"
                 );
                 out.write_str("            pub use module::*;\n        }\n");
 

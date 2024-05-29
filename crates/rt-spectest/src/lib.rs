@@ -15,3 +15,20 @@ mod imports;
 
 pub use host_ref::HostRef;
 pub use imports::SpecTestImports;
+
+/// Runtime support for WebAssembly modules within the specification tests.
+pub mod embedder {
+    /// Used for WebAssembly modules with no imports, at most one 32-bit linear memory, and at most
+    /// one table containing [`FuncRef`]s only.
+    ///
+    /// [`FuncRef`]: wasm2rs_rt::func_ref::FuncRef
+    #[allow(missing_docs)]
+    pub mod self_contained {
+        #[doc(no_inline)]
+        pub use wasm2rs_rt::embedder::self_contained::{
+            rt, Imports, Memory0, Module, Store, Table0, Trap,
+        };
+
+        pub type ExternRef = crate::HostRef;
+    }
+}
