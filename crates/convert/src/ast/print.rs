@@ -310,7 +310,7 @@ impl crate::ast::Expr {
                 val_1,
                 val_2,
                 condition,
-            } => {
+            } => nested_expr! {
                 out.write_str("if ");
                 condition.print_bool(out, context, function);
                 out.write_str(" { ");
@@ -318,7 +318,7 @@ impl crate::ast::Expr {
                 out.write_str(" } else { ");
                 val_2.print(out, false, context, function);
                 out.write_str(" }");
-            }
+            },
             Self::UnaryOperator { kind, c_1 } => {
                 use crate::ast::UnOp;
 
