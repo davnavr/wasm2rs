@@ -55,8 +55,10 @@ impl FuncRefSignature {
     }
 }
 
-pub(crate) trait HasFuncRefSignature {
-    const SIGNATURE: FuncRefSignature;
+/// Internal API used to associate [`FuncRefSignature`]s with function pointer types.
+#[allow(missing_docs)]
+pub trait HasFuncRefSignature {
+    const SIGNATURE: &'static FuncRefSignature;
 }
 
 impl<F> HasFuncRefSignature for F
@@ -69,7 +71,7 @@ where
         + core::panic::RefUnwindSafe
         + 'static,
 {
-    const SIGNATURE: FuncRefSignature = FuncRefSignature::of::<F>();
+    const SIGNATURE: &'static FuncRefSignature = &FuncRefSignature::of::<F>();
 }
 
 impl core::fmt::Debug for FuncRefSignature {

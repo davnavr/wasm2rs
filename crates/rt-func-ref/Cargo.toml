@@ -14,4 +14,5 @@ std = ["alloc"]
 alloc = []
 
 [dependencies]
+paste = "1.0"
 wasm2rs-rt-core = { workspace = true }
