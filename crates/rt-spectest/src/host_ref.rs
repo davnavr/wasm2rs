@@ -18,4 +18,8 @@ impl wasm2rs_rt::table::TableElement for HostRef {}
 
 impl wasm2rs_rt::table::NullableTableElement for HostRef {
     const NULL: Self = Self(None);
+
+    fn is_null(&self) -> bool {
+        self.0.is_none()
+    }
 }
