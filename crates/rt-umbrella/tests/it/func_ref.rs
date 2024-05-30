@@ -38,10 +38,7 @@ fn basic_closure_call() {
     assert_eq!(func_ref.call_2(1, 2, None), Ok(1));
     assert_eq!(cloned.call_2(2, 3, None), Ok(2));
     assert_eq!(call_counter.get(), 3);
-    assert_ne!(func_ref, FuncRef::<TrapError>::NULL);
-
-    #[cfg(not(miri))] // `const`s are not equal in miri?
-    assert_eq!(func_ref, cloned); // Addresses of the `Rc` are the same
+    assert!(!func_ref.is_null());
 }
 
 #[test]
@@ -70,7 +67,4 @@ fn padding_bytes() {
 
     #[cfg(feature = "std")]
     std::println!("{func_ref:?} vs {cloned:?}");
-
-    #[cfg(not(miri))] // VTABLE addresses are not equal under miri.
-    assert_eq!(func_ref, cloned);
 }

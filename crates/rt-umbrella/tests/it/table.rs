@@ -8,6 +8,10 @@ impl table::TableElement for IntRef {}
 
 impl table::NullableTableElement for IntRef {
     const NULL: Self = Self(None);
+
+    fn is_null(&self) -> bool {
+        self.0.is_none()
+    }
 }
 
 #[test]
@@ -88,6 +92,10 @@ fn heap_table() {
 
     impl table::NullableTableElement for TestRef {
         const NULL: Self = Self(None);
+
+        fn is_null(&self) -> bool {
+            self.0.is_none()
+        }
     }
 
     let table = table::HeapTable::<TestRef>::with_maximum(10);
