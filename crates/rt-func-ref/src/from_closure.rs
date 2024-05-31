@@ -64,7 +64,7 @@ macro_rules! define_from_closure {
                 impl<'a, $($parameter,)* R, E, C> InlineClosure<'a, $($parameter,)* R, E> for C
                 where
                     $($parameter: 'static,)*
-                    C: Fn($($parameter),*) -> Result<R, E> + 'a,
+                    C: Clone + Fn($($parameter),*) -> Result<R, E> + 'a,
                     R: 'static,
                     E: 'static,
                 {
@@ -80,7 +80,7 @@ macro_rules! define_from_closure {
                         let clone: unsafe fn(&RawFuncRefData) -> RawFuncRef = |data| {
                             // SAFETY: `data` contains `C`.
                             let me: &C = unsafe { data.as_ref_inline::<C>() };
-                            let clone = me.clone();
+                            let clone: C = <C as Clone>::clone(me);
 
                             // SAFETY: `C` is known to be stored inline.
                             let data = unsafe { clone.into_raw_data() };
