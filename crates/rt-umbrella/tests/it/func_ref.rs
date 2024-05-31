@@ -42,6 +42,54 @@ fn basic_closure_call() {
 }
 
 #[test]
+fn inlined_closure() {
+    let value = 5i32;
+    let closure = move |x: i32| Ok(x.wrapping_add(value));
+    let func_ref = FuncRef::<TrapError>::from_closure_1(closure);
+    assert_eq!(func_ref.call_1(5i32, None), Ok(10i32));
+}
+
+struct BigData {
+    a: u32,
+    b: u32,
+    c: u64,
+}
+
+#[test]
+#[cfg(feature = "alloc")]
+fn big_data_closure_on_heap() {
+    let big_data = BigData {
+        a: 1,
+        b: 2,
+        c: 3,
+    };
+
+    let closure = move || -> Result<i64, _> {
+        Ok((u64::from(big_data.a) + u64::from(big_data.b) + big_data.c) as i64)
+    };
+
+    let func_ref = FuncRef::<TrapError>::from_closure_0(closure);
+    assert_eq!(func_ref.call_0(None), Ok(6i64));
+}
+
+#[test]
+#[should_panic]
+#[cfg(not(feature = "alloc"))]
+fn big_data_closure_panic() {
+    let big_data = BigData {
+        a: 6,
+        b: 7,
+        c: 8,
+    };
+
+    let closure = move || -> Result<i64, _> {
+        Ok((u64::from(big_data.a) + u64::from(big_data.b) + big_data.c) as i64)
+    };
+
+    let _ = FuncRef::<TrapError>::from_closure_0(closure);
+}
+
+#[test]
 fn null_call() {
     let null = FuncRef::<TrapError>::NULL;
 
