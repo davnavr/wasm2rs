@@ -27,6 +27,10 @@ wasmparser = { version = "=0.208.1", default-features = false, features = ["std"
 wat = "1.208.1"
 wast = "=208.0.1"
 
+[profile.dev]
+debug = "line-tables-only"
+codegen-units = 512
+
 [profile.dev.package]
 insta.opt-level = 3
 similar.opt-level = 3
