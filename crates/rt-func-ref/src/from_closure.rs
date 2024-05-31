@@ -1,4 +1,4 @@
-use crate::{signature::HasFuncRefSignature, RawFuncRef, RawFuncRefData};
+use crate::{raw, signature::HasFuncRefSignature};
 
 macro_rules! define_from_closure {
     (($($argument:ident: $parameter:ident),*); $number:literal) => {
@@ -6,8 +6,8 @@ macro_rules! define_from_closure {
             /// Creates a new [`FuncRef`] used to invoke the given closure.
             ///
             /// If the closure is too large, the closure is moved into an [`Rc`] heap allocation to
-            /// ensure that it fits into [`RawFuncRefData`]. See the documentation for the
-            /// [`RawFuncRefData::can_store_inline()`] method for more information.
+            /// ensure that it fits into [`raw::Data`]. See the documentation for the
+            /// [`raw::Data::can_store_inline()`] method for more information.
             ///
             /// # Interior Mutability
             ///
@@ -19,7 +19,7 @@ macro_rules! define_from_closure {
             /// # Panics
             ///
             /// Panics if the `alloc` feature is not enabled when
-            /// [`RawFuncRefData::can_store_inline::<C>()`] returns `false`.
+            /// [`raw::Data::can_store_inline::<C>()`] returns `false`.
             ///
             /// [`FuncRef`]: crate::FuncRef
             /// [`Rc`]: alloc::rc::Rc
@@ -30,7 +30,7 @@ macro_rules! define_from_closure {
                 C: Clone + Fn($($parameter),*) -> Result<R, E> + 'a,
                 R: 'static,
             {
-                if !RawFuncRefData::can_store_inline::<C>() {
+                if !raw::Data::can_store_inline::<C>() {
                     #[cfg(not(feature = "alloc"))]
                     panic!(
                         "could not store closure inline, layout requires {} bytes aligned to {} bytes",
@@ -48,16 +48,16 @@ macro_rules! define_from_closure {
                         let vtable = <Rc::<C> as IntoRawFunc::<'a, $number, _, R, E>>::VTABLE;
 
                         // SAFETY: implementation of VTABLE for `Rc` is correct.
-                        unsafe { Self::from_raw(RawFuncRef::new(data, vtable)) }
+                        unsafe { Self::from_raw(raw::Raw::new(data, vtable)) }
                     };
                 }
 
                 trait InlineClosure<'a, $($parameter,)* R, E> {
                     type FnPtr: HasFuncRefSignature;
 
-                    const VTABLE: &'static crate::RawFuncRefVTable;
+                    const VTABLE: &'static raw::VTable;
 
-                    unsafe fn into_raw_data(self) -> RawFuncRefData;
+                    unsafe fn into_raw_data(self) -> raw::Data;
                 }
 
                 // SAFETY: `C` always guaranteed to be stored inline.
@@ -70,14 +70,14 @@ macro_rules! define_from_closure {
                 {
                     type FnPtr = crate::signature_function_pointer!(($($parameter),*) -> Result<R, E>);
 
-                    const VTABLE: &'static crate::RawFuncRefVTable = {
+                    const VTABLE: &'static raw::VTable = {
                         let invoke: Self::FnPtr = |data $(, $argument)*| {
                             // SAFETY: `data` contains `C`.
                             let me: &C = unsafe { data.as_ref_inline::<C>() };
                             (me)($($argument),*)
                         };
 
-                        let clone: unsafe fn(&RawFuncRefData) -> RawFuncRef = |data| {
+                        let clone: unsafe fn(&raw::Data) -> raw::Raw = |data| {
                             // SAFETY: `data` contains `C`.
                             let me: &C = unsafe { data.as_ref_inline::<C>() };
                             let clone: C = <C as Clone>::clone(me);
@@ -85,26 +85,24 @@ macro_rules! define_from_closure {
                             // SAFETY: `C` is known to be stored inline.
                             let data = unsafe { clone.into_raw_data() };
 
-                            RawFuncRef::new(data, Self::VTABLE)
+                            raw::Raw::new(data, Self::VTABLE)
                         };
 
-                        let drop: unsafe fn(RawFuncRefData) = |data| {
+                        let drop: unsafe fn(raw::Data) = |data| {
                             // SAFETY: `data` contains `C`.
                             unsafe { data.read::<C>() };
 
                             // `C` is automatically dropped
                         };
 
-                        let debug: unsafe fn(&RawFuncRefData, &mut core::fmt::Formatter) -> core::fmt::Result = |_, f| {
+                        let debug: unsafe fn(&_, &mut core::fmt::Formatter) -> _ = |_, f| {
                             write!(f, "{}", core::any::type_name::<C>())
                         };
 
                         // SAFETY: function pointers have the same size.
-                        let invoke = unsafe {
-                            core::mem::transmute::<_, crate::RawFuncRefInvoke>(invoke)
-                        };
+                        let invoke = unsafe { core::mem::transmute::<_, raw::Invoke>(invoke) };
 
-                        &crate::RawFuncRefVTable::new(
+                        &raw::VTable::new(
                             invoke,
                             Self::FnPtr::SIGNATURE,
                             clone,
@@ -113,8 +111,8 @@ macro_rules! define_from_closure {
                         )
                     };
 
-                    unsafe fn into_raw_data(self) -> RawFuncRefData {
-                        let data = RawFuncRefData::try_from_inline::<C>(self);
+                    unsafe fn into_raw_data(self) -> raw::Data {
+                        let data = raw::Data::try_from_inline::<C>(self);
 
                         // SAFETY: Caller ensures `C` can be stored inline.
                         unsafe { data.unwrap_unchecked() }
@@ -128,7 +126,7 @@ macro_rules! define_from_closure {
 
                 // SAFETY: implementation of VTABLE for `<C as InlineClosure>` is correct.
                 unsafe {
-                    Self::from_raw(RawFuncRef::new(data, <C as InlineClosure<'a, $($parameter,)* R, E>>::VTABLE))
+                    Self::from_raw(raw::Raw::new(data, <C as InlineClosure<'a, $($parameter,)* R, E>>::VTABLE))
                 }
             }
         }

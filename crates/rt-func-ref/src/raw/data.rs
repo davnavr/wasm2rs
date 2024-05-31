@@ -1,10 +1,10 @@
 const INLINE_LEN: usize = core::mem::size_of::<*const ()>();
 
-/// Allows inclusion of additional data in a closure used within a [`RawFuncRef`].
+/// Allows inclusion of additional data in a closure used within a [`Raw`] function reference.
 ///
-/// [`RawFuncRef`]: crate::RawFuncRef
+/// [`Raw`]: crate::raw::Raw
 #[derive(Clone, Copy)]
-pub union RawFuncRefData {
+pub union Data {
     /// Allows storing heap allocations or pointers to `'static` data.
     pub pointer: *const (),
     /// Allows storing data inline. This can be used to store any pointer-sized value with an
@@ -18,10 +18,10 @@ pub union RawFuncRefData {
     pub inline: core::mem::MaybeUninit<[u8; INLINE_LEN]>,
 }
 
-impl RawFuncRefData {
+impl Data {
     /// Initializes the data with the given raw [`pointer`].
     ///
-    /// [`pointer`]: RawFuncRefData::pointer
+    /// [`pointer`]: Data::pointer
     pub const fn from_ptr<T>(pointer: *const T) -> Self {
         // Since all pointer bit patterns are valid, the `inline` bytes can be read.
         Self {
@@ -31,7 +31,7 @@ impl RawFuncRefData {
 
     /// Initializes the data with the given raw mutable [`pointer`].
     ///
-    /// [`pointer`]: RawFuncRefData::pointer
+    /// [`pointer`]: Data::pointer
     pub const fn from_mut_ptr<T>(pointer: *mut T) -> Self {
         Self::from_ptr(pointer as *const T)
     }
@@ -41,8 +41,8 @@ impl RawFuncRefData {
     /// See the documentation for the [`inline`] field and the [`try_from_inline()`] method for
     /// more information.
     ///
-    /// [`inline`]: RawFuncRefData::inline
-    /// [`try_from_inline()`]: RawFuncRefData::try_from_inline()
+    /// [`inline`]: Data::inline
+    /// [`try_from_inline()`]: Data::try_from_inline()
     pub const fn can_store_inline<T>() -> bool {
         core::mem::size_of::<T>() <= INLINE_LEN
             && core::mem::align_of::<T>() <= core::mem::align_of::<Self>()
@@ -52,10 +52,10 @@ impl RawFuncRefData {
     ///
     /// # Errors
     ///
-    /// Returns the `value` if [`size_of::<T>()`] is larger than `size_of::<RawFuncRefData>`, or if
-    /// [`align_of::<T>()`] is greater than `align_of::<RawFuncRefData>`.
+    /// Returns the `value` if [`size_of::<T>()`] is larger than `size_of::<raw::Data>`, or if
+    /// [`align_of::<T>()`] is greater than `align_of::<raw::Data>`.
     ///
-    /// [`inline`]: RawFuncRefData::inline
+    /// [`inline`]: Data::inline
     /// [`size_of::<T>()`]: core::mem::size_of()
     /// [`align_of::<T>()`]: core::mem::align_of()
     pub fn try_from_inline<T>(value: T) -> Result<Self, T> {
@@ -88,7 +88,7 @@ impl RawFuncRefData {
     /// Interprets the [`inline`] data as **containing** a [valid] instance of `T`, and returns a
     /// reference to it.
     ///
-    /// If the [`RawFuncRefData`] instead contains a [`pointer`] to an instance of `T`, use the
+    /// If the [`raw::Data`] instead contains a [`pointer`] to an instance of `T`, use the
     /// [`as_by_ref()`] method instead.
     ///
     /// # Panics
@@ -102,11 +102,12 @@ impl RawFuncRefData {
     /// Additionally, as this creates a shared reference to the [`inline`] data, there must be no
     /// existing exclusive references to it.
     ///
-    /// [`inline`]: RawFuncRefData::inline
+    /// [`inline`]: Data::inline
     /// [valid]: core::ptr#safety
-    /// [`pointer`]: RawFuncRefData::pointer
-    /// [`as_by_ref()`]: RawFuncRefData::as_by_ref()
-    /// [`can_store_inline::<T>()`]: RawFuncRefData::can_store_inline()
+    /// [`raw::Data`]: Data
+    /// [`pointer`]: Data::pointer
+    /// [`as_by_ref()`]: Data::as_by_ref()
+    /// [`can_store_inline::<T>()`]: Data::can_store_inline()
     /// [*dereferenceable* requirement]: core::ptr#safety
     pub unsafe fn as_ref_inline<T>(&self) -> &T {
         Self::assert_can_store_inline::<T>();
@@ -128,10 +129,10 @@ impl RawFuncRefData {
     /// `T`. Additionally, as this creates a shared reference to the [`inline`] data, there must be
     /// no existing exclusive references to it.
     ///
-    /// [`pointer`]: RawFuncRefData::pointer
+    /// [`pointer`]: Data::pointer
     /// [valid]: core::ptr#safety
-    /// [`inline`]: RawFuncRefData::inline
-    /// [`as_ref_inline()`]: RawFuncRefData::as_ref_inline()
+    /// [`inline`]: Data::inline
+    /// [`as_ref_inline()`]: Data::as_ref_inline()
     pub unsafe fn as_by_ref<T>(&self) -> &T {
         // SAFETY: caller ensures that the contained pointer is valid.
         // SAFETY: the `inline` data lives as long as `self` does.
@@ -154,9 +155,9 @@ impl RawFuncRefData {
     ///
     /// See the documentation for [`ptr::read()`] for more information.
     ///
-    /// [`inline`]: RawFuncRefData::inline
+    /// [`inline`]: Data::inline
     /// [`MaybeUninit::assume_init_read()`]: core::mem::MaybeUninit::assume_init_read()
-    /// [`can_store_inline::<T>()`]: RawFuncRefData::can_store_inline()
+    /// [`can_store_inline::<T>()`]: Data::can_store_inline()
     /// [*dereferenceable* requirement]: core::ptr#safety
     /// [valid]: core::ptr#safety
     /// [`ptr::read()`]: core::ptr::read()
@@ -168,9 +169,9 @@ impl RawFuncRefData {
     }
 }
 
-impl core::fmt::Debug for RawFuncRefData {
+impl core::fmt::Debug for Data {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // Can't read bytes, might be `uninit`.
-        f.debug_struct("RawFuncRefData").finish_non_exhaustive()
+        f.debug_struct("Data").finish_non_exhaustive()
     }
 }

@@ -1,22 +1,22 @@
-use crate::{signature::HasFuncRefSignature, RawFuncRef, RawFuncRefData, RawFuncRefVTable};
+use crate::{raw, signature::HasFuncRefSignature};
 
-/// Trait used for converting closures into [`RawFuncRef`]s.
+/// Trait used for converting closures into [`Raw`] function references.
 ///
 /// # Safety
 ///
 /// See the documentation for [`FuncRef::from_raw()`] for more information.
 ///
-/// [`RawFuncRef`]: crate::RawFuncRef
+/// [`Raw`]: raw::Raw
 /// [`FuncRef::from_raw()`]: crate::FuncRef::from_raw()
 pub unsafe trait IntoRawFunc<'a, const ARG_COUNT: usize, Params, Results, Trap>: 'a {
     #[allow(missing_docs)]
     type FnPtr: HasFuncRefSignature;
 
     #[allow(missing_docs)]
-    const VTABLE: &'static RawFuncRefVTable;
+    const VTABLE: &'static raw::VTable;
 
     #[allow(missing_docs)]
-    fn into_raw_data(self) -> RawFuncRefData;
+    fn into_raw_data(self) -> raw::Data;
 }
 
 macro_rules! define_into_raw_func {
@@ -33,14 +33,14 @@ macro_rules! define_into_raw_func {
         {
             type FnPtr = crate::signature_function_pointer!(($($parameter),*) -> Result<R, E>);
 
-            const VTABLE: &'static RawFuncRefVTable = {
+            const VTABLE: &'static raw::VTable = {
                 let invoke: Self::FnPtr = |data $(, $argument)*| {
                     // SAFETY: `data` contains a `*const F`.
                     let me: &F = unsafe { data.as_by_ref::<F>() };
                     (me)($($argument),*)
                 };
 
-                let clone: unsafe fn(&RawFuncRefData) -> RawFuncRef = |data| {
+                let clone: unsafe fn(&raw::Data) -> raw::Raw = |data| {
                     // SAFETY: `data` contains a `*const F`.
                     let me: *const F = unsafe { data.read::<*const F>() };
 
@@ -50,10 +50,10 @@ macro_rules! define_into_raw_func {
                     }
 
                     // The `data` contains the same `*const F`.
-                    RawFuncRef::new(*data, Self::VTABLE)
+                    raw::Raw::new(*data, Self::VTABLE)
                 };
 
-                let drop: unsafe fn(RawFuncRefData) = |data| {
+                let drop: unsafe fn(raw::Data) = |data| {
                     // SAFETY: `data` contains a `*const F`.
                     let me: *const F = unsafe { data.read::<*const F>() };
 
@@ -65,7 +65,7 @@ macro_rules! define_into_raw_func {
                     // `Rc` is automatically dropped
                 };
 
-                let debug: unsafe fn(&RawFuncRefData, &mut core::fmt::Formatter) -> core::fmt::Result = |data, f| {
+                let debug: unsafe fn(&raw::Data, &mut core::fmt::Formatter) -> _ = |data, f| {
                     // SAFETY: `data` contains a `*const F`.
                     let me: *const F = unsafe { data.read::<*const F>() };
 
@@ -83,11 +83,9 @@ macro_rules! define_into_raw_func {
                 };
 
                 // SAFETY: function pointers have the same size.
-                let invoke = unsafe {
-                    core::mem::transmute::<_, crate::RawFuncRefInvoke>(invoke)
-                };
+                let invoke = unsafe { core::mem::transmute::<_, raw::Invoke>(invoke) };
 
-                &RawFuncRefVTable::new(
+                &raw::VTable::new(
                     invoke,
                     Self::FnPtr::SIGNATURE,
                     clone,
@@ -96,8 +94,8 @@ macro_rules! define_into_raw_func {
                 )
             };
 
-            fn into_raw_data(self) -> RawFuncRefData {
-                RawFuncRefData::from_ptr::<F>(Self::into_raw(self))
+            fn into_raw_data(self) -> raw::Data {
+                raw::Data::from_ptr::<F>(Self::into_raw(self))
             }
         }
 

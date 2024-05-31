@@ -20,16 +20,16 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+pub mod raw;
+
 mod error;
 mod from_closure;
 mod into_raw_func;
 mod invoke;
-mod raw;
 mod signature;
 
 pub use error::{FuncRefCastError, SignatureMismatchError};
 pub use into_raw_func::IntoRawFunc;
-pub use raw::{RawFuncRef, RawFuncRefData, RawFuncRefInvoke, RawFuncRefVTable};
 pub use signature::FuncRefSignature;
 
 /// Internal API used to generate code for [`FuncRef`]s with differing parameter types.
@@ -73,7 +73,7 @@ struct FuncRefPhantom<'a, E: 'static> {
 /// [**`funcref`**]: https://webassembly.github.io/spec/core/exec/runtime.html#values
 /// [`Trap`]: wasm2rs_rt_core::trap::Trap
 pub struct FuncRef<'a, E: 'static> {
-    func: Option<RawFuncRef>,
+    func: Option<raw::Raw>,
     _marker: core::marker::PhantomData<FuncRefPhantom<'a, E>>,
 }
 
@@ -103,15 +103,17 @@ impl<E: 'static> FuncRef<'_, E> {
         self.func.is_none()
     }
 
-    /// Creates a new [`FuncRef`] from a [`RawFuncRef`].
+    /// Creates a new [`FuncRef`] from a [`Raw`] function reference.
     ///
     /// # Safety
     ///
-    /// The provided [`RawFuncRef`] must meet the requirements specified in its documentation. For
-    /// more information, see the documentation for [`RawFuncRefVTable::new()`].
+    /// The provided [`Raw`] instance must meet the requirements specified in its documentation.
+    /// For more information, see the documentation for [`raw::VTable::new()`].
     ///
-    /// Additionally, the [`RawFuncRefData`] may only reference data lasting for the lifetime `'a`.
-    pub const unsafe fn from_raw(func_ref: RawFuncRef) -> Self {
+    /// Additionally, the [`raw::Data`] may only reference data lasting for the lifetime `'a`.
+    ///
+    /// [`Raw`]: raw::Raw
+    pub const unsafe fn from_raw(func_ref: raw::Raw) -> Self {
         Self {
             func: Some(func_ref),
             _marker: core::marker::PhantomData,
@@ -126,10 +128,11 @@ impl<E: 'static> FuncRef<'_, E> {
     ///
     /// Generated code and the `call_` functions call [`cast()`] to obtain a function pointer of
     /// type `C` to the referrenced function. Refer to the documentation for
-    /// [`FuncRefSignature::of()`] for valid types to use as `C`.
+    /// [`FuncRefSignature::of()`] and [`signature_function_pointer!`] for valid types to use as
+    /// `C`.
     ///
-    /// The function pointer that is produced is safe to call only with the [`RawFuncRefData`] that
-    /// is returned alongside it.
+    /// The function pointer that is produced is safe to call only with the [`raw::Data`] that is
+    /// returned alongside it.
     ///
     /// # Panics
     ///
@@ -140,10 +143,10 @@ impl<E: 'static> FuncRef<'_, E> {
     /// An error is returned if the function reference is not of the correct type, or if `self` is [`NULL`]
     ///
     /// [`cast()`]: FuncRef::cast()
-    /// [`NULL`]: FuncRef::NULL
     /// [`call_0()`]: Self::call_0()
     /// [`call_1()`]: Self::call_1()
-    pub fn cast<C>(&self) -> Result<(&RawFuncRefData, C), FuncRefCastError>
+    /// [`NULL`]: FuncRef::NULL
+    pub fn cast<C>(&self) -> Result<(&raw::Data, C), FuncRefCastError>
     where
         C: signature::HasFuncRefSignature,
     {
@@ -158,16 +161,15 @@ impl<E: 'static> FuncRef<'_, E> {
             Some(func) => {
                 assert_eq!(
                     core::mem::size_of::<C>(),
-                    core::mem::size_of::<RawFuncRefInvoke>(),
+                    core::mem::size_of::<raw::Invoke>(),
                     "expected {} to be a function pointer type",
                     core::any::type_name::<C>(),
                 );
 
                 // SAFETY: check above ensures sizes are the same.
                 // SAFETY: `vtable` implementor ensures `invoke` is ABI compatible with `C`.
-                let casted = unsafe {
-                    core::mem::transmute_copy::<RawFuncRefInvoke, C>(&func.vtable.invoke)
-                };
+                let casted =
+                    unsafe { core::mem::transmute_copy::<raw::Invoke, C>(&func.vtable.invoke) };
 
                 Ok((&func.data, casted))
             }
@@ -201,11 +203,11 @@ impl<E> core::fmt::Debug for FuncRef<'_, E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if let Some(func) = &self.func {
             #[repr(transparent)]
-            struct Inner<'a>(&'a RawFuncRef);
+            struct Inner<'a>(&'a raw::Raw);
 
             impl core::fmt::Debug for Inner<'_> {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    // SAFETY: ensured by implementor of `debug` in `RawFuncRef`.
+                    // SAFETY: ensured by implementor of `debug` in `raw::Raw`.
                     unsafe { (self.0.vtable.debug)(&self.0.data, f) }
                 }
             }
@@ -213,7 +215,7 @@ impl<E> core::fmt::Debug for FuncRef<'_, E> {
             f.debug_struct("FuncRef")
                 .field("function", &Inner(func))
                 .field("signature", func.vtable.signature)
-                .field("vtable", &(func.vtable as *const RawFuncRefVTable))
+                .field("vtable", &(func.vtable as *const raw::VTable))
                 .finish()
         } else {
             debug_fmt_null(f)
@@ -222,24 +224,6 @@ impl<E> core::fmt::Debug for FuncRef<'_, E> {
 }
 
 // WebAssembly GC proposal does **not** add equality for `funcref`.
-
-/* impl<E> PartialEq for FuncRef<'_, E> {
-    /// Compares two [`FuncRef`]s for equality.
-    ///
-    /// This implements the [WebAssembly `ref.is_null` and `ref.eq`] instruction.
-    fn eq(&self, other: &Self) -> bool {
-        match (&self.func, &other.func) {
-            (None, None) => true,
-            (Some(self_data), Some(other_data)) => {
-                core::ptr::eq(self_data.vtable(), other_data.vtable())
-                    && self_data.data().memcmp(other_data.data())
-            }
-            _ => false,
-        }
-    }
-}
-
-impl<E> Eq for FuncRef<'_, E> {} */
 
 impl<E> Drop for FuncRef<'_, E> {
     fn drop(&mut self) {

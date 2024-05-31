@@ -14,13 +14,13 @@
 #[macro_export]
 macro_rules! signature_function_pointer {
     (($($parameter:ty),*) -> Result<$results:ty, $trap:ty>) => {
-        unsafe fn(&$crate::RawFuncRefData $(, $parameter)*) -> ::core::result::Result<R, E>
+        unsafe fn(&$crate::raw::Data $(, $parameter)*) -> ::core::result::Result<R, E>
     };
 }
 
-/// Describes the argument and result types of a [`RawFuncRef`].
+/// Describes the argument and result types of a [`Raw`] function reference.
 ///
-/// [`RawFuncRef`]: crate::RawFuncRef
+/// [`Raw`]: crate::raw::Raw
 #[derive(Clone, Copy)]
 pub struct FuncRefSignature {
     type_id: fn() -> core::any::TypeId,
@@ -33,15 +33,16 @@ impl FuncRefSignature {
     /// # Usage
     ///
     /// It is very easy to use this function correctly, which may result in unexpected
-    /// [`SignatureMismatchError`]s if used to create a [`RawFuncRef`]. Consider using the
-    /// result of a [`signature_function_pointer!`] macro invocation and passing it as `F`.
+    /// [`SignatureMismatchError`]s if used to create a [`Raw`] function reference that is later
+    /// called. Consider using the result of a [`signature_function_pointer!`] macro invocation and
+    /// passing it as the type parameter `F`.
     ///
     /// # Requirements
     ///
     /// The type parameter `F` **should** be a function pointer in the following form:
     ///
     /// ```ignore
-    /// unsafe fn(&RawFuncRefData, A0, A1, ...) -> Result<(R0, R1, ...), E>
+    /// unsafe fn(&raw::Data, A0, A1, ...) -> Result<(R0, R1, ...), E>
     /// ```
     ///
     /// where `A0, A1, ...` are the function arguments, and `(R0, R1, ...)` are the tuple of the
@@ -51,7 +52,7 @@ impl FuncRefSignature {
     /// to implement traits that *all* [function pointer]s implement.
     ///
     /// [`SignatureMismatchError`]: crate::SignatureMismatchError
-    /// [`RawFuncRef`]: crate::RawFuncRef
+    /// [`Raw`]: crate::raw::Raw
     /// [function pointer]: fn
     pub const fn of<F>() -> Self
     where
@@ -71,7 +72,8 @@ impl FuncRefSignature {
 
     /// Gets the [`TypeId`] corresponding to the underlying function pointer type.
     ///
-    /// For what this [`TypeId`] actually identifies, refer to the documentation for [`FuncRefSignature::of()`].
+    /// For what this [`TypeId`] actually identifies, refer to the documentation for
+    /// [`FuncRefSignature::of()`].
     ///
     /// [`TypeId`]: core::any::TypeId
     pub fn type_id(&self) -> core::any::TypeId {

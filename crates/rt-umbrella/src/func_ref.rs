@@ -2,10 +2,7 @@
 //!
 //! [WebAssembly `funcref`s]: https://webassembly.github.io/spec/core/syntax/types.html#reference-types
 
-pub use rt_func_ref::{
-    FuncRef, FuncRefCastError, FuncRefSignature, RawFuncRef, RawFuncRefData, RawFuncRefVTable,
-    SignatureMismatchError,
-};
+pub use rt_func_ref::{raw, FuncRef, FuncRefCastError, FuncRefSignature, SignatureMismatchError};
 
 use crate::trap::Trap;
 
