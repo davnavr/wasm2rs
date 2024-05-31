@@ -36,6 +36,9 @@ test_spec run_flags='': && test_spec_run
         -i ./crates/rt-spectest/tests/spec/testsuite/conversions.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/endianness.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/fac.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/f32_bitwise.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/f32_cmp.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/f32.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/forward.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/i64.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/int_exprs.wast \
