@@ -260,18 +260,10 @@ pub(in crate::ast::print) fn print_expression(
                 BinOp::FxxSub => infix_operator!("-"),
                 BinOp::FxxMul => infix_operator!("*"),
                 BinOp::FxxDiv => infix_operator!("/"),
-                BinOp::FxxMin => {
-                    c_1.print(out, true, context, function);
-                    out.write_str(".min(");
-                    c_2.print(out, false, context, function);
-                    out.write_str(")");
-                }
-                BinOp::FxxMax => {
-                    c_1.print(out, true, context, function);
-                    out.write_str(".max(");
-                    c_2.print(out, false, context, function);
-                    out.write_str(")");
-                }
+                BinOp::F32Min => function!(paths::RT_MATH, "::f32_min"),
+                BinOp::F32Max => function!(paths::RT_MATH, "::f32_max"),
+                BinOp::F64Min => function!(paths::RT_MATH, "::f64_min"),
+                BinOp::F64Max => function!(paths::RT_MATH, "::f64_max"),
                 BinOp::FxxCopysign => {
                     c_1.print(out, true, context, function);
                     out.write_str(".copysign(");

@@ -801,8 +801,10 @@ fn convert_impl(
             Operator::F32Sub | Operator::F64Sub => bin_op!(FxxSub),
             Operator::F32Mul | Operator::F64Mul => bin_op!(FxxMul),
             Operator::F32Div | Operator::F64Div => bin_op!(FxxDiv),
-            Operator::F32Min | Operator::F64Min => bin_op!(FxxMin),
-            Operator::F32Max | Operator::F64Max => bin_op!(FxxMax),
+            Operator::F32Min => bin_op!(F32Min),
+            Operator::F32Max => bin_op!(F32Max),
+            Operator::F64Min => bin_op!(F64Min),
+            Operator::F64Max => bin_op!(F64Max),
             Operator::F32Copysign | Operator::F64Copysign => bin_op!(FxxCopysign),
             Operator::I32WrapI64 => un_op!(I32WrapI64),
             Operator::I32TruncF32S => {

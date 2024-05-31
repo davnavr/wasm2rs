@@ -318,8 +318,10 @@ pub(crate) enum BinOp {
     FxxSub,
     FxxMul,
     FxxDiv,
-    FxxMin,
-    FxxMax,
+    F32Min,
+    F32Max,
+    F64Min,
+    F64Max,
     FxxCopysign,
     /// Wrapping addition on `i32`s (`c_1 + c_2`).
     I32Add,
