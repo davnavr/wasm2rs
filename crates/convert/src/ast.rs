@@ -215,7 +215,9 @@ impl Literal {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum UnOp {
-    /// Compares an integer value to `0`. Corresponds to the `i32.eqz` and `i64.eqz` instuctions.
+    /// Compares an integer value to `0`. Corresponds to the [`i32.eqz` and `i64.eqz`] instuctions.
+    ///
+    /// [`i32.eqz` and `i64.eqz`]: https://webassembly.github.io/spec/core/exec/numerics.html#op-ieqz
     IxxEqz,
     I32Clz,
     I64Clz,
@@ -223,8 +225,21 @@ pub(crate) enum UnOp {
     I64Ctz,
     I32Popcnt,
     I64Popcnt,
-    /// Corresponds to the `f32.neg` and `f64.neg` instructions.
+    FxxAbs,
+    /// Corresponds to the [`f32.neg` and `f64.neg`] instructions.
+    ///
+    /// [`f32.neg` and `f64.neg`]: https://webassembly.github.io/spec/core/exec/numerics.html#op-fneg
     FxxNeg,
+    FxxCeil,
+    FxxFloor,
+    FxxTrunc,
+    /// Corresponds to the [`f32.nearest` and `f64.nearest`] instructions.
+    ///
+    /// This is translated to a call to [`f32::round_ties_even()`] or [`f64::round_ties_even()`].
+    ///
+    /// [`f32.nearest` and `f64.nearest`]: https://webassembly.github.io/spec/core/exec/numerics.html#op-ftrunc
+    FxxNearest,
+    FxxSqrt,
     I32WrapI64,
     I32TruncF32S {
         offset: u32,
@@ -295,7 +310,17 @@ pub(crate) enum BinOp {
     I32GeU,
     I64LeU,
     I64GeU,
+    FxxLt,
     FxxGt,
+    FxxLe,
+    FxxGe,
+    FxxAdd,
+    FxxSub,
+    FxxMul,
+    FxxDiv,
+    FxxMin,
+    FxxMax,
+    FxxCopysign,
     /// Wrapping addition on `i32`s (`c_1 + c_2`).
     I32Add,
     /// Wrapping addition on `i64`s (`c_1 + c_2`).

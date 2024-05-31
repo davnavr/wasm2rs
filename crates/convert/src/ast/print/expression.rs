@@ -76,6 +76,13 @@ pub(in crate::ast::print) fn print_expression(
                 };
             }
 
+            macro_rules! primitive_method {
+                ($name:ident) => {{
+                    c_1.print(out, true, context, function);
+                    out.write_str(concat!(".", stringify!($name), "()"));
+                }};
+            }
+
             match kind {
                 UnOp::IxxEqz => nested_expr! {
                     out.write_str("(");
@@ -106,11 +113,17 @@ pub(in crate::ast::print) fn print_expression(
                     c_1.print(out, true, context, function);
                     out.write_str(".count_ones() as i64");
                 },
+                UnOp::FxxAbs => primitive_method!(abs),
                 UnOp::FxxNeg => nested_expr! {
                     // `::core::ops::Neg` on `f32` and `f64` do the same operation in Rust.
                     out.write_str("-");
                     c_1.print(out, true, context, function);
                 },
+                UnOp::FxxCeil => primitive_method!(ceil),
+                UnOp::FxxFloor => primitive_method!(floor),
+                UnOp::FxxTrunc => primitive_method!(trunc),
+                UnOp::FxxNearest => primitive_method!(round_ties_even),
+                UnOp::FxxSqrt => primitive_method!(sqrt),
                 UnOp::I32WrapI64 | UnOp::I32TruncSatFxxS => simple_cast!(i32),
                 UnOp::I32TruncF32S { offset } => rt_math_function!(i32_trunc_f32_s @ offset),
                 UnOp::I32TruncF32U { offset } => rt_math_function!(i32_trunc_f32_u @ offset),
@@ -231,18 +244,40 @@ pub(in crate::ast::print) fn print_expression(
             match *kind {
                 BinOp::Eq => infix_comparison!("=="),
                 BinOp::Ne => infix_comparison!("!="),
-                BinOp::IxxLtS => infix_comparison!("<"),
+                BinOp::IxxLtS | BinOp::FxxLt => infix_comparison!("<"),
                 BinOp::IxxGtS | BinOp::FxxGt => infix_comparison!(">"),
                 BinOp::I32LtU => infix_comparison!("<" as u32),
                 BinOp::I32GtU => infix_comparison!(">" as u32),
                 BinOp::I64LtU => infix_comparison!("<" as u64),
                 BinOp::I64GtU => infix_comparison!(">" as u64),
-                BinOp::IxxLeS => infix_comparison!("<="),
-                BinOp::IxxGeS => infix_comparison!(">="),
+                BinOp::IxxLeS | BinOp::FxxLe => infix_comparison!("<="),
+                BinOp::IxxGeS | BinOp::FxxGe => infix_comparison!(">="),
                 BinOp::I32LeU => infix_comparison!("<=" as u32),
                 BinOp::I32GeU => infix_comparison!(">=" as u32),
                 BinOp::I64LeU => infix_comparison!("<=" as u64),
                 BinOp::I64GeU => infix_comparison!(">=" as u64),
+                BinOp::FxxAdd => infix_operator!("+"),
+                BinOp::FxxSub => infix_operator!("-"),
+                BinOp::FxxMul => infix_operator!("*"),
+                BinOp::FxxDiv => infix_operator!("/"),
+                BinOp::FxxMin => {
+                    c_1.print(out, true, context, function);
+                    out.write_str(".min(");
+                    c_2.print(out, false, context, function);
+                    out.write_str(")");
+                }
+                BinOp::FxxMax => {
+                    c_1.print(out, true, context, function);
+                    out.write_str(".max(");
+                    c_2.print(out, false, context, function);
+                    out.write_str(")");
+                }
+                BinOp::FxxCopysign => {
+                    c_1.print(out, true, context, function);
+                    out.write_str(".copysign(");
+                    c_2.print(out, false, context, function);
+                    out.write_str(")");
+                }
                 BinOp::I32Add => function!("i32::wrapping_add"),
                 BinOp::I64Add => function!("i64::wrapping_add"),
                 BinOp::I32Sub => function!("i32::wrapping_sub"),
