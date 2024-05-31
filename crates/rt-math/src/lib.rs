@@ -11,7 +11,11 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+mod float;
+
 pub mod nan;
+
+pub use float::{f32_max, f32_min, f64_max, f64_min};
 
 use core::fmt::Display;
 
