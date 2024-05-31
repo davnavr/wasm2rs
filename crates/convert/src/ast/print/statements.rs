@@ -1,8 +1,8 @@
-use crate::ast::print::{self, paths, print_frame, print_indentation, Context, Indentation};
+use crate::ast::print::{self, paths, print_frame, print_indentation, Indentation};
 
 fn print_loop_inputs(
     out: &mut dyn crate::write::Write,
-    context: &Context,
+    context: &print::Context,
     function: crate::ast::FuncId,
     indentation: Indentation,
     indent_level: u32,
@@ -27,7 +27,7 @@ struct BranchTableCase {
 // Contains code duplicated with cases for `Statement::Branch` in `print_statements()`
 fn print_branch_table_case(
     out: &mut dyn crate::write::Write,
-    context: &Context,
+    context: &print::Context,
     function: crate::ast::FuncId,
     indentation: Indentation,
     indent_level: u32,
@@ -133,7 +133,7 @@ fn print_call_statement_results(
 
 pub(crate) fn print_statements(
     out: &mut dyn crate::write::Write,
-    context: &Context,
+    context: &print::Context,
     function: crate::ast::FuncId,
     indentation: Indentation,
     mut indent_level: u32,
