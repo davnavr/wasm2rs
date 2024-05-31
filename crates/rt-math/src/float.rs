@@ -26,6 +26,12 @@ fn f64_propagate_nan(z_1: f64, z_2: f64) -> f64 {
     }
 }
 
+macro_rules! zeroes_with_opposite_signs {
+    ($z_1:ident, $z_2:ident) => {
+        $z_1 == 0.0 && $z_2 == 0.0 && $z_1.is_sign_positive() == $z_2.is_sign_negative()
+    };
+}
+
 /// Implements the [`f32.min`] WebAssembly instruction.
 ///
 /// This corresponds to the [*fmin* operator].
@@ -34,8 +40,10 @@ fn f64_propagate_nan(z_1: f64, z_2: f64) -> f64 {
 /// [*fmin* operator]: https://webassembly.github.io/spec/core/exec/numerics.html#op-fmin
 pub fn f32_min(z_1: f32, z_2: f32) -> f32 {
     // `f32::minimum()` is currently nightly-only.
-    if z_1.is_nan() && z_2.is_nan() {
+    if z_1.is_nan() || z_2.is_nan() {
         f32_propagate_nan(z_1, z_2)
+    } else if zeroes_with_opposite_signs!(z_1, z_2) {
+        -0.0
     } else {
         z_1.min(z_2)
     }
@@ -49,8 +57,10 @@ pub fn f32_min(z_1: f32, z_2: f32) -> f32 {
 /// [*fmin* operator]: https://webassembly.github.io/spec/core/exec/numerics.html#op-fmin
 pub fn f64_min(z_1: f64, z_2: f64) -> f64 {
     // `f64::minimum()` is currently nightly-only.
-    if z_1.is_nan() && z_2.is_nan() {
+    if z_1.is_nan() || z_2.is_nan() {
         f64_propagate_nan(z_1, z_2)
+    } else if zeroes_with_opposite_signs!(z_1, z_2) {
+        -0.0
     } else {
         z_1.min(z_2)
     }
@@ -64,8 +74,10 @@ pub fn f64_min(z_1: f64, z_2: f64) -> f64 {
 /// [*fmax* operator]: https://webassembly.github.io/spec/core/exec/numerics.html#op-fmax
 pub fn f32_max(z_1: f32, z_2: f32) -> f32 {
     // `f32::fmaximum()` is currently nightly-only.
-    if z_1.is_nan() && z_2.is_nan() {
+    if z_1.is_nan() || z_2.is_nan() {
         f32_propagate_nan(z_1, z_2)
+    } else if zeroes_with_opposite_signs!(z_1, z_2) {
+        0.0
     } else {
         z_1.max(z_2)
     }
@@ -79,8 +91,10 @@ pub fn f32_max(z_1: f32, z_2: f32) -> f32 {
 /// [*fmax* operator]: https://webassembly.github.io/spec/core/exec/numerics.html#op-fmax
 pub fn f64_max(z_1: f64, z_2: f64) -> f64 {
     // `f64::maximum()` is currently nightly-only.
-    if z_1.is_nan() && z_2.is_nan() {
+    if z_1.is_nan() || z_2.is_nan() {
         f64_propagate_nan(z_1, z_2)
+    } else if zeroes_with_opposite_signs!(z_1, z_2) {
+        0.0
     } else {
         z_1.max(z_2)
     }
