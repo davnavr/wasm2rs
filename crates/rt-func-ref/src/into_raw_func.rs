@@ -1,5 +1,8 @@
 use crate::{raw, signature::HasFuncRefSignature};
 
+#[cfg(feature = "alloc")]
+use alloc::rc::Rc;
+
 /// Trait used for converting closures into [`Raw`] function references.
 ///
 /// # Safety
@@ -24,7 +27,7 @@ macro_rules! define_into_raw_func {
         // SAFETY: `VTABLE` implementation is correct.
         #[cfg(feature = "alloc")]
         #[allow(unused_parens)]
-        unsafe impl<'a, F, $($parameter,)* R, E> IntoRawFunc<'a, $number, ($($parameter),*), R, E> for alloc::rc::Rc<F>
+        unsafe impl<'a, F, $($parameter,)* R, E> IntoRawFunc<'a, $number, ($($parameter),*), R, E> for Rc<F>
         where
             F: Fn($($parameter),*) -> Result<R, E> + 'a,
             $($parameter: 'static,)*
@@ -99,8 +102,26 @@ macro_rules! define_into_raw_func {
             }
         }
 
-        // TODO: Impl for function pointers
+        // No cfg to determine if size of function pointer matches size of pointer?
+        // Assumption true for most Rust programs anyway, could store raw::Invoke in field in raw::Data.
+        // Makes IntoRawFunc for fn pointers a bit of a problem...
     };
 }
 
 crate::with_parameters!(define_into_raw_func);
+
+#[cfg(feature = "alloc")]
+impl<'a, E: 'static> crate::FuncRef<'a, E> {
+    /// Creates a new [`FuncRef`] calling the given closure stored within an [`Rc`] smart pointer.
+    ///
+    /// [`FuncRef`]: crate::FuncRef
+    pub fn from_rc<C, const ARG_COUNT: usize, Params, Results>(closure: Rc<C>) -> Self
+    where
+        Rc<C>: IntoRawFunc<'a, ARG_COUNT, Params, Results, E>,
+    {
+        let raw = raw::Raw::new(closure.into_raw_data(), Rc::<C>::VTABLE);
+
+        // SAFETY: Genearted `IntoRawFunc` implementations are correct.
+        unsafe { Self::from_raw(raw) }
+    }
+}

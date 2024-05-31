@@ -108,3 +108,14 @@ fn padding_bytes() {
     #[cfg(feature = "std")]
     std::println!("{func_ref:?} vs {cloned:?}");
 }
+
+#[test]
+#[cfg(feature = "alloc")]
+fn from_rc() {
+    let closure = alloc::rc::Rc::new(|a: i32, b: i32| Ok(i64::from(a) * i64::from(b)));
+
+    let func_ref = FuncRef::<TrapError>::from_rc(closure);
+    let result = func_ref.call_1::<i32, i64>(6i32, None);
+    assert!(result.is_err(), "expected error, got {result:?}");
+    assert_eq!(func_ref.call_2(3i32, 4i32, None), Ok(12i64));
+}
