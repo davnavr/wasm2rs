@@ -58,11 +58,7 @@ struct BigData {
 #[test]
 #[cfg(feature = "alloc")]
 fn big_data_closure_on_heap() {
-    let big_data = BigData {
-        a: 1,
-        b: 2,
-        c: 3,
-    };
+    let big_data = BigData { a: 1, b: 2, c: 3 };
 
     let closure = move || -> Result<i64, _> {
         Ok((u64::from(big_data.a) + u64::from(big_data.b) + big_data.c) as i64)
@@ -76,11 +72,7 @@ fn big_data_closure_on_heap() {
 #[should_panic]
 #[cfg(not(feature = "alloc"))]
 fn big_data_closure_panic() {
-    let big_data = BigData {
-        a: 6,
-        b: 7,
-        c: 8,
-    };
+    let big_data = BigData { a: 6, b: 7, c: 8 };
 
     let closure = move || -> Result<i64, _> {
         Ok((u64::from(big_data.a) + u64::from(big_data.b) + big_data.c) as i64)

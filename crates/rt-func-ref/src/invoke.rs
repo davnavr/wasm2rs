@@ -1,4 +1,3 @@
-use crate::RawFuncRefData;
 use wasm2rs_rt_core::{trace::WasmFrame, trap::Trap};
 
 macro_rules! define_call {

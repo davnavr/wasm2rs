@@ -32,15 +32,6 @@ pub use into_raw_func::IntoRawFunc;
 pub use raw::{RawFuncRef, RawFuncRefData, RawFuncRefInvoke, RawFuncRefVTable};
 pub use signature::FuncRefSignature;
 
-/// Returns the function pointer used to uniquely identify a [`FuncRefSignature`]
-/// for the given parameter and result types.
-#[macro_export]
-macro_rules! signature_function_pointer {
-    (($($parameter:ty),*) -> Result<$results:ty, $trap:ty>) => {
-        unsafe fn(&RawFuncRefData $(, $parameter)*) -> Result<R, E>
-    };
-}
-
 /// Internal API used to generate code for [`FuncRef`]s with differing parameter types.
 ///
 /// This is a workaround for a lack of generic argument types for the [`Fn`] trait in stable Rust.

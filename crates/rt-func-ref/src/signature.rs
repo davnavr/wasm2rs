@@ -1,3 +1,23 @@
+/// Returns the function pointer used to uniquely identify a [`FuncRefSignature`]
+/// for the given parameter and result types.
+///
+/// The resulting type can be passed to the [`FuncRefSignature::of()`] method to indicate the
+/// parameter and result types of a [`FuncRef`](crate::FuncRef).
+///
+/// # Example
+///
+/// ```ignore
+/// let signature = FuncRefSignature::of::<
+///     signature_function_pointer!((i32, i64) -> Result<i32, TrapOccurred>)
+/// >();
+/// ```
+#[macro_export]
+macro_rules! signature_function_pointer {
+    (($($parameter:ty),*) -> Result<$results:ty, $trap:ty>) => {
+        unsafe fn(&$crate::RawFuncRefData $(, $parameter)*) -> ::core::result::Result<R, E>
+    };
+}
+
 /// Describes the argument and result types of a [`RawFuncRef`].
 ///
 /// [`RawFuncRef`]: crate::RawFuncRef
@@ -10,10 +30,13 @@ pub struct FuncRefSignature {
 impl FuncRefSignature {
     /// Gets a [`FuncRefSignature`] corresponding to the given type.
     ///
-    /// # Warning
+    /// # Usage
     ///
-    /// It is very easy to use this function correctly, which may result in unexpected [`SignatureMismatchError`]s if
-    /// used to create a [`RawFuncRef`].
+    /// It is very easy to use this function correctly, which may result in unexpected
+    /// [`SignatureMismatchError`]s if used to create a [`RawFuncRef`]. Consider using the
+    /// result of a [`signature_function_pointer!`] macro invocation and passing it as `F`.
+    ///
+    /// # Requirements
     ///
     /// The type parameter `F` **should** be a function pointer in the following form:
     ///
@@ -21,7 +44,8 @@ impl FuncRefSignature {
     /// unsafe fn(&RawFuncRefData, A0, A1, ...) -> Result<(R0, R1, ...), E>
     /// ```
     ///
-    /// where `A0, A1, ...` are the function arguments, and `(R0, R1, ...)` are the tuple of the function results.
+    /// where `A0, A1, ...` are the function arguments, and `(R0, R1, ...)` are the tuple of the
+    /// function results.
     ///
     /// To prevent accidental usage with types that aren't [function pointer]s, `F` is constrained
     /// to implement traits that *all* [function pointer]s implement.
