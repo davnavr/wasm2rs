@@ -6,7 +6,7 @@
 // mod i8x16;
 mod ishape;
 
-pub use ishape::{I16x8, I8x16, U8x16};
+pub use ishape::{I16x8, I32x4, I64x2, I8x16, U16x8, U32x4, U64x2, U8x16};
 
 #[cfg(simd_sse2_intrinsics)]
 type Repr = crate::arch::__m128i;

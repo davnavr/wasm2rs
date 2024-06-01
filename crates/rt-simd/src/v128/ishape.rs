@@ -3,6 +3,7 @@
 use crate::v128::V128;
 
 macro_rules! sse2_impl {
+    // *shape*.splat
     (<[i8; 16]>::splat($x:expr)) => {
         Self(crate::arch::_mm_set1_epi8($x))
     };
@@ -12,6 +13,29 @@ macro_rules! sse2_impl {
     (<[i16; 8]>::splat($x:expr)) => {
         Self(crate::arch::_mm_set1_epi16($x))
     };
+    (<[u16; 8]>::splat($x:ident)) => {
+        sse2_impl!(<[i16; 8]>::splat($x as i16))
+    };
+    (<[i32; 4]>::splat($x:expr)) => {
+        Self(crate::arch::_mm_set1_epi32($x))
+    };
+    (<[u32; 4]>::splat($x:ident)) => {
+        sse2_impl!(<[i32; 4]>::splat($x as i32))
+    };
+    (<[i32; 4]>::splat($x:expr)) => {
+        Self(crate::arch::_mm_set1_epi32($x))
+    };
+    (<[u32; 4]>::splat($x:ident)) => {
+        sse2_impl!(<[i32; 4]>::splat($x as i32))
+    };
+    (<[i64; 2]>::splat($x:expr)) => {
+        Self(crate::arch::_mm_set1_epi64x($x))
+    };
+    (<[u64; 2]>::splat($x:ident)) => {
+        sse2_impl!(<[i64; 2]>::splat($x as i64))
+    };
+
+    // *shape*.add
     (<[i8; 16]>::add($self:ident, $rhs:ident)) => {
         Self(crate::arch::_mm_add_epi8($self.0, $rhs.0))
     };
@@ -20,6 +44,21 @@ macro_rules! sse2_impl {
     };
     (<[i16; 8]>::add($self:ident, $rhs:ident)) => {
         Self(crate::arch::_mm_add_epi16($self.0, $rhs.0))
+    };
+    (<[u16; 8]>::add($self:ident, $rhs:ident)) => {
+        sse2_impl!(<[i16; 8]>::add($self, $rhs))
+    };
+    (<[i32; 4]>::add($self:ident, $rhs:ident)) => {
+        Self(crate::arch::_mm_add_epi32($self.0, $rhs.0))
+    };
+    (<[u32; 4]>::add($self:ident, $rhs:ident)) => {
+        sse2_impl!(<[i32; 4]>::add($self, $rhs))
+    };
+    (<[i64; 2]>::add($self:ident, $rhs:ident)) => {
+        Self(crate::arch::_mm_add_epi64($self.0, $rhs.0))
+    };
+    (<[u64; 2]>::add($self:ident, $rhs:ident)) => {
+        sse2_impl!(<[i64; 2]>::add($self, $rhs))
     };
 }
 
@@ -37,7 +76,12 @@ macro_rules! into_lanes {
 #[cfg(simd_no_intrinsics)]
 macro_rules! lanewise_op {
     (($self:ident, rhs:ident) => <[$int:ty; $lanes:literal]>::$op:ident) => {
-        ::core::array::from_fn::<$int, $lanes, _>(|i| $self.0.lanes[i].$op($rhs.0.lanes[i]))
+        ::core::array::from_fn::<$int, $lanes, _>(|i| {
+            $self.0.lanes[i]
+                .from_le()
+                .$op($rhs.0.lanes[i].from_le())
+                .to_le()
+        })
     };
 }
 
@@ -185,3 +229,8 @@ impl core::fmt::UpperHex for $name {
 define!(i8x16::I8x16 = [i8; 16] as "i8x16");
 define!(u8x16::U8x16 = [u8; 16] as "i8x16");
 define!(i16x8::I16x8 = [i16; 8] as "i16x8");
+define!(u16x8::U16x8 = [u16; 8] as "i16x8");
+define!(i32x4::I32x4 = [i32; 4] as "i32x4");
+define!(u32x4::U32x4 = [u32; 4] as "i32x4");
+define!(i64x2::I64x2 = [i64; 2] as "i64x2");
+define!(u64x2::U64x2 = [u64; 2] as "i64x2");
