@@ -60,6 +60,32 @@ macro_rules! sse2_impl {
     (<[u64; 2]>::add($self:ident, $rhs:ident)) => {
         sse2_impl!(<[i64; 2]>::add($self, $rhs))
     };
+
+    // *shape*.sub
+    (<[i8; 16]>::sub($self:ident, $rhs:ident)) => {
+        Self(crate::arch::_mm_sub_epi8($self.0, $rhs.0))
+    };
+    (<[u8; 16]>::sub($self:ident, $rhs:ident)) => {
+        sse2_impl!(<[i8; 16]>::sub($self, $rhs))
+    };
+    (<[i16; 8]>::sub($self:ident, $rhs:ident)) => {
+        Self(crate::arch::_mm_sub_epi16($self.0, $rhs.0))
+    };
+    (<[u16; 8]>::sub($self:ident, $rhs:ident)) => {
+        sse2_impl!(<[i16; 8]>::sub($self, $rhs))
+    };
+    (<[i32; 4]>::sub($self:ident, $rhs:ident)) => {
+        Self(crate::arch::_mm_sub_epi32($self.0, $rhs.0))
+    };
+    (<[u32; 4]>::sub($self:ident, $rhs:ident)) => {
+        sse2_impl!(<[i32; 4]>::sub($self, $rhs))
+    };
+    (<[i64; 2]>::sub($self:ident, $rhs:ident)) => {
+        Self(crate::arch::_mm_sub_epi64($self.0, $rhs.0))
+    };
+    (<[u64; 2]>::sub($self:ident, $rhs:ident)) => {
+        sse2_impl!(<[i64; 2]>::sub($self, $rhs))
+    };
 }
 
 macro_rules! into_lanes {
@@ -121,6 +147,10 @@ impl $name {
         return Self($module::Repr { lanes: [x; $lanes] });
     }
 
+    //pub fn extract_lane
+
+    //pub fn replace_lane
+
     #[doc = concat!("Retrieves each ", stringify!($int), " lane in the vector.")]
     pub fn into_lanes(self) -> [$int; $lanes] {
         #[cfg(not(simd_no_intrinsics))]
@@ -147,6 +177,40 @@ impl core::ops::Add for $name {
         return lanewise_op!((self, rhs) => <[$int; $lanes]>::wrapping_add);
     }
 }
+
+impl core::ops::Sub for $name {
+    type Output = Self;
+
+    #[doc = "Lane-wise wrapping integer subtraction.\n\n"]
+    #[doc = concat!("This implements the [`", $wasm, ".sub`](")]
+    #[doc = "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-vibinop"]
+    #[doc = ") instruction."]
+    fn sub(self, rhs: Self) -> Self {
+        // SAFETY: check for `sse2` occurs above.
+        #[cfg(simd_sse2_intrinsics)]
+        return unsafe { sse2_impl!(<[$int; $lanes]>::sub(self, rhs)) };
+
+        #[cfg(simd_no_intrinsics)]
+        return lanewise_op!((self, rhs) => <[$int; $lanes]>::wrapping_sub);
+    }
+}
+
+/* impl core::ops::Mul for $name {
+    type Output = Self;
+
+    #[doc = "Lane-wise wrapping integer multplication.\n\n"]
+    #[doc = concat!("This implements the [`", $wasm, ".mul`](")]
+    #[doc = "https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-vibinop"]
+    #[doc = ") instruction."]
+    fn mul(self, rhs: Self) -> Self {
+        // SAFETY: check for `sse2` occurs above.
+        #[cfg(simd_sse2_intrinsics)]
+        return unsafe { sse2_impl!(<[$int; $lanes]>::mul(self, rhs)) };
+
+        #[cfg(simd_no_intrinsics)]
+        return lanewise_op!((self, rhs) => <[$int; $lanes]>::wrapping_mul);
+    }
+} */
 
 impl From<$name> for V128 {
     fn from(vec: $name) -> Self {
