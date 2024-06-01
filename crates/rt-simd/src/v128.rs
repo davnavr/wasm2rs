@@ -2,9 +2,11 @@
 //!
 //! [fixed-width SIMD]: https://github.com/webassembly/simd
 
-mod i8x16;
+// mod i16x8;
+// mod i8x16;
+mod ishape;
 
-pub use i8x16::I8x16;
+pub use ishape::{I16x8, I8x16, U8x16};
 
 #[cfg(simd_sse2_intrinsics)]
 type Repr = crate::arch::__m128i;
@@ -18,11 +20,23 @@ struct Repr {
 
 /// Represents a generic [128-bit vector] whose interpretation is not specified.
 ///
-/// Specific interpretations of a [`V128`] are provided (e.g. [`I8x16`]). This is so that when the
-/// `simd-intrinsics` feature flag is **not** enabled, the Rust compiler's auto-vectorization will
-/// be able to optimize the code.
+/// # Interpretations
+///
+/// Specific interpretations of the lanes of a [`V128`] are provided as separate types, along with
+/// operations (e.g. lane-wise [`Add`]) for those interpretations. These currently include:
+/// - [`I8x16`]
+///
+/// Various [`From`] implementations are provided for interpreting the lanes of a [`V128`]
+/// differently.
+///
+/// # Disabling `simd-intrinsics`
+///
+/// When the `simd-intrinsics` feature flag is **not** enabled, operations are implemented in
+/// normal Rust code (which may be optimized by the Rust compiler's auto-vectorization) rather than
+/// target-archecture specific SIMD intrinsics.
 ///
 /// [128-bit vector]: https://webassembly.github.io/spec/core/syntax/values.html#vectors
+/// [`Add`]: core::ops::Add
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct V128(Repr);
