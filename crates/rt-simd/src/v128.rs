@@ -6,13 +6,15 @@
 // mod i8x16;
 mod ishape;
 
-#[cfg(simd_sse2_intrinsics)]
-#[path = "v128/sse2.rs"]
-mod implementation;
+crate::cfg_sse2_intrinsics! {
+    #[path = "v128/sse2.rs"]
+    mod implementation;
+}
 
-#[cfg(simd_no_intrinsics)]
-#[path = "v128/fallback.rs"]
-mod implementation;
+crate::cfg_no_intrinsics! {
+    #[path = "v128/fallback.rs"]
+    mod implementation;
+}
 
 pub use ishape::{I16x8, I32x4, I64x2, I8x16, U16x8, U32x4, U64x2, U8x16};
 
@@ -53,83 +55,22 @@ pub struct V128(implementation::V128);
 impl V128 {
     /// Interprets a 128-bit integer value as a 128-bit vector.
     pub fn from_bits(bits: u128) -> Self {
-        #[cfg(simd_sse2_intrinsics)]
-        return Self::from_bytes(bits.to_le_bytes());
-
-        #[cfg(simd_no_intrinsics)]
-        return Self(Repr { bits });
+        Self::from_bytes(bits.to_le_bytes())
     }
 
     /// Returns a 128-bit integer value containing the contents of the 128-bit vector.
     pub fn to_bits(self) -> u128 {
-        #[cfg(not(simd_no_intrinsics))]
-        return u128::from_le_bytes(self.to_bytes());
-
-        #[cfg(simd_no_intrinsics)]
-        return self.0.bits;
+        u128::from_le_bytes(self.to_bytes())
     }
 
     /// Constructs a 128-bit vector from bytes in little-endian order.
     pub fn from_bytes(bytes: [u8; 16]) -> Self {
-        #[cfg(simd_sse2_intrinsics)]
-        return {
-            // SAFETY: check for `sse2` target feature occurs above.
-            #[allow(clippy::cast_possible_truncation)]
-            let v = unsafe {
-                crate::intrinsics::sse2::_mm_setr_epi8(
-                    bytes[15] as i8,
-                    bytes[14] as i8,
-                    bytes[13] as i8,
-                    bytes[12] as i8,
-                    bytes[11] as i8,
-                    bytes[10] as i8,
-                    bytes[9] as i8,
-                    bytes[8] as i8,
-                    bytes[7] as i8,
-                    bytes[6] as i8,
-                    bytes[5] as i8,
-                    bytes[4] as i8,
-                    bytes[3] as i8,
-                    bytes[2] as i8,
-                    bytes[1] as i8,
-                    bytes[0] as i8,
-                )
-            };
-
-            Self(v)
-        };
-
-        #[cfg(simd_no_intrinsics)]
-        return Self::from_bits(u128::from_le_bytes(bytes));
+        Self(Self::from_bytes_impl(bytes))
     }
 
     /// Returns the representation of a 128-bit vector as a byte array in little-endian order.
     pub fn to_bytes(self) -> [u8; 16] {
-        #[cfg(not(simd_no_intrinsics))]
-        #[repr(align(16))]
-        struct Bytes {
-            bytes: [u8; 16],
-        }
-
-        #[cfg(not(simd_no_intrinsics))]
-        let mut bytes = Bytes { bytes: [0u8; 16] };
-
-        #[cfg(simd_sse2_intrinsics)]
-        return {
-            // SAFETY: check for `sse2` target feature occurs above.
-            // SAFETY: `bytes.bytes` is aligned to 16 bytes.
-            unsafe {
-                crate::intrinsics::sse2::_mm_storeu_si128(
-                    (&mut bytes) as *mut Bytes as *mut crate::intrinsics::sse2::__m128i,
-                    self.0,
-                );
-            }
-
-            bytes.bytes
-        };
-
-        #[cfg(simd_no_intrinsics)]
-        return self.0.bits.to_le_bytes();
+        self.to_bytes_impl()
     }
 }
 

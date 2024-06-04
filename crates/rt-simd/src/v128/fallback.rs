@@ -5,6 +5,16 @@ use crate::v128;
 
 pub(in crate::v128) type V128 = v128::Bytes;
 
+macro_rules! repr_struct {
+    ($name:ident = [$int:tt; $lanes:tt] as $_:literal) => {
+        #[derive(Clone, Copy)]
+        #[repr(align(16))]
+        pub(in crate::v128) struct $name {
+            lanes: [$int; $lanes],
+        }
+    };
+}
+
 crate::v128_integer_interpretations!(repr_struct);
 
 #[cfg(simd_no_intrinsics)]
@@ -26,8 +36,8 @@ macro_rules! implementations {
                 $name { lanes: [x; $lanes] }
             }
 
-            pub(in crate::v128) fn into_lanes_impl(vec: __m128i) -> [$int; $lanes] {
-                impl_into_lanes!(vec => [$int; $lanes])
+            pub(in crate::v128) fn into_lanes_impl(vec: $name) -> [$int; $lanes] {
+                vec.lanes
             }
         }
     };

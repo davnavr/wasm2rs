@@ -9,6 +9,3 @@ repository.workspace = true
 default = ["std", "simd-intrinsics"]
 std = []
 simd-intrinsics = []
-
-[build-dependencies]
-cfg_aliases = "0.2.0"

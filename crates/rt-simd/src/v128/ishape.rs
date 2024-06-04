@@ -90,11 +90,7 @@ impl core::ops::Sub for $name {
 
 impl From<$name> for V128 {
     fn from(vec: $name) -> Self {
-        #[cfg(not(simd_no_intrinsics))]
-        return vec.0.into();
-
-        #[cfg(simd_no_intrinsics)]
-        return Self::from_bytes(vec.0.lanes.map(|i| i as u8));
+        vec.0.into()
     }
 }
 
@@ -102,8 +98,7 @@ impl From<V128> for $name {
     #[doc = concat!("Interprets the contents of the [`V128`] as ", stringify!($lanes), " lanes ")]
     #[doc = concat!("of packed [`", stringify!($int), "`] values.")]
     fn from(vec: V128) -> Self {
-        #[cfg(not(simd_no_intrinsics))]
-        return Self(vec.into());
+        Self(vec.into())
     }
 }
 

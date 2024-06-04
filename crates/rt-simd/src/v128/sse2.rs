@@ -158,14 +158,12 @@ impl v128::$name {
     }
 }
 
-#[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
 impl From<__m128i> for v128::$name {
     fn from(vec: __m128i) -> Self {
         Self(vec)
     }
 }
 
-#[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
 impl From<v128::$name> for __m128i {
     fn from(vec: v128::$name) -> __m128i {
         vec.0
@@ -176,3 +174,45 @@ impl From<v128::$name> for __m128i {
 }
 
 crate::v128_integer_interpretations!(implementations);
+
+impl v128::V128 {
+    pub(in crate::v128) fn from_bytes_impl(bytes: [u8; 16]) -> __m128i {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        #[allow(clippy::cast_possible_truncation)]
+        unsafe {
+            sse2::_mm_setr_epi8(
+                bytes[15] as i8,
+                bytes[14] as i8,
+                bytes[13] as i8,
+                bytes[12] as i8,
+                bytes[11] as i8,
+                bytes[10] as i8,
+                bytes[9] as i8,
+                bytes[8] as i8,
+                bytes[7] as i8,
+                bytes[6] as i8,
+                bytes[5] as i8,
+                bytes[4] as i8,
+                bytes[3] as i8,
+                bytes[2] as i8,
+                bytes[1] as i8,
+                bytes[0] as i8,
+            )
+        }
+    }
+
+    pub(in crate::v128) fn to_bytes_impl(self) -> [u8; 16] {
+        let mut bytes = v128::Bytes { bytes: [0u8; 16] };
+
+        // SAFETY: check for `sse2` target feature occurs above.
+        // SAFETY: `bytes.bytes` is aligned to 16 bytes.
+        unsafe {
+            crate::intrinsics::sse2::_mm_storeu_si128(
+                bytes.bytes.as_mut_ptr() as *mut crate::intrinsics::sse2::__m128i,
+                self.0,
+            );
+        }
+
+        bytes.bytes
+    }
+}

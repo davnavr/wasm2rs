@@ -22,7 +22,6 @@
 
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![cfg_attr(simd_no_intrinsics, deny(unsafe_code))]
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
@@ -35,7 +34,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(not(simd_no_intrinsics))]
+mod cfg;
 mod intrinsics;
 
 pub mod v128;
