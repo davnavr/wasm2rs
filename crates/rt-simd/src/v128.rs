@@ -6,25 +6,33 @@
 // mod i8x16;
 mod ishape;
 
-pub use ishape::{I16x8, I32x4, I64x2, I8x16, U16x8, U32x4, U64x2, U8x16};
-
 #[cfg(simd_sse2_intrinsics)]
-type Repr = crate::arch::__m128i;
+#[path = "v128/sse2.rs"]
+mod implementation;
+
+#[cfg(simd_no_intrinsics)]
+#[path = "v128/fallback.rs"]
+mod implementation;
+
+pub use ishape::{I16x8, I32x4, I64x2, I8x16, U16x8, U32x4, U64x2, U8x16};
 
 #[derive(Clone, Copy)]
 #[repr(align(16))]
-#[cfg(simd_no_intrinsics)]
-struct Repr {
-    bits: u128,
+struct Bytes {
+    bytes: [u8; 16],
 }
 
 /// Represents a generic [128-bit vector] whose interpretation is not specified.
 ///
 /// # Interpretations
 ///
-/// Specific interpretations of the lanes of a [`V128`] are provided as separate types, along with
-/// operations (e.g. lane-wise [`Add`]) for those interpretations. These currently include:
-/// - [`I8x16`]
+/// Specific interpretations of the lanes of a [`V128`] are provided as separate types
+/// corresponding to the WebAssembly vector [*shape*s], along with operations (e.g. lane-wise
+/// [`Add`]) for those interpretations. These currently include:
+/// - `i8x16`: [`I8x16`] or [`U8x16`]
+/// - `i16x8`: [`I16x8`] or [`U16x8`]
+/// - `i32x4`: [`I32x4`] or [`U32x4`]
+/// - `i64x2`: [`I64x2`] or [`U64x2`]
 ///
 /// Various [`From`] implementations are provided for interpreting the lanes of a [`V128`]
 /// differently.
@@ -36,10 +44,11 @@ struct Repr {
 /// target-archecture specific SIMD intrinsics.
 ///
 /// [128-bit vector]: https://webassembly.github.io/spec/core/syntax/values.html#vectors
+/// [*shape*s]: https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-shape
 /// [`Add`]: core::ops::Add
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct V128(Repr);
+pub struct V128(implementation::V128);
 
 impl V128 {
     /// Interprets a 128-bit integer value as a 128-bit vector.
@@ -67,7 +76,7 @@ impl V128 {
             // SAFETY: check for `sse2` target feature occurs above.
             #[allow(clippy::cast_possible_truncation)]
             let v = unsafe {
-                crate::arch::_mm_setr_epi8(
+                crate::intrinsics::sse2::_mm_setr_epi8(
                     bytes[15] as i8,
                     bytes[14] as i8,
                     bytes[13] as i8,
@@ -110,8 +119,8 @@ impl V128 {
             // SAFETY: check for `sse2` target feature occurs above.
             // SAFETY: `bytes.bytes` is aligned to 16 bytes.
             unsafe {
-                crate::arch::_mm_storeu_si128(
-                    (&mut bytes) as *mut Bytes as *mut crate::arch::__m128i,
+                crate::intrinsics::sse2::_mm_storeu_si128(
+                    (&mut bytes) as *mut Bytes as *mut crate::intrinsics::sse2::__m128i,
                     self.0,
                 );
             }
@@ -125,33 +134,33 @@ impl V128 {
 }
 
 #[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<crate::arch::__m128i> for V128 {
-    fn from(v: crate::arch::__m128i) -> Self {
+impl From<crate::intrinsics::sse2::__m128i> for V128 {
+    fn from(v: crate::intrinsics::sse2::__m128i) -> Self {
         Self(v)
     }
 }
 
 #[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<V128> for crate::arch::__m128i {
+impl From<V128> for crate::intrinsics::sse2::__m128i {
     fn from(v: V128) -> Self {
         v.0
     }
 }
 
 #[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<crate::arch::__m128> for V128 {
-    fn from(v: crate::arch::__m128) -> Self {
+impl From<crate::intrinsics::sse2::__m128> for V128 {
+    fn from(v: crate::intrinsics::sse2::__m128) -> Self {
         // SAFETY: this is compiled only when the `sse2` target feature is enabled.
-        let v = unsafe { crate::arch::_mm_castps_si128(v) };
+        let v = unsafe { crate::intrinsics::sse2::_mm_castps_si128(v) };
         Self(v)
     }
 }
 
 #[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<V128> for crate::arch::__m128 {
+impl From<V128> for crate::intrinsics::sse2::__m128 {
     fn from(v: V128) -> Self {
         // SAFETY: this is compiled only when the `sse2` target feature is enabled.
-        unsafe { crate::arch::_mm_castsi128_ps(v.0) }
+        unsafe { crate::intrinsics::sse2::_mm_castsi128_ps(v.0) }
     }
 }
 

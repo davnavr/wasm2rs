@@ -36,6 +36,6 @@
 extern crate std;
 
 #[cfg(not(simd_no_intrinsics))]
-mod arch;
+mod intrinsics;
 
 pub mod v128;
