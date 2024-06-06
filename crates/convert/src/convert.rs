@@ -9,7 +9,7 @@ pub use allocations::Allocations;
 use anyhow::Context;
 pub use options::{DataSegmentWriter, DebugInfo, StackOverflowChecks};
 
-pub(crate) const FUNC_REF_MAX_PARAM_COUNT: usize = 9;
+pub(crate) const FUNC_REF_MAX_PARAM_COUNT: usize = 15;
 
 /// Provides options for converting a [WebAssembly binary module] into a [Rust source file].
 ///
