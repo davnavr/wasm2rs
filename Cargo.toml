@@ -9,6 +9,10 @@ resolver = "2"
 members = [
     "crates/*"
 ]
+default-members = [
+    "crates/convert*",
+    "crates/rt-*"
+]
 exclude = [
     # Temporary
     "crates/compiler",
