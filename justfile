@@ -62,9 +62,14 @@ test_spec_run:
 doc *FLAGS='--all-features':
     RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc {{FLAGS}}
 
+opt_demo_python3 wasm_opt='wasm-opt':
+    {{wasm_opt}} ./demo/python3/wasm/python-3.12.0.wasm \
+        --output ./demo/python3/wasm/python3-opt.wasm \
+        -O4
+
 build_demo_python3:
     cargo run -p wasm2rs-cli -- convert \
-        -i ./demo/python3/wasm/python-3.12.0.wasm \
+        -i ./demo/python3/wasm/python3-opt.wasm \
         -o ./demo/python3/src/python3.wasm2.rs \
         --indentation omit \
         --debug-info omit
