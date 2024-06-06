@@ -4,6 +4,8 @@
 
 // mod i16x8;
 // mod i8x16;
+mod fshape;
+mod interpretations;
 mod ishape;
 
 crate::cfg_sse2_intrinsics! {
@@ -16,7 +18,7 @@ crate::cfg_no_intrinsics! {
     mod implementation;
 }
 
-pub use ishape::{I16x8, I32x4, I64x2, I8x16, U16x8, U32x4, U64x2, U8x16};
+pub use interpretations::{F32x4, F64x2, I16x8, I32x4, I64x2, I8x16, U16x8, U32x4, U64x2, U8x16};
 
 #[derive(Clone, Copy)]
 #[repr(align(16))]
@@ -35,6 +37,8 @@ struct Bytes {
 /// - `i16x8`: [`I16x8`] or [`U16x8`]
 /// - `i32x4`: [`I32x4`] or [`U32x4`]
 /// - `i64x2`: [`I64x2`] or [`U64x2`]
+/// - `f32x4`: [`F32x4`]
+/// - `f64x2`: [`F64x2`]
 ///
 /// Various [`From`] implementations are provided for interpreting the lanes of a [`V128`]
 /// differently.
@@ -74,39 +78,20 @@ impl V128 {
     }
 }
 
-#[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<crate::intrinsics::sse2::__m128i> for V128 {
-    fn from(v: crate::intrinsics::sse2::__m128i) -> Self {
-        Self(v)
+impl core::fmt::UpperHex for V128 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:#034X}", self.to_bits())
     }
 }
 
-#[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<V128> for crate::intrinsics::sse2::__m128i {
-    fn from(v: V128) -> Self {
-        v.0
-    }
-}
-
-#[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<crate::intrinsics::sse2::__m128> for V128 {
-    fn from(v: crate::intrinsics::sse2::__m128) -> Self {
-        // SAFETY: this is compiled only when the `sse2` target feature is enabled.
-        let v = unsafe { crate::intrinsics::sse2::_mm_castps_si128(v) };
-        Self(v)
-    }
-}
-
-#[cfg(all(feature = "simd-intrinsics", target_feature = "sse2"))]
-impl From<V128> for crate::intrinsics::sse2::__m128 {
-    fn from(v: V128) -> Self {
-        // SAFETY: this is compiled only when the `sse2` target feature is enabled.
-        unsafe { crate::intrinsics::sse2::_mm_castsi128_ps(v.0) }
+impl core::fmt::LowerHex for V128 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:#034x}", self.to_bits())
     }
 }
 
 impl core::fmt::Debug for V128 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:#034X}", self.to_bits())
+        core::fmt::UpperHex::fmt(self, f)
     }
 }

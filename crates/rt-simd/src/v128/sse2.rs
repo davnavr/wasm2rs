@@ -1,20 +1,23 @@
-//! Implements 128-bit vector operations for `x86` and `x86_64` platforms, utilizing [SSE2]
-//! intrinsics and those introduced in later extensions.
-//!
-//! [SSE2]: https://en.wikipedia.org/wiki/SSE2
+//! Implements 128-bit vector operations using [`sse2`].
 
-use crate::intrinsics::sse2::{self, __m128i};
-use crate::v128;
+#[path = "sse2/integer.rs"]
+mod integer;
+#[path = "sse2/float.rs"]
+mod float;
 
-pub(in crate::v128) type V128 = __m128i;
-pub(in crate::v128) type I8x16 = __m128i;
-pub(in crate::v128) type U8x16 = __m128i;
-pub(in crate::v128) type I16x8 = __m128i;
-pub(in crate::v128) type U16x8 = __m128i;
-pub(in crate::v128) type I32x4 = __m128i;
-pub(in crate::v128) type U32x4 = __m128i;
-pub(in crate::v128) type I64x2 = __m128i;
-pub(in crate::v128) type U64x2 = __m128i;
+use crate::{v128, intrinsics::sse2};
+
+pub(in crate::v128) type V128 = sse2::__m128i;
+pub(in crate::v128) type I8x16 = sse2::__m128i;
+pub(in crate::v128) type U8x16 = sse2::__m128i;
+pub(in crate::v128) type I16x8 = sse2::__m128i;
+pub(in crate::v128) type U16x8 = sse2::__m128i;
+pub(in crate::v128) type I32x4 = sse2::__m128i;
+pub(in crate::v128) type U32x4 = sse2::__m128i;
+pub(in crate::v128) type I64x2 = sse2::__m128i;
+pub(in crate::v128) type U64x2 = sse2::__m128i;
+pub(in crate::v128) type F32x4 = sse2::__m128;
+pub(in crate::v128) type F64x2 = sse2::__m128d;
 
 macro_rules! impl_splat {
     ($x:expr => I8x16) => {
@@ -41,38 +44,25 @@ macro_rules! impl_splat {
             sse2::_mm_set1_epi64x($x)
         }
     };
+    ($x:expr => F32x4) => {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe {
+            sse2::_mm_set1_ps($x)
+        }
+    };
+    ($x:expr => F64x2) => {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe {
+            sse2::_mm_set1_pd($x)
+        }
+    };
     ($x:ident => U8x16) => (impl_splat!(($x as i8) => I8x16));
     ($x:ident => U16x8) => (impl_splat!(($x as i16) => I16x8));
     ($x:ident => U32x4) => (impl_splat!(($x as i32) => I32x4));
     ($x:ident => U64x2) => (impl_splat!(($x as i64) => I64x2));
 }
 
-macro_rules! impl_into_lanes {
-    ($vec:expr => [u8; 16]) => {{
-        let mut bytes = v128::Bytes { bytes: [0u8; 16] };
-
-        // SAFETY: module compiled only when `sse2` is enabled.
-        // SAFETY: `bytes.bytes` is aligned to 16 bytes.
-        unsafe {
-            sse2::_mm_storeu_si128(
-                (&mut bytes) as *mut v128::Bytes as *mut __m128i,
-                $vec,
-            );
-        }
-
-        bytes.bytes
-    }};
-    ($vec:expr => [$int:ty; $lanes:literal]) => {{
-        let lanes = impl_into_lanes!($vec => [u8; 16]);
-
-        // SAFETY: all bits are valid in source and destination.
-        unsafe {
-            core::mem::transmute::<[u8; 16], [$int; $lanes]>(lanes)
-        }
-    }};
-}
-
-macro_rules! impl_unop {
+macro_rules! impl_binop {
     (I8x16::$macro:ident($lhs:ident, $rhs:ident)) => {
         $macro!(($lhs, $rhs) => I8x16)
     };
@@ -97,6 +87,12 @@ macro_rules! impl_unop {
     (U64x2::$macro:ident($lhs:ident, $rhs:ident)) => {
         $macro!(($lhs, $rhs) => I64x2)
     };
+    (F32x4::$macro:ident($lhs:ident, $rhs:ident)) => {
+        $macro!(($lhs, $rhs) => F32x4)
+    };
+    (F64x2::$macro:ident($lhs:ident, $rhs:ident)) => {
+        $macro!(($lhs, $rhs) => F64x2)
+    };
 }
 
 macro_rules! impl_add {
@@ -115,6 +111,14 @@ macro_rules! impl_add {
     (($lhs:ident, $rhs:ident) => I64x2) => {
         // SAFETY: module compiled only when `sse2` is enabled.
         unsafe { sse2::_mm_add_epi64($lhs, $rhs) }
+    };
+    (($lhs:ident, $rhs:ident) => F32x4) => {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe { sse2::_mm_add_ps($lhs, $rhs) }
+    };
+    (($lhs:ident, $rhs:ident) => F64x2) => {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe { sse2::_mm_add_pd($lhs, $rhs) }
     };
 }
 
@@ -135,48 +139,40 @@ macro_rules! impl_sub {
         // SAFETY: module compiled only when `sse2` is enabled.
         unsafe { sse2::_mm_sub_epi64($lhs, $rhs) }
     };
+    (($lhs:ident, $rhs:ident) => F32x4) => {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe { sse2::_mm_sub_ps($lhs, $rhs) }
+    };
+    (($lhs:ident, $rhs:ident) => F64x2) => {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe { sse2::_mm_sub_pd($lhs, $rhs) }
+    };
 }
 
 macro_rules! implementations {
-    ($name:ident = [$int:tt; $lanes:tt] as $_:literal) => {
+    ($name:ident = [$num:tt; $lanes:tt] as $_:literal) => {
 
 impl v128::$name {
-    pub(in crate::v128) fn splat_impl(x: $int) -> __m128i {
+    pub(in crate::v128) fn splat_impl(x: $num) -> $name {
         impl_splat!(x => $name)
     }
 
-    pub(in crate::v128) fn into_lanes_impl(vec: __m128i) -> [$int; $lanes] {
-        impl_into_lanes!(vec => [$int; $lanes])
+    pub(in crate::v128) fn add_impl(lhs: $name, rhs: $name) -> $name {
+        impl_binop!($name::impl_add(lhs, rhs))
     }
 
-    pub(in crate::v128) fn add_impl(lhs: __m128i, rhs: __m128i) -> __m128i {
-        impl_unop!($name::impl_add(lhs, rhs))
-    }
-
-    pub(in crate::v128) fn sub_impl(lhs: __m128i, rhs: __m128i) -> __m128i {
-        impl_unop!($name::impl_sub(lhs, rhs))
-    }
-}
-
-impl From<__m128i> for v128::$name {
-    fn from(vec: __m128i) -> Self {
-        Self(vec)
-    }
-}
-
-impl From<v128::$name> for __m128i {
-    fn from(vec: v128::$name) -> __m128i {
-        vec.0
+    pub(in crate::v128) fn sub_impl(lhs: $name, rhs: $name) -> $name {
+        impl_binop!($name::impl_sub(lhs, rhs))
     }
 }
 
     }
 }
 
-crate::v128_integer_interpretations!(implementations);
+crate::v128_interpretations!(implementations);
 
 impl v128::V128 {
-    pub(in crate::v128) fn from_bytes_impl(bytes: [u8; 16]) -> __m128i {
+    pub(in crate::v128) fn from_bytes_impl(bytes: [u8; 16]) -> sse2::__m128i {
         // SAFETY: module compiled only when `sse2` is enabled.
         #[allow(clippy::cast_possible_truncation)]
         unsafe {
@@ -204,15 +200,57 @@ impl v128::V128 {
     pub(in crate::v128) fn to_bytes_impl(self) -> [u8; 16] {
         let mut bytes = v128::Bytes { bytes: [0u8; 16] };
 
-        // SAFETY: check for `sse2` target feature occurs above.
-        // SAFETY: `bytes.bytes` is aligned to 16 bytes.
+        // SAFETY: module compiled only when `sse2` is enabled.
+        // SAFETY: `bytes.bytes` is valid to write to, and is aligned to 16 bytes.
         unsafe {
-            crate::intrinsics::sse2::_mm_storeu_si128(
-                bytes.bytes.as_mut_ptr() as *mut crate::intrinsics::sse2::__m128i,
+            sse2::_mm_store_si128(
+                bytes.bytes.as_mut_ptr() as *mut sse2::__m128i,
                 self.0,
             );
         }
 
         bytes.bytes
+    }
+}
+
+impl From<sse2::__m128i> for v128::V128 {
+    fn from(v: sse2::__m128i) -> Self {
+        Self(v)
+    }
+}
+
+impl From<v128::V128> for sse2::__m128i {
+    fn from(v: v128::V128) -> sse2::__m128i {
+        v.0
+    }
+}
+
+impl From<sse2::__m128> for v128::V128 {
+    fn from(v: sse2::__m128) -> Self {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        let v = unsafe { sse2::_mm_castps_si128(v) };
+        Self(v)
+    }
+}
+
+impl From<v128::V128> for sse2::__m128 {
+    fn from(v: v128::V128) -> Self {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe { sse2::_mm_castsi128_ps(v.0) }
+    }
+}
+
+impl From<sse2::__m128d> for v128::V128 {
+    fn from(v: sse2::__m128d) -> Self {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        let v = unsafe { sse2::_mm_castpd_si128(v) };
+        Self(v)
+    }
+}
+
+impl From<v128::V128> for sse2::__m128d {
+    fn from(v: v128::V128) -> Self {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe { sse2::_mm_castsi128_pd(v.0) }
     }
 }
