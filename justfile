@@ -22,10 +22,10 @@ fmt *FLAGS='':
     cargo fmt {{FLAGS}}
 
 test_compiler: clippy_rt
-    cargo run -- convert -i ./crates/rt-umbrella/tests/wat/simple.wat
-    cargo run -- convert -i ./crates/rt-umbrella/tests/wat/memory.wat
-    cargo run -- convert -i ./crates/rt-umbrella/tests/wat/imports.wat
-    cargo run -- convert -i ./crates/rt-umbrella/tests/wat/ref_func.wat
+    cargo run -p wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/simple.wat
+    cargo run -p wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/memory.wat
+    cargo run -p wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/imports.wat
+    cargo run -p wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/ref_func.wat
     cargo test --package wasm2rs-rt --test wat
 
 test_spec run_flags='': && test_spec_run
@@ -48,6 +48,8 @@ test_spec run_flags='': && test_spec_run
         -i ./crates/rt-spectest/tests/spec/testsuite/int_literals.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/labels.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/memory_fill.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/nop.wast \
+        -i ./crates/rt-spectest/tests/spec/testsuite/return.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/switch.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/traps.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/unreached-valid.wast \
@@ -59,3 +61,8 @@ test_spec_run:
 # Generate documentation; requires Rust nightly.
 doc *FLAGS='--all-features':
     RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc {{FLAGS}}
+
+build_demo_python3:
+    cargo run -p wasm2rs-cli -- convert \
+        -i ./demo/python3/wasm/python-3.12.0.wasm \
+        -o ./demo/python3/src/python3.wasm2.rs

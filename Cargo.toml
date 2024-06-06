@@ -7,7 +7,8 @@ repository = "https://github.com/davnavr/wasm2rs"
 [workspace]
 resolver = "2"
 members = [
-    "crates/*"
+    "crates/*",
+    "demo/python3"
 ]
 default-members = [
     "crates/convert*",

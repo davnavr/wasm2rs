@@ -1,0 +1,9 @@
+[package]
+name = "wasm2rs-python3"
+description = "WASI port of the CPython 3 interpreter translated by wasm2rs"
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+wasm2rs-rt = { path = "../../crates/rt-umbrella" }

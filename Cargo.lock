@@ -469,6 +469,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm2rs-python3"
+version = "0.0.0"
+dependencies = [
+ "wasm2rs-rt",
+]
+
+[[package]]
 name = "wasm2rs-rt"
 version = "0.1.0"
 dependencies = [
