@@ -13,6 +13,11 @@ crate::cfg_sse2_intrinsics! {
     mod implementation;
 }
 
+crate::cfg_neon_intrinsics! {
+    #[path = "v128/neon.rs"]
+    mod implementation;
+}
+
 crate::cfg_no_intrinsics! {
     #[path = "v128/fallback.rs"]
     mod implementation;
@@ -22,6 +27,7 @@ pub use interpretations::{F32x4, F64x2, I16x8, I32x4, I64x2, I8x16, U16x8, U32x4
 
 #[derive(Clone, Copy)]
 #[repr(align(16))]
+#[allow(dead_code)]
 struct Bytes {
     bytes: [u8; 16],
 }

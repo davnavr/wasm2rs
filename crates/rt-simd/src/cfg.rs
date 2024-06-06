@@ -17,6 +17,22 @@ macro_rules! cfg_sse2_intrinsics {
 
 #[macro_export]
 #[doc(hidden)]
+macro_rules! cfg_neon_intrinsics {
+    {
+        $($item:item)*
+    } => {$(
+        #[cfg(all(
+            feature = "simd-intrinsics",
+            target_arch = "aarch64",
+            target_endian = "little",
+            target_feature = "neon",
+        ))]
+        $item
+    )*};
+}
+
+#[macro_export]
+#[doc(hidden)]
 macro_rules! cfg_use_intrinsics {
     {
         $($item:item)*
@@ -26,6 +42,8 @@ macro_rules! cfg_use_intrinsics {
             any(
                 // sse2_intrinsics
                 all(any(target_arch = "x86_64", target_arch = "x86"), target_feature = "sse2"),
+                // neon_intrinsics
+                all(target_arch = "aarch64", target_endian = "little", target_feature = "neon"),
             ),
         ))]
         $item
@@ -43,6 +61,8 @@ macro_rules! cfg_no_intrinsics {
             any(
                 // sse2_intrinsics
                 all(any(target_arch = "x86_64", target_arch = "x86"), target_feature = "sse2"),
+                // neon_intrinsics
+                all(target_arch = "aarch64", target_endian = "little", target_feature = "neon"),
             ),
         )))]
         $item

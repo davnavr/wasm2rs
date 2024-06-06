@@ -10,8 +10,13 @@
 //! corresponding [target features] are enabled:
 //!
 //! - `x86` and `x86-64`: requires `sse2`
-//!   - Note that common targets such as `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`
-//!     already enable the `sse2` target feature by default.
+//!   - Common targets such as `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, and
+//!     `x86_64-pc-windows-msvc` already enable the `sse2` target feature by default.
+//! - `aarch64`: requires `neon`
+//!   - Common targets such as `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`, and
+//!     `aarch64-pc-windows-msvc` already enable the `neon` target feature by default.
+//!   - Currently only little-endian ARM is supported (`target_endian = "little"`). Support for big
+//!     endian currently does **not** use SIMD intrinsics.
 //!
 //! The `simd-intrinsic` feature flag is provided to allow testing the fallback implementation of
 //! SIMD operations which doesn't use SIMD intrinsics.
