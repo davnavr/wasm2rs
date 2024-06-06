@@ -56,7 +56,18 @@ struct Bytes {
 #[repr(transparent)]
 pub struct V128(implementation::V128);
 
+impl Default for V128 {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
+
 impl V128 {
+    /// Returns a 128-bit vector whose bits are all set to zero.
+    pub fn zero() -> Self {
+        Self(Self::zero_impl())
+    }
+
     /// Interprets a 128-bit integer value as a 128-bit vector.
     pub fn from_bits(bits: u128) -> Self {
         Self::from_bytes(bits.to_le_bytes())

@@ -20,8 +20,9 @@ pub(crate) mod sse2 {
         _mm_add_pd, _mm_add_ps, _mm_castpd_si128, _mm_castps_si128, _mm_castsi128_pd,
         _mm_castsi128_ps, _mm_div_pd, _mm_div_ps, _mm_mul_pd, _mm_mul_ps, _mm_set1_epi16,
         _mm_set1_epi32, _mm_set1_epi64x, _mm_set1_epi8, _mm_set1_pd, _mm_set1_ps, _mm_setr_epi8,
-        _mm_store_pd, _mm_store_ps, _mm_store_si128, _mm_sub_epi16, _mm_sub_epi32, _mm_sub_epi64,
-        _mm_sub_epi8, _mm_sub_pd, _mm_sub_ps,
+        _mm_setzero_pd, _mm_setzero_ps, _mm_setzero_si128, _mm_store_pd, _mm_store_ps,
+        _mm_store_si128, _mm_sub_epi16, _mm_sub_epi32, _mm_sub_epi64, _mm_sub_epi8, _mm_sub_pd,
+        _mm_sub_ps,
     };
 }
 

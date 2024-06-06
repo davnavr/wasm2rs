@@ -122,6 +122,10 @@ macro_rules! implementations_integer {
     ($name:ident = [$int:tt; $lanes:tt] as $_:literal) => {
 
 impl v128::$name {
+    pub(in crate::v128) const fn zero_impl() -> $name {
+        $name { lanes: [0; $lanes] }
+    }
+
     pub(in crate::v128) fn add_impl(lhs: $name, rhs: $name) -> $name {
         lanewise_unop!($name::wrapping_add(lhs, rhs))
     }
@@ -140,6 +144,10 @@ macro_rules! implementations_float {
     ($name:ident = [$fnn:tt; $lanes:tt] as $_:literal) => {
 
 impl v128::$name {
+    pub(in crate::v128) const fn zero_impl() -> $name {
+        $name { lanes: [0.0; $lanes] }
+    }
+
     pub(in crate::v128) fn add_impl(lhs: $name, rhs: $name) -> $name {
         lanewise_unop!((lhs, rhs) -> $name = |left, right| left + right)
     }
@@ -163,6 +171,10 @@ impl v128::$name {
 crate::v128_float_interpretations!(implementations_float);
 
 impl v128::V128 {
+    pub(in crate::v128) fn zero_impl() -> v128::Bytes {
+        v128::Bytes { bytes: [0; 16] }
+    }
+
     pub(in crate::v128) fn from_bytes_impl(bytes: [u8; 16]) -> v128::Bytes {
         v128::Bytes { bytes }
     }

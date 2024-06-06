@@ -32,6 +32,13 @@ macro_rules! implementations {
     ($name:ident = [$int:tt; $lanes:tt] as $_:literal) => {
 
 impl v128::$name {
+    pub(in crate::v128) fn zero_impl() -> __m128i {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe {
+            sse2::_mm_setzero_si128()
+        }
+    }
+
     pub(in crate::v128) fn into_lanes_impl(vec: __m128i) -> [$int; $lanes] {
         impl_into_lanes!(vec => [$int; $lanes])
     }

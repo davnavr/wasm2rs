@@ -172,6 +172,13 @@ impl v128::$name {
 crate::v128_interpretations!(implementations);
 
 impl v128::V128 {
+    pub(in crate::v128) fn zero_impl() -> sse2::__m128i {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe {
+            sse2::_mm_setzero_si128()
+        }
+    }
+
     pub(in crate::v128) fn from_bytes_impl(bytes: [u8; 16]) -> sse2::__m128i {
         // SAFETY: module compiled only when `sse2` is enabled.
         #[allow(clippy::cast_possible_truncation)]

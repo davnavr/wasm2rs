@@ -14,7 +14,21 @@ macro_rules! define {
 #[repr(transparent)]
 pub struct $name(pub(in crate::v128) implementation::$name);
 
+impl Default for $name {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
+
 impl $name {
+    /// The number of lanes in this interpretation of a 128-bit vector.
+    pub const LANES: usize = $lanes;
+
+    /// Creates a new 128-bit vector whose lanes are all set to zero.
+    pub fn zero() -> Self {
+        Self(Self::zero_impl())
+    }
+
     #[doc = concat!("Creates a new 128-bit vector whose ", stringify!($lanes), " lanes are ")]
     #[doc = concat!("filled with the given ", stringify!($num), " value.\n\n")]
     #[doc = concat!("This implements the [`", $wasm, ".splat`](")]
@@ -132,6 +146,18 @@ impl core::ops::SubAssign for $name {
 
 // TODO: Mul/Div on borrows and Mul/DivAssign.
 // TODO: Bitwise operations on borrows and assign.
+
+impl core::iter::Sum for $name {
+    fn sum<I: Iterator<Item = $name>>(iter: I) -> Self {
+        iter.fold(Default::default(), |sum, x| sum + x)
+    }
+}
+
+impl<'a> core::iter::Sum<&'a $name> for $name {
+    fn sum<I: Iterator<Item = &'a $name>>(iter: I) -> Self {
+        iter.fold(Default::default(), |sum, x| sum + x)
+    }
+}
 
     };
 }

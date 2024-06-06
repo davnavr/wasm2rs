@@ -4,6 +4,13 @@ use crate::v128;
 use crate::intrinsics::sse2::{self, __m128, __m128d};
 
 impl v128::F32x4 {
+    pub(in crate::v128) fn zero_impl() -> __m128 {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe {
+            sse2::_mm_setzero_ps()
+        }
+    }
+
     pub(in crate::v128) fn into_lanes_impl(vec: __m128) -> [f32; 4] {
         #[derive(Clone, Copy)]
         #[repr(align(16))]
@@ -38,6 +45,13 @@ impl v128::F32x4 {
 }
 
 impl v128::F64x2 {
+    pub(in crate::v128) fn zero_impl() -> __m128d {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        unsafe {
+            sse2::_mm_setzero_pd()
+        }
+    }
+
     pub(in crate::v128) fn into_lanes_impl(vec: __m128d) -> [f64; 2] {
         #[derive(Clone, Copy)]
         #[repr(align(16))]
