@@ -42,7 +42,11 @@ impl $name {
 
     //pub fn replace_lane
 
-    //pub fn from_lanes(lanes: [$num; $lanes]) -> Self {}
+    #[doc = concat!("Creates a new 128-bit vector from the given array of ", stringify!($lanes))]
+    #[doc = concat!("[`", stringify!($num), "`] values.")]
+    pub fn from_lanes(lanes: [$num; $lanes]) -> Self {
+        Self(Self::from_lanes_impl(lanes))
+    }
 
     #[doc = concat!("Returns an array containing each [`", stringify!($num), "`] lane in the")]
     #[doc = "vector."]
@@ -51,7 +55,12 @@ impl $name {
     }
 }
 
-//impl From<[$num; $lanes]> for $name {}
+impl From<[$num; $lanes]> for $name {
+    #[doc = concat!("Calls [`", stringify!($name), "::from_lanes()`].")]
+    fn from(lanes: [$num; $lanes]) -> $name {
+        $name::from_lanes(lanes)
+    }
+}
 
 //impl From<[$num; $lanes]> for V128 {}
 

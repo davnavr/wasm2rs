@@ -39,6 +39,15 @@ impl v128::$name {
         }
     }
 
+    pub(in crate::v128) fn from_lanes_impl(vec: [$int; $lanes]) -> __m128i {
+        // SAFETY: module compiled only when `sse2` is enabled.
+        // SAFETY: `vec` is valid to read 16 bytes from.
+        // SAFETY: no 16-byte alignment required here.
+        unsafe {
+            sse2::_mm_loadu_si128(vec.as_ptr() as *const __m128i)
+        }
+    }
+
     pub(in crate::v128) fn into_lanes_impl(vec: __m128i) -> [$int; $lanes] {
         impl_into_lanes!(vec => [$int; $lanes])
     }

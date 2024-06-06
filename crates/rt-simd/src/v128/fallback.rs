@@ -92,6 +92,10 @@ macro_rules! implementations_common {
     ($name:ident = [$num:tt; $lanes:tt] as $_:literal) => {
 
 impl v128::$name {
+    pub(in crate::v128) fn from_lanes_impl(lanes: [$num; $lanes]) -> $name {
+        $name { lanes }
+    }
+
     pub(in crate::v128) const fn splat_impl(x: $num) -> $name {
         $name { lanes: [x; $lanes] }
     }
