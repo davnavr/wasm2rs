@@ -70,6 +70,69 @@ impl core::fmt::Debug for $name {
     }
 }
 
+impl core::ops::Add<&$name> for &$name {
+    type Output = $name;
+
+    fn add(self, rhs: &$name) -> $name {
+        *self + *rhs
+    }
+}
+
+impl core::ops::Add<&$name> for $name {
+    type Output = $name;
+
+    fn add(self, rhs: &$name) -> $name {
+        self + *rhs
+    }
+}
+
+impl<'a> core::ops::Add<$name> for &'a $name {
+    type Output = $name;
+
+    fn add(self, rhs: $name) -> $name {
+        *self + rhs
+    }
+}
+
+impl core::ops::AddAssign for $name {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl core::ops::Sub<&$name> for &$name {
+    type Output = $name;
+
+    fn sub(self, rhs: &$name) -> $name {
+        *self - *rhs
+    }
+}
+
+impl core::ops::Sub<&$name> for $name {
+    type Output = $name;
+
+    fn sub(self, rhs: &$name) -> $name {
+        self - *rhs
+    }
+}
+
+impl<'a> core::ops::Sub<$name> for &'a $name {
+    type Output = $name;
+
+    fn sub(self, rhs: $name) -> $name {
+        *self - rhs
+    }
+}
+
+impl core::ops::SubAssign for $name {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
+// TODO: Mul/Div on borrows and Mul/DivAssign.
+// TODO: Bitwise operations on borrows and assign.
+
     };
 }
 
