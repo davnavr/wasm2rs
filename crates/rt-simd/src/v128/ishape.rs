@@ -43,6 +43,8 @@ macro_rules! define {
 pub struct $name(pub(in crate::v128) implementation::$name);
 
 impl $name {
+    //pub fn new(l0, l1, ...)
+
     #[doc = concat!("Creates a new 128-bit vector whose ", stringify!($lanes), " lanes are ")]
     #[doc = concat!("filled with the given ", stringify!($int), " value.\n\n")]
     #[doc = concat!("This implements the [`", $wasm, ".splat`](")]
@@ -56,9 +58,21 @@ impl $name {
 
     //pub fn replace_lane
 
-    #[doc = concat!("Returns an array containing each ", stringify!($int), " lane in the vector.")]
+    #[doc = concat!("Returns an array containing each [`", stringify!($int), "`] lane in the")]
+    #[doc = "vector."]
     pub fn into_lanes(self) -> [$int; $lanes] {
         Self::into_lanes_impl(self.0)
+    }
+}
+
+//impl From<[$int; $lanes]> for $name {}
+
+//impl From<[$int; $lanes]> for V128 {}
+
+impl From<$name> for [$int; $lanes] {
+    #[doc = concat!("Calls [`", stringify!($name), "::into_lanes()`].")]
+    fn from(vec: $name) -> Self {
+        vec.into_lanes()
     }
 }
 

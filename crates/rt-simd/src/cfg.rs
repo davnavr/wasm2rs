@@ -38,13 +38,13 @@ macro_rules! cfg_no_intrinsics {
     {
         $($item:item)*
     } => {$(
-        #[cfg(all(
+        #[cfg(not(all(
             feature = "simd-intrinsics",
-            not(any(
+            any(
                 // sse2_intrinsics
                 all(any(target_arch = "x86_64", target_arch = "x86"), target_feature = "sse2"),
-            )),
-        ))]
+            ),
+        )))]
         $item
     )*};
 }

@@ -69,7 +69,7 @@ macro_rules! impl_into_lanes {
         unsafe {
             core::mem::transmute::<[u8; 16], [$int; $lanes]>(lanes)
         }
-    }}
+    }};
 }
 
 macro_rules! impl_unop {
