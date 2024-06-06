@@ -14,6 +14,24 @@ struct Arguments {
     command: Command,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+enum ConvertIndentation {
+    /// Do not emit indentation.
+    Omit,
+    /// Use the standard 4 spaces for indentation.
+    #[default]
+    Standard,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+enum ConvertDebugInfo {
+    /// Do not include debug information from the WebAssembly module.
+    Omit,
+    /// Includes debug information taken from the WebAssembly module.
+    #[default]
+    Full,
+}
+
 #[derive(clap::Subcommand, Debug)]
 enum Command {
     /// Translates a WebAssembly module into `.rs` source code.
@@ -28,6 +46,12 @@ enum Command {
         /// If not specified, defaults to the name of the input file with the extension changed.
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
+        /// The indentation to use in the generated Rust code
+        #[arg(long, value_enum, default_value_t)]
+        indentation: ConvertIndentation,
+        /// Indicates what debug information from the WebAssembly module is included.
+        #[arg(long, value_enum, default_value_t)]
+        debug_info: ConvertDebugInfo,
     },
     /// Translates WebAssembly specification tests.
     #[cfg(feature = "test-utils")]
@@ -55,7 +79,12 @@ pub fn main() -> anyhow::Result<std::process::ExitCode> {
     }
 
     let exit_code = match arguments.command {
-        Command::Convert { input, output } => {
+        Command::Convert {
+            input,
+            output,
+            indentation,
+            debug_info,
+        } => {
             let wasm =
                 wat::parse_file(&input).with_context(|| format!("could not parse {input:?}"))?;
 
@@ -63,7 +92,19 @@ pub fn main() -> anyhow::Result<std::process::ExitCode> {
             let out = std::fs::File::create(&output_path)
                 .with_context(|| format!("could not create output file {output_path:?}"))?;
 
+            let indentation = match indentation {
+                ConvertIndentation::Omit => wasm2rs_convert::Indentation::OMITTED,
+                ConvertIndentation::Standard => wasm2rs_convert::Indentation::STANDARD,
+            };
+
+            let debug_info = match debug_info {
+                ConvertDebugInfo::Omit => wasm2rs_convert::DebugInfo::Omit,
+                ConvertDebugInfo::Full => wasm2rs_convert::DebugInfo::Full,
+            };
+
             wasm2rs_convert::Convert::new()
+                .indentation(indentation)
+                .debug_info(debug_info)
                 .convert_from_buffer(&wasm, &mut std::io::BufWriter::with_capacity(4096, out))?;
 
             std::process::ExitCode::SUCCESS

@@ -65,4 +65,6 @@ doc *FLAGS='--all-features':
 build_demo_python3:
     cargo run -p wasm2rs-cli -- convert \
         -i ./demo/python3/wasm/python-3.12.0.wasm \
-        -o ./demo/python3/src/python3.wasm2.rs
+        -o ./demo/python3/src/python3.wasm2.rs \
+        --indentation omit \
+        --debug-info omit
