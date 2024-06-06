@@ -49,4 +49,10 @@ call_indirect! {
     fn "seven arguments" call_indirect_7(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6) => call_7;
     fn "eight arguments" call_indirect_8(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7) => call_8;
     fn "nine arguments" call_indirect_9(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8) => call_9;
+    fn "ten arguments" call_indirect_10(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8, a9: A9) => call_10;
+    fn "eleven arguments" call_indirect_11(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8, a9: A9, a10: A10) => call_11;
+    fn "twelve arguments" call_indirect_12(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8, a9: A9, a10: A10, a11: A11) => call_12;
+    fn "thirteen arguments" call_indirect_13(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8, a9: A9, a10: A10, a11: A11, a12: A12) => call_13;
+    fn "fourteen arguments" call_indirect_14(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8, a9: A9, a10: A10, a11: A11, a12: A12, a13: A13) => call_14;
+    fn "fifteen arguments" call_indirect_15(a0: A0, a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8, a9: A9, a10: A10, a11: A11, a12: A12, a13: A13, a14: A14) => call_15;
 }
