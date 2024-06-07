@@ -26,6 +26,8 @@ mod hex_dump;
 
 #[cfg(feature = "alloc")]
 mod heap;
+#[cfg(feature = "alloc")]
+mod rc;
 
 pub use address::{Address, EffectiveAddress};
 pub use empty::EmptyMemory;
