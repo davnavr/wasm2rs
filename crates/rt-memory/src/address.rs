@@ -3,6 +3,8 @@
 mod private {
     pub trait Integer:
         Copy
+        + Default
+        + core::hash::Hash
         + num_traits::PrimInt
         + num_traits::ConstZero
         + num_traits::ConstOne

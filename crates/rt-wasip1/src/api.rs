@@ -1,5 +1,5 @@
 use crate::Errno;
-use wasm2rs_rt_memory_typed::{MutPtr, Ptr};
+use wasm2rs_rt_memory_typed::{slice::Slice, MutPtr, Ptr};
 
 /// Result type used by functions in the `wasi_snapshot_preview1` [`Api`].
 pub type Result<T> = core::result::Result<T, Errno>;
@@ -279,6 +279,14 @@ wasm2rs_rt_memory_typed::wasm_struct! {
         pub mtim: Timestamp,
         pub ctim: Timestamp,
     }
+
+    /// An [`$iovec`] defines "a region of memory for scatter/gather reads."
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    #[allow(missing_docs)]
+    pub struct IoVec {
+        pub buf: MutPtr<u8>,
+        pub buf_len: u32,
+    }
 }
 
 impl FdStat {
@@ -297,6 +305,9 @@ impl FdStat {
         }
     }
 }
+
+/// An array of [`IoVec`]s, used in [`fd_pread`](Api::fd_pread()).
+pub type IovecArray = Slice<IoVec>;
 
 /// Provides the implementation of the [`wasi_snapshot_preview1`] API.
 ///
@@ -557,8 +568,22 @@ pub trait Api {
         Err(Errno::_nosys)
     }
 
-    // fn fd_pread(&self, mem: &Self::Memory, fd: Fd, iovs: Slice<IoVec>, offset: FileSize) -> Result<u32> {
-    //     let _ = (mem, fd, iovs, offset);
-    //     Err(Errno::_nosys)
-    // }
+    /// "Read from a file descriptor, without using and updating the file descriptor's offset."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_pread()`](crate::Wasi::fd_pread()).
+    /// - `"fd_pread"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L168C3-L177C4
+    fn fd_pread(
+        &self,
+        mem: &Self::Memory,
+        fd: Fd,
+        iovs: IovecArray,
+        offset: FileSize,
+    ) -> Result<u32> {
+        let _ = (mem, fd, iovs, offset);
+        Err(Errno::_nosys)
+    }
 }

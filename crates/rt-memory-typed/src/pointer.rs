@@ -1,7 +1,6 @@
 use crate::memory::{Address, BoundsCheck, Memory};
 
 /// Represents an [`Address`] to some struct `T` within a linear [`Memory<I>`].
-#[derive(Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Ptr<T: Pointee<I>, I: Address = u32> {
     address: I,
@@ -37,11 +36,6 @@ impl<T: Pointee<I>, I: Address> Ptr<T, I> {
         T::load_from(mem, self.address)
     }
 
-    /// Calls [`Pointee::store_into()`].
-    pub fn store<M: Memory<I> + ?Sized>(self, mem: &M, value: T) -> BoundsCheck<()> {
-        T::store_into(mem, self.address, value)
-    }
-
     /// "Casts" this [`Ptr`] into a [`MutPtr`].
     pub const fn cast_to_mut_ptr(self) -> MutPtr<T, I> {
         MutPtr(self)
@@ -70,7 +64,7 @@ impl<T: Pointee<I>, I: Address> MutPtr<T, I> {
 
     /// Calls [`Pointee::store_into()`].
     pub fn store<M: Memory<I> + ?Sized>(self, mem: &M, value: T) -> BoundsCheck<()> {
-        self.0.store(mem, value)
+        T::store_into(mem, self.0.address, value)
     }
 
     /// "Casts" this [`MutPtr`] into a [`Ptr`].
@@ -93,7 +87,7 @@ impl<T: Pointee> From<i32> for MutPtr<T> {
 
 impl<T: Pointee<I>, I: Address> Clone for Ptr<T, I> {
     fn clone(&self) -> Self {
-        Self::from_address(self.address)
+        *self
     }
 }
 
@@ -106,6 +100,24 @@ impl<T: Pointee<I>, I: Address> PartialEq for Ptr<T, I> {
 }
 
 impl<T: Pointee<I>, I: Address> Eq for Ptr<T, I> {}
+
+impl<T: Pointee<I>, I: Address> core::cmp::PartialOrd for Ptr<T, I> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(core::cmp::Ord::cmp(self, other))
+    }
+}
+
+impl<T: Pointee<I>, I: Address> core::cmp::Ord for Ptr<T, I> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        core::cmp::Ord::cmp(&self.address, &other.address)
+    }
+}
+
+impl<T: Pointee<I>, I: Address> core::hash::Hash for Ptr<T, I> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::hash::Hash::hash(&self.address, state)
+    }
+}
 
 impl<T: Pointee<I>, I: Address> core::fmt::Pointer for Ptr<T, I> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -160,29 +172,39 @@ pub trait Pointee<I: Address = u32>: Sized {
     fn store_into<M: Memory<I> + ?Sized>(mem: &M, address: I, value: Self) -> BoundsCheck<()>;
 }
 
-impl<T: Pointee<I>, I: Address + Pointee<I>> Pointee<I> for Ptr<T, I> {
-    const SIZE: usize = core::mem::size_of::<I>();
+impl<T, I1, I2> Pointee<I2> for Ptr<T, I1>
+where
+    T: Pointee<I1>,
+    I1: Address + Pointee<I2>,
+    I2: Address,
+{
+    const SIZE: usize = core::mem::size_of::<I1>();
     const ALIGN: core::num::NonZeroUsize = alignment(Self::SIZE);
 
-    fn load_from<M: Memory<I> + ?Sized>(mem: &M, address: I) -> BoundsCheck<Self> {
-        I::load_from(mem, address).map(Ptr::from_address)
+    fn load_from<M: Memory<I2> + ?Sized>(mem: &M, address: I2) -> BoundsCheck<Self> {
+        I1::load_from(mem, address).map(Ptr::from_address)
     }
 
-    fn store_into<M: Memory<I> + ?Sized>(mem: &M, address: I, value: Self) -> BoundsCheck<()> {
-        I::store_into(mem, address, value.to_address())
+    fn store_into<M: Memory<I2> + ?Sized>(mem: &M, address: I2, value: Self) -> BoundsCheck<()> {
+        I1::store_into(mem, address, value.to_address())
     }
 }
 
-impl<T: Pointee<I>, I: Address + Pointee<I>> Pointee<I> for MutPtr<T, I> {
-    const SIZE: usize = core::mem::size_of::<I>();
-    const ALIGN: core::num::NonZeroUsize = alignment(Self::SIZE);
+impl<T, I1, I2> Pointee<I2> for MutPtr<T, I1>
+where
+    T: Pointee<I1>,
+    I1: Address + Pointee<I2>,
+    I2: Address,
+{
+    const SIZE: usize = <Ptr<T, I1> as Pointee<I2>>::SIZE;
+    const ALIGN: core::num::NonZeroUsize = <Ptr<T, I1> as Pointee<I2>>::ALIGN;
 
-    fn load_from<M: Memory<I> + ?Sized>(mem: &M, address: I) -> BoundsCheck<Self> {
-        I::load_from(mem, address).map(MutPtr::from_address)
+    fn load_from<M: Memory<I2> + ?Sized>(mem: &M, address: I2) -> BoundsCheck<Self> {
+        Ptr::<T, I1>::load_from(mem, address).map(Self)
     }
 
-    fn store_into<M: Memory<I> + ?Sized>(mem: &M, address: I, value: Self) -> BoundsCheck<()> {
-        I::store_into(mem, address, value.to_address())
+    fn store_into<M: Memory<I2> + ?Sized>(mem: &M, address: I2, value: Self) -> BoundsCheck<()> {
+        Ptr::<T, I1>::store_into(mem, address, value.0)
     }
 }
 

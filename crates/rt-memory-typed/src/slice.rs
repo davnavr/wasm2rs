@@ -1,7 +1,7 @@
 //! Types for reading slices and arrays of structures in linear [`Memory`].
 
-use crate::{Ptr, Pointee};
-use crate::memory::{Memory, Address};
+use crate::memory::{Address, Memory};
+use crate::{Pointee, Ptr};
 
 /// Represents a slice of `T` into linear [`Memory`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -26,7 +26,9 @@ pub struct IntoIter<'a, M: Memory<I>, T: Pointee<I>, I: Address = u32> {
 
 impl<'a, M, T, I> Iterator for IntoIter<'a, M, T, I>
 where
-    M: Memory<I>, T: Pointee<I>, I: Address,
+    M: Memory<I>,
+    T: Pointee<I>,
+    I: Address,
 {
     type Item = crate::memory::BoundsCheck<T>;
 
@@ -39,20 +41,32 @@ where
             return Some(read_result);
         }
 
-        Some(match self.slice.items.to_address().checked_add(&I::cast_from_usize(T::SIZE)) {
-            Some(new_items) => {
-                self.slice.items = Ptr::from_address(new_items);
-                read_result
-            }
-            None => {
-                self.slice.count = I::ZERO;
-                Err(crate::memory::BoundsCheckError)
-            }
-        })
+        Some(
+            match self
+                .slice
+                .items
+                .to_address()
+                .checked_add(&I::cast_from_usize(T::SIZE))
+            {
+                Some(new_items) => {
+                    self.slice.items = Ptr::from_address(new_items);
+                    read_result
+                }
+                None => {
+                    self.slice.count = I::ZERO;
+                    Err(crate::memory::BoundsCheckError)
+                }
+            },
+        )
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let min_bytes: usize = self.memory.size().checked_sub(&self.slice.items.to_address()).unwrap_or(I::ZERO).as_();
+        let min_bytes: usize = self
+            .memory
+            .size()
+            .checked_sub(&self.slice.items.to_address())
+            .unwrap_or_default()
+            .as_();
 
         (min_bytes / T::SIZE, self.slice.count.to_usize())
     }

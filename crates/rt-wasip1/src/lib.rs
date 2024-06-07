@@ -27,7 +27,7 @@ mod wasi;
 
 pub use api::{
     Advice, Api, ClockId, DataSizes, Device, Fd, FdFlags, FdStat, FileSize, FileStat, FileType,
-    FstFlags, Inode, LinkCount, Result, Rights, Timestamp,
+    FstFlags, Inode, IoVec, IovecArray, LinkCount, Result, Rights, Timestamp,
 };
 pub use errno::Errno;
 pub use wasi::Wasi;

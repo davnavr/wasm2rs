@@ -1,5 +1,5 @@
 use crate::Api;
-use wasm2rs_rt_memory_typed::Ptr;
+use wasm2rs_rt_memory_typed::{MutPtr, Ptr};
 
 /// Allows WebAssembly modules translated by `wasm2rs` to use a imported WASI functions provided by
 /// an [`Api`] implementation.
@@ -49,7 +49,11 @@ impl<A: Api> Wasi<A> {
         )))
     }
 
-    fn arg_sizes_get_impl(&self, argc: Ptr<u32>, argv_buf_size: Ptr<u32>) -> crate::Result<()> {
+    fn arg_sizes_get_impl(
+        &self,
+        argc: MutPtr<u32>,
+        argv_buf_size: MutPtr<u32>,
+    ) -> crate::Result<()> {
         let crate::DataSizes { count, buf_size } = self.api.args_sizes_get()?;
         argc.store(&self.memory, count)?;
         argv_buf_size.store(&self.memory, buf_size)?;
@@ -94,8 +98,8 @@ impl<A: Api> Wasi<A> {
 
     fn environ_sizes_get_impl(
         &self,
-        environ_count: Ptr<u32>,
-        environ_buf_size: Ptr<u32>,
+        environ_count: MutPtr<u32>,
+        environ_buf_size: MutPtr<u32>,
     ) -> crate::Result<()> {
         let crate::DataSizes { count, buf_size } = self.api.args_sizes_get()?;
         environ_count.store(&self.memory, count)?;
@@ -124,7 +128,7 @@ impl<A: Api> Wasi<A> {
     fn clock_res_get_impl(
         &self,
         clock_id: u32,
-        resolution: Ptr<crate::Timestamp>,
+        resolution: MutPtr<crate::Timestamp>,
     ) -> crate::Result<()> {
         // `inval` used if clock is not supported, so it's used here when `clock_id` is garbage.
         let id = crate::ClockId::try_from(clock_id)?;
@@ -153,7 +157,7 @@ impl<A: Api> Wasi<A> {
         &self,
         clock_id: u32,
         precision: crate::Timestamp,
-        time: Ptr<crate::Timestamp>,
+        time: MutPtr<crate::Timestamp>,
     ) -> crate::Result<()> {
         let id = crate::ClockId::try_from(clock_id)?;
         time.store(&self.memory, self.api.clock_time_get(id, precision)?)?;
@@ -265,7 +269,11 @@ impl<A: Api> Wasi<A> {
         ))
     }
 
-    fn fd_fdstat_get_impl(&self, fd: crate::Fd, buf_ptr: Ptr<crate::FdStat>) -> crate::Result<()> {
+    fn fd_fdstat_get_impl(
+        &self,
+        fd: crate::Fd,
+        buf_ptr: MutPtr<crate::FdStat>,
+    ) -> crate::Result<()> {
         buf_ptr.store(&self.memory, self.api.fd_fdstat_get(fd)?)?;
         Ok(())
     }
@@ -336,7 +344,11 @@ impl<A: Api> Wasi<A> {
         )))
     }
 
-    fn fd_filestat_get_impl(&self, fd: crate::Fd, buf: Ptr<crate::FileStat>) -> crate::Result<()> {
+    fn fd_filestat_get_impl(
+        &self,
+        fd: crate::Fd,
+        buf: MutPtr<crate::FileStat>,
+    ) -> crate::Result<()> {
         buf.store(&self.memory, self.api.fd_filestat_get(fd)?)?;
         Ok(())
     }
@@ -415,5 +427,54 @@ impl<A: Api> Wasi<A> {
         )))
     }
 
-    //pub fn fd_pread(&self, )
+    fn fd_pread_impl(
+        &self,
+        fd: crate::Fd,
+        iovs: Ptr<crate::IoVec>,
+        iovs_len: u32,
+        offset: crate::FileSize,
+        nread: MutPtr<u32>,
+    ) -> crate::Result<()> {
+        let iovs = crate::IovecArray {
+            items: iovs,
+            count: iovs_len,
+        };
+
+        nread.store(
+            &self.memory,
+            self.api.fd_pread(&self.memory, fd, iovs, offset)?,
+        )?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_pread()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_pread" (func
+    ///     (param $fd i32)
+    ///     (param $iovs i32)
+    ///     (param $iovs_len i32)
+    ///     (param $offset i64)
+    ///     (param $nread i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_pread(
+        &self,
+        fd: i32,
+        iovs: i32,
+        iovs_len: i32,
+        offset: i64,
+        nread: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.fd_pread_impl(
+            crate::Fd::from_i32(fd),
+            iovs.into(),
+            iovs_len as u32,
+            offset as u64,
+            nread.into(),
+        )))
+    }
 }
