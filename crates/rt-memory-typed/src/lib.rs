@@ -24,6 +24,8 @@ mod pointer;
 
 pub use pointer::{MutPtr, Pointee, Ptr};
 
+pub mod slice;
+
 /// Implements the [`Pointee`] trait for `repr(C)`-like struct passed to WebAssembly.
 #[macro_export]
 macro_rules! wasm_struct {

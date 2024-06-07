@@ -1,7 +1,7 @@
 use crate::memory::{Address, BoundsCheck, Memory};
 
 /// Represents an [`Address`] to some struct `T` within a linear [`Memory<I>`].
-#[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Ptr<T: Pointee<I>, I: Address = u32> {
     address: I,
@@ -90,6 +90,22 @@ impl<T: Pointee> From<i32> for MutPtr<T> {
         Self::from_address(address as u32)
     }
 }
+
+impl<T: Pointee<I>, I: Address> Clone for Ptr<T, I> {
+    fn clone(&self) -> Self {
+        Self::from_address(self.address)
+    }
+}
+
+impl<T: Pointee<I>, I: Address> Copy for Ptr<T, I> {}
+
+impl<T: Pointee<I>, I: Address> PartialEq for Ptr<T, I> {
+    fn eq(&self, other: &Self) -> bool {
+        self.address == other.address
+    }
+}
+
+impl<T: Pointee<I>, I: Address> Eq for Ptr<T, I> {}
 
 impl<T: Pointee<I>, I: Address> core::fmt::Pointer for Ptr<T, I> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
