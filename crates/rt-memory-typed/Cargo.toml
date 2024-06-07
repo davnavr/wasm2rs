@@ -1,0 +1,14 @@
+[package]
+name = "wasm2rs-rt-memory-typed"
+description = "Strongly-typed accesses of WebAssembly linear memory for wasm2rs embedders"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+
+[dependencies]
+wasm2rs-rt-memory = { path = "../rt-memory" }

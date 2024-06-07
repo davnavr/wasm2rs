@@ -1,0 +1,19 @@
+[package]
+name = "wasm2rs-rt-wasip1"
+description = "Runtime support for WASI preview 1 applications translated by wasm2rs"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[lib]
+doctest = false
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+
+[dependencies]
+wasm2rs-rt-core = { workspace = true }
+wasm2rs-rt-memory = { path = "../rt-memory" }
+wasm2rs-rt-memory-typed = { path = "../rt-memory-typed" }
