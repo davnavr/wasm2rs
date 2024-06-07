@@ -175,12 +175,18 @@ impl<A: Api> Wasi<A> {
     pub fn clock_time_get(&self, clock_id: i32, precision: i64, time: i32) -> Result<A> {
         Ok(result_to_error_code(self.clock_time_get_impl(
             clock_id as u32,
-            precision as u64,
+            crate::Timestamp::from_i64(precision),
             time.into(),
         )))
     }
 
-    fn fd_advise_impl(&self, fd: u32, offset: u64, len: u64, advice: u32) -> crate::Result<()> {
+    fn fd_advise_impl(
+        &self,
+        fd: crate::Fd,
+        offset: u64,
+        len: u64,
+        advice: u32,
+    ) -> crate::Result<()> {
         let advice =
             crate::Advice::try_from(u8::try_from(advice).map_err(|_| crate::Errno::_inval)?)?;
 
@@ -202,7 +208,7 @@ impl<A: Api> Wasi<A> {
     /// ```
     pub fn fd_advise(&self, fd: i32, offset: i64, len: i64, advice: i32) -> Result<A> {
         Ok(result_to_error_code(self.fd_advise_impl(
-            fd as u32,
+            crate::Fd::from_i32(fd),
             offset as u64,
             len as u64,
             advice as u32,
@@ -223,7 +229,7 @@ impl<A: Api> Wasi<A> {
     /// ```
     pub fn fd_allocate(&self, fd: i32, offset: i64, len: i64) -> Result<A> {
         Ok(result_to_error_code(self.api.fd_allocate(
-            fd as u32,
+            crate::Fd::from_i32(fd),
             offset as u64,
             len as u64,
         )))
@@ -239,7 +245,9 @@ impl<A: Api> Wasi<A> {
     ///     (result i32)
     /// ))
     pub fn fd_close(&self, fd: i32) -> Result<A> {
-        Ok(result_to_error_code(self.api.fd_close(fd as u32)))
+        Ok(result_to_error_code(
+            self.api.fd_close(crate::Fd::from_i32(fd)),
+        ))
     }
 
     /// Calls [`Api::fd_datasync()`].
@@ -252,6 +260,160 @@ impl<A: Api> Wasi<A> {
     ///     (result i32)
     /// ))
     pub fn fd_datasync(&self, fd: i32) -> Result<A> {
-        Ok(result_to_error_code(self.api.fd_datasync(fd as u32)))
+        Ok(result_to_error_code(
+            self.api.fd_datasync(crate::Fd::from_i32(fd)),
+        ))
     }
+
+    fn fd_fdstat_get_impl(&self, fd: crate::Fd, buf_ptr: Ptr<crate::FdStat>) -> crate::Result<()> {
+        buf_ptr.store(&self.memory, self.api.fd_fdstat_get(fd)?)?;
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_fdstat_get()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_fdstat_get" (func
+    ///     (param $fd i32)
+    ///     (param $buf_ptr i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_fdstat_get(&self, fd: i32, buf_ptr: i32) -> Result<A> {
+        Ok(result_to_error_code(self.fd_fdstat_get_impl(
+            crate::Fd::from_i32(fd),
+            buf_ptr.into(),
+        )))
+    }
+
+    fn fd_fdstat_set_flags_impl(&self, fd: crate::Fd, flags: u32) -> crate::Result<()> {
+        let flags = crate::FdFlags::from_bits_retain(
+            u16::try_from(flags).map_err(|_| crate::Errno::_inval)?,
+        );
+
+        self.api.fd_fdstat_set_flags(fd, flags)
+    }
+
+    /// Calls [`Api::fd_fdstat_set_flags()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_fdstat_set_flags" (func
+    ///     (param $fd i32)
+    ///     (param $flags i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_fdstat_set_flags(&self, fd: i32, flags: i32) -> Result<A> {
+        Ok(result_to_error_code(self.fd_fdstat_set_flags_impl(
+            crate::Fd::from_i32(fd),
+            flags as u32,
+        )))
+    }
+
+    /// Calls [`Api::fd_fdstat_set_rights()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_fdstat_set_rights" (func
+    ///     (param $fd i32)
+    ///     (param $fs_rights_base i64)
+    ///     (param $fs_rights_inheriting i64)
+    ///     (result i32)
+    /// ))
+    pub fn fd_fdstat_set_rights(
+        &self,
+        fd: i32,
+        fs_rights_base: i64,
+        fs_rights_inheriting: i64,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.api.fd_fdstat_set_rights(
+            crate::Fd::from_i32(fd),
+            crate::Rights::from_bits_retain(fs_rights_base as u64),
+            crate::Rights::from_bits_retain(fs_rights_inheriting as u64),
+        )))
+    }
+
+    fn fd_filestat_get_impl(&self, fd: crate::Fd, buf: Ptr<crate::FileStat>) -> crate::Result<()> {
+        buf.store(&self.memory, self.api.fd_filestat_get(fd)?)?;
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_filestat_get()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_filestat_get" (func
+    ///     (param $fd i32)
+    ///     (param $buf i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_filestat_get(&self, fd: i32, buf: i32) -> Result<A> {
+        Ok(result_to_error_code(
+            self.fd_filestat_get_impl(crate::Fd::from_i32(fd), buf.into()),
+        ))
+    }
+
+    /// Calls [`Api::fd_filestat_set_size()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_filestat_set_size" (func
+    ///     (param $fd i32)
+    ///     (param $st_size i64)
+    ///     (result i32)
+    /// ))
+    pub fn fd_filestat_set_size(&self, fd: i32, st_size: i64) -> Result<A> {
+        Ok(result_to_error_code(self.api.fd_filestat_set_size(
+            crate::Fd::from_i32(fd),
+            st_size as u64,
+        )))
+    }
+
+    fn fd_filestat_set_times_impl(
+        &self,
+        fd: crate::Fd,
+        atim: crate::Timestamp,
+        mtim: crate::Timestamp,
+        fst_flags: u32,
+    ) -> crate::Result<()> {
+        let flags = crate::FstFlags::from_bits_retain(
+            u16::try_from(fst_flags).map_err(|_| crate::Errno::_inval)?,
+        );
+
+        self.api.fd_filestat_set_times(fd, atim, mtim, flags)
+    }
+
+    /// Calls [`Api::fd_filestat_set_times()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_filestat_set_times" (func
+    ///     (param $fd i32)
+    ///     (param $atim i64)
+    ///     (param $mtim i64)
+    ///     (param $fst_flags i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_filestat_set_times(
+        &self,
+        fd: i32,
+        atim: i64,
+        mtim: i64,
+        fst_flags: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.fd_filestat_set_times_impl(
+            crate::Fd::from_i32(fd),
+            crate::Timestamp::from_i64(atim),
+            crate::Timestamp::from_i64(mtim),
+            fst_flags as u32,
+        )))
+    }
+
+    //pub fn fd_pread(&self, )
 }

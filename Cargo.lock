@@ -76,9 +76,9 @@ checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 
 [[package]]
 name = "bitflags"
-version = "2.4.2"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed570934406eb16438a4e976b1b4500774099c13b8cb96eec99f620f05090ddf"
+checksum = "cf4b9d6a944f767f8e5e0db018570623c85f3d925ac718db4e06d0187adb21c1"
 
 [[package]]
 name = "bumpalo"
@@ -555,6 +555,7 @@ dependencies = [
 name = "wasm2rs-rt-wasip1"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "wasm2rs-rt-core",
  "wasm2rs-rt-memory",
  "wasm2rs-rt-memory-typed",

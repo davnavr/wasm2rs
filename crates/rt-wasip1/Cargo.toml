@@ -14,6 +14,7 @@ std = ["alloc"]
 alloc = []
 
 [dependencies]
+bitflags = "2.5.0"
 wasm2rs-rt-core = { workspace = true }
 wasm2rs-rt-memory = { path = "../rt-memory" }
 wasm2rs-rt-memory-typed = { path = "../rt-memory-typed" }

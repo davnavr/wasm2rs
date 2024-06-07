@@ -25,7 +25,10 @@ mod api;
 mod errno;
 mod wasi;
 
-pub use api::{Advice, Api, ClockId, DataSizes, Fd, FileSize, Result, Timestamp};
+pub use api::{
+    Advice, Api, ClockId, DataSizes, Device, Fd, FdFlags, FdStat, FileSize, FileStat, FileType,
+    FstFlags, Inode, LinkCount, Result, Rights, Timestamp,
+};
 pub use errno::Errno;
 pub use wasi::Wasi;
 
