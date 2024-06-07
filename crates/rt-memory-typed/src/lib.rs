@@ -22,7 +22,7 @@ pub use wasm2rs_rt_memory as memory;
 
 mod pointer;
 
-pub use pointer::{Pointee, Ptr};
+pub use pointer::{MutPtr, Pointee, Ptr};
 
 /// Implements the [`Pointee`] trait for `repr(C)`-like struct passed to WebAssembly.
 #[macro_export]

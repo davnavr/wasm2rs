@@ -8,6 +8,12 @@ pub struct Ptr<T: Pointee<I>, I: Address = u32> {
     _marker: core::marker::PhantomData<fn() -> T>,
 }
 
+/// Represents an [`Address`] to some struct `T` within a linear [`Memory<I>`] that will be written
+/// to.
+#[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct MutPtr<T: Pointee<I>, I: Address = u32>(Ptr<T, I>);
+
 impl<T: Pointee<I>, I: Address> Ptr<T, I> {
     /// Gets a pointer to [`Address`] `0`, which typically means `NULL` in many programming
     /// languages (e.g. C).
@@ -35,9 +41,51 @@ impl<T: Pointee<I>, I: Address> Ptr<T, I> {
     pub fn store<M: Memory<I> + ?Sized>(self, mem: &M, value: T) -> BoundsCheck<()> {
         T::store_into(mem, self.address, value)
     }
+
+    /// "Casts" this [`Ptr`] into a [`MutPtr`].
+    pub const fn cast_to_mut_ptr(self) -> MutPtr<T, I> {
+        MutPtr(self)
+    }
+}
+
+impl<T: Pointee<I>, I: Address> MutPtr<T, I> {
+    /// Gets a pointer to [`Address`] `0`, which typically means `NULL` in many programming
+    /// languages (e.g. C).
+    pub const ZERO: Self = Self::from_address(I::ZERO);
+
+    /// Creates a new [`MutPtr`] to `T` from the given [`Address`].
+    pub const fn from_address(address: I) -> Self {
+        Self(Ptr::from_address(address))
+    }
+
+    /// Gets the underlying numeric [`Address`] into the linear [`Memory`].
+    pub const fn to_address(self) -> I {
+        self.0.to_address()
+    }
+
+    /// Calls [`Pointee::load_from()`].
+    pub fn load<M: Memory<I> + ?Sized>(self, mem: &M) -> BoundsCheck<T> {
+        self.0.load(mem)
+    }
+
+    /// Calls [`Pointee::store_into()`].
+    pub fn store<M: Memory<I> + ?Sized>(self, mem: &M, value: T) -> BoundsCheck<()> {
+        self.0.store(mem, value)
+    }
+
+    /// "Casts" this [`MutPtr`] into a [`Ptr`].
+    pub const fn cast_to_ptr(self) -> Ptr<T, I> {
+        self.0
+    }
 }
 
 impl<T: Pointee> From<i32> for Ptr<T> {
+    fn from(address: i32) -> Self {
+        Self::from_address(address as u32)
+    }
+}
+
+impl<T: Pointee> From<i32> for MutPtr<T> {
     fn from(address: i32) -> Self {
         Self::from_address(address as u32)
     }
@@ -54,9 +102,21 @@ impl<T: Pointee<I>, I: Address> core::fmt::Pointer for Ptr<T, I> {
     }
 }
 
+impl<T: Pointee<I>, I: Address> core::fmt::Pointer for MutPtr<T, I> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Pointer::fmt(&self.0, f)
+    }
+}
+
 impl<T: Pointee<I>, I: Address> core::fmt::Debug for Ptr<T, I> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         core::fmt::Pointer::fmt(self, f)
+    }
+}
+
+impl<T: Pointee<I>, I: Address> core::fmt::Debug for MutPtr<T, I> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Pointer::fmt(&self.0, f)
     }
 }
 
@@ -90,6 +150,19 @@ impl<T: Pointee<I>, I: Address + Pointee<I>> Pointee<I> for Ptr<T, I> {
 
     fn load_from<M: Memory<I> + ?Sized>(mem: &M, address: I) -> BoundsCheck<Self> {
         I::load_from(mem, address).map(Ptr::from_address)
+    }
+
+    fn store_into<M: Memory<I> + ?Sized>(mem: &M, address: I, value: Self) -> BoundsCheck<()> {
+        I::store_into(mem, address, value.to_address())
+    }
+}
+
+impl<T: Pointee<I>, I: Address + Pointee<I>> Pointee<I> for MutPtr<T, I> {
+    const SIZE: usize = core::mem::size_of::<I>();
+    const ALIGN: core::num::NonZeroUsize = alignment(Self::SIZE);
+
+    fn load_from<M: Memory<I> + ?Sized>(mem: &M, address: I) -> BoundsCheck<Self> {
+        I::load_from(mem, address).map(MutPtr::from_address)
     }
 
     fn store_into<M: Memory<I> + ?Sized>(mem: &M, address: I, value: Self) -> BoundsCheck<()> {

@@ -1,5 +1,5 @@
 use crate::Errno;
-use wasm2rs_rt_memory_typed::Ptr;
+use wasm2rs_rt_memory_typed::{MutPtr, Ptr};
 
 /// Result type used by functions in the `wasi_snapshot_preview1` [`Api`].
 pub type Result<T> = core::result::Result<T, Errno>;
@@ -327,7 +327,12 @@ pub trait Api {
     ///
     /// [`args_sizes_get`]: Api::args_sizes_get()
     /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L17C3-L21C4
-    fn args_get(&self, mem: &Self::Memory, argv: Ptr<Ptr<u8>>, argv_buf: Ptr<u8>) -> Result<()> {
+    fn args_get(
+        &self,
+        mem: &Self::Memory,
+        argv: MutPtr<MutPtr<u8>>,
+        argv_buf: MutPtr<u8>,
+    ) -> Result<()> {
         let _ = (mem, argv, argv_buf);
         Err(Errno::_nosys)
     }
@@ -360,8 +365,8 @@ pub trait Api {
     fn environ_get(
         &self,
         mem: &Self::Memory,
-        environ: Ptr<Ptr<u8>>,
-        environ_buf: Ptr<u8>,
+        environ: MutPtr<MutPtr<u8>>,
+        environ_buf: MutPtr<u8>,
     ) -> Result<()> {
         let _ = (mem, environ, environ_buf);
         Err(Errno::_nosys)
