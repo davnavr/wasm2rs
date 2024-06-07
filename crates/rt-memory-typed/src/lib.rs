@@ -23,3 +23,104 @@ pub use wasm2rs_rt_memory as memory;
 mod pointer;
 
 pub use pointer::{Pointee, Ptr};
+
+/// Implements the `Pointee` trait for `repr(C)`-like struct passed to WebAssembly.
+#[macro_export]
+macro_rules! wasm_struct {
+    {
+        $(#[$struct_meta:meta])*
+        $struct_vis:vis struct $struct_name:ident {
+            $(
+                $(#[$field_meta:meta])*
+                $field_vis:vis $field_name:ident: $field_type:ty,
+            )*
+        }
+    } => {
+
+$(#[$struct_meta])*
+$struct_vis struct $struct_name {
+    $(
+        $(#[$field_meta])*
+        $field_vis $field_name: $field_type,
+    )*
+}
+
+impl<I: $crate::memory::Address> $crate::Pointee<I> for $struct_name {
+    const SIZE: usize = {
+        let mut size = 0;
+
+        $(
+            if size % <$field_type as $crate::Pointee<I>>::ALIGN.get() != 0 {
+                // Need to align for next field
+                size += size % <$field_type as $crate::Pointee<I>>::ALIGN.get();
+            }
+
+            size += <$field_type as $crate::Pointee<I>>::SIZE;
+        )*
+
+        size
+    };
+
+    const ALIGN: ::core::num::NonZeroUsize = {
+        let mut align = 1;
+
+        $(
+            if align < <$field_type as $crate::Pointee<I>>::ALIGN.get() {
+                align = <$field_type as $crate::Pointee<I>>::ALIGN.get();
+            }
+        )*
+
+        match ::core::num::NonZeroUsize::new(align) {
+            Some(ok) => ok,
+            None => panic!("alignment of zero"),
+        }
+    };
+
+    fn load_from<M>(mem: &M, address: I) -> $crate::memory::BoundsCheck<Self>
+    where
+        M: $crate::memory::Memory<I> + ?Sized,
+    {
+       let mut offset = address;
+
+       $(
+            let realign = offset % I::cast_from_usize(<$field_type as $crate::Pointee<I>>::ALIGN.get());
+            if realign != I::ZERO {
+                // Need to align for next field
+                offset += realign;
+            }
+
+            let $field_name = <$field_type as $crate::Pointee<I>>::load_from(
+                mem,
+                $crate::memory::EffectiveAddress::with_offset(offset, address).calculate()?
+            )?;
+       )*
+
+       Ok(Self { $($field_name),* })
+    }
+
+    fn store_into<M>(mem: &M, address: I, value: Self) -> $crate::memory::BoundsCheck<()>
+    where
+        M: $crate::memory::Memory<I> + ?Sized,
+    {
+        let mut offset = address;
+
+        $(
+            let realign = offset % I::cast_from_usize(<$field_type as $crate::Pointee<I>>::ALIGN.get());
+            if realign != I::ZERO {
+                // Need to align for next field
+                offset += realign;
+            }
+
+            <$field_type as $crate::Pointee<I>>::store_into(
+                mem,
+                $crate::memory::EffectiveAddress::with_offset(offset, address).calculate()?,
+                value.$field_name,
+            )?;
+       )*
+
+        Ok(())
+    }
+}
+
+    };
+}

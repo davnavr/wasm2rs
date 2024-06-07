@@ -60,13 +60,20 @@ impl<T: Pointee<I>, I: Address> core::fmt::Debug for Ptr<T, I> {
     }
 }
 
+const fn alignment(align: usize) -> core::num::NonZeroUsize {
+    match core::num::NonZeroUsize::new(align) {
+        Some(ok) => ok,
+        None => panic!("zero value"),
+    }
+}
+
 /// Trait for types that support reading from and writing into linear [`Memory<I>`].
 pub trait Pointee<I: Address = u32>: Sized {
     /// The size, in bytes, of the value.
     const SIZE: usize;
 
-    // /// What [`Ptr<Self>`] should be a multiple of for aligned accesses.
-    // const NATURAL_ALIGNMENT: core::num::NonZeroUsize;
+    /// What [`Ptr<Self>`] should be a multiple of for aligned accesses.
+    const ALIGN: core::num::NonZeroUsize;
 
     // These methods could also be in the `MemoryExt` trait.
 
@@ -79,6 +86,7 @@ pub trait Pointee<I: Address = u32>: Sized {
 
 impl<T: Pointee<I>, I: Address + Pointee<I>> Pointee<I> for Ptr<T, I> {
     const SIZE: usize = core::mem::size_of::<I>();
+    const ALIGN: core::num::NonZeroUsize = alignment(Self::SIZE);
 
     fn load_from<M: Memory<I> + ?Sized>(mem: &M, address: I) -> BoundsCheck<Self> {
         I::load_from(mem, address).map(Ptr::from_address)
@@ -93,7 +101,8 @@ macro_rules! integer_pointee {
     ($($load:ident / $store:ident => $int:ty $(as $convert:ty)?;)*) => {$(
 
 impl<I: Address> Pointee<I> for $int {
-    const SIZE: usize = core::mem::size_of::<I>();
+    const SIZE: usize = core::mem::size_of::<$int>();
+    const ALIGN: core::num::NonZeroUsize = alignment(core::mem::size_of::<$int>());
 
     fn load_from<M: Memory<I> + ?Sized>(mem: &M, address: I) -> BoundsCheck<$int> {
         M::$load(mem, address) $(.map(|i: $convert| i as $int))?
