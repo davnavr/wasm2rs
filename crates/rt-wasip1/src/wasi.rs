@@ -435,7 +435,7 @@ impl<A: Api> Wasi<A> {
         offset: crate::FileSize,
         nread: MutPtr<u32>,
     ) -> crate::Result<()> {
-        let iovs = crate::IovecArray {
+        let iovs = crate::IoVecArray {
             items: iovs,
             count: iovs_len,
         };
@@ -497,5 +497,27 @@ impl<A: Api> Wasi<A> {
         Ok(result_to_error_code(
             self.fd_prestat_get_impl(crate::Fd::from_i32(fd), buf.into()),
         ))
+    }
+
+    /// Calls [`Api::fd_prestat_dir_name()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_prestat_dir_name" (func
+    ///     (param $fd i32)
+    ///     (param $path i32)
+    ///     (param $path_len i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_prestat_dir_name(&self, fd: i32, path: i32, path_len: i32) -> crate::Result<()> {
+        self.api.fd_prestat_dir_name(
+            &self.memory,
+            crate::Fd::from_i32(fd),
+            wasm2rs_rt_memory_typed::slice::MutSlice {
+                items: path.into(),
+                count: path_len as u32,
+            },
+        )
     }
 }

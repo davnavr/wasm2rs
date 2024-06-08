@@ -1,5 +1,8 @@
 use crate::Errno;
-use wasm2rs_rt_memory_typed::{slice::Slice, MutPtr, Ptr};
+use wasm2rs_rt_memory_typed::{
+    slice::{MutSlice, Slice},
+    MutPtr, Ptr,
+};
 
 /// Result type used by functions in the `wasi_snapshot_preview1` [`Api`].
 pub type Result<T> = core::result::Result<T, Errno>;
@@ -365,7 +368,7 @@ wasm_layout_check! {
 }
 
 /// An array of [`IoVec`]s, used in [`fd_pread`](Api::fd_pread()).
-pub type IovecArray = Slice<IoVec>;
+pub type IoVecArray = Slice<IoVec>;
 
 /// Provides the implementation of the [`wasi_snapshot_preview1`] API.
 ///
@@ -638,7 +641,7 @@ pub trait Api {
         &self,
         mem: &Self::Memory,
         fd: Fd,
-        iovs: IovecArray,
+        iovs: IoVecArray,
         offset: FileSize,
     ) -> Result<u32> {
         let _ = (mem, fd, iovs, offset);
@@ -655,6 +658,19 @@ pub trait Api {
     /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L180C3-L185C4
     fn fd_prestat_get(&self, fd: Fd) -> Result<PreStat> {
         let _ = fd;
+        Err(Errno::_nosys)
+    }
+
+    /// "Return a description of the given preopened file descriptor."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_prestat_dir_name()`](crate::Wasi::fd_prestat_dir_name()).
+    /// - `"fd_prestat_dir_name"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L188C3-L194C4
+    fn fd_prestat_dir_name(&self, mem: &Self::Memory, fd: Fd, path: MutSlice<u8>) -> Result<()> {
+        let _ = (mem, fd, path);
         Err(Errno::_nosys)
     }
 }
