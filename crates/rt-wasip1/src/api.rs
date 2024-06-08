@@ -313,6 +313,16 @@ wasm2rs_rt_memory_typed::wasm_struct! {
         pub buf_len: u32,
     }
 
+    /// An [`$ciovec`] defines a read-only" region of memory for scatter/gather reads."
+    ///
+    /// [`$ciovec`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L290C1-L297C2
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    #[allow(missing_docs)]
+    pub struct CIoVec {
+        pub buf: Ptr<u8>,
+        pub buf_len: u32,
+    }
+
     /// A [`$prestat_dir`] contains "the contents of a [`$prestat`] when (the) type is
     /// [`preopentype::dir`]."
     ///
@@ -348,6 +358,8 @@ impl FdStat {
 wasm_layout_check! {
     FdStat => 24 ^ 8,
     FileStat => 64 ^ 8,
+    IoVec => 8 ^ 4,
+    CIoVec => 8 ^ 4,
     PreStatDir => 4 ^ 4
 }
 
@@ -367,8 +379,11 @@ wasm_layout_check! {
     PreStat => 8 ^ 4
 }
 
-/// An array of [`IoVec`]s, used in [`fd_pread`](Api::fd_pread()).
+/// An array of [`IoVec`]s, used in functions like `fd_read` or [`fd_pread`](Api::fd_pread()).
 pub type IoVecArray = Slice<IoVec>;
+
+/// An array of [`CIoVec`]s, used in functions like `fd_write` or [`fd_pwrite`](Api::fd_pwrite()).
+pub type CIoVecArray = Slice<CIoVec>;
 
 /// Provides the implementation of the [`wasi_snapshot_preview1`] API.
 ///
@@ -671,6 +686,25 @@ pub trait Api {
     /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L188C3-L194C4
     fn fd_prestat_dir_name(&self, mem: &Self::Memory, fd: Fd, path: MutSlice<u8>) -> Result<()> {
         let _ = (mem, fd, path);
+        Err(Errno::_nosys)
+    }
+
+    /// "Write to a file descriptor, without using and updating the file descriptor's offset."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_pwrite()`](crate::Wasi::fd_pwrite()).
+    /// - `"fd_pwrite"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L198C3-L207C4
+    fn fd_pwrite(
+        &self,
+        mem: &Self::Memory,
+        fd: Fd,
+        iovs: CIoVecArray,
+        offset: FileSize,
+    ) -> Result<u32> {
+        let _ = (mem, fd, iovs, offset);
         Err(Errno::_nosys)
     }
 }

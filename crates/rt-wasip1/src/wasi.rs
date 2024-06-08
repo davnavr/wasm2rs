@@ -520,4 +520,53 @@ impl<A: Api> Wasi<A> {
             },
         )
     }
+
+    fn fd_pwrite_impl(
+        &self,
+        fd: crate::Fd,
+        iovs: Ptr<crate::CIoVec>,
+        iovs_len: u32,
+        offset: crate::FileSize,
+        nwritten: MutPtr<u32>,
+    ) -> crate::Result<()> {
+        let iovs = crate::CIoVecArray {
+            items: iovs,
+            count: iovs_len,
+        };
+        nwritten.store(
+            &self.memory,
+            self.api.fd_pwrite(&self.memory, fd, iovs, offset)?,
+        )?;
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_pwrite()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_pwrite" (func
+    ///     (param $fd i32)
+    ///     (param $iovs i32)
+    ///     (param $iovs_len i32)
+    ///     (param $offset i64)
+    ///     (param $nwritten i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_pwrite(
+        &self,
+        fd: i32,
+        iovs: i32,
+        iovs_len: i32,
+        offset: i64,
+        nwritten: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.fd_pwrite_impl(
+            crate::Fd::from_i32(fd),
+            iovs.into(),
+            iovs_len as u32,
+            offset as u64,
+            nwritten.into(),
+        )))
+    }
 }
