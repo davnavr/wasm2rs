@@ -281,11 +281,27 @@ wasm2rs_rt_memory_typed::wasm_struct! {
     }
 
     /// An [`$iovec`] defines "a region of memory for scatter/gather reads."
+    ///
+    /// [`$iovec`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L280C1-L287C2
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     #[allow(missing_docs)]
     pub struct IoVec {
         pub buf: MutPtr<u8>,
         pub buf_len: u32,
+    }
+
+    /// A [`$prestat_dir`] contains "the contents of a [`$prestat`] when (the) type is
+    /// [`preopentype::dir`]."
+    ///
+    /// [`$prestat_dir`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L734C1-L739C2
+    /// [`$prestat`]: PreStat
+    /// [`preopentype::dir`]: PreOpenType::Dir
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct PreStatDir {
+        /// "The length of the directory name for use with [`fd_prestat_dir_name`]."
+        ///
+        /// [`fd_prestat_dir_name`]: Api::fd_prestat_dir_name()
+        pub pr_name_len: u32,
     }
 }
 
@@ -303,6 +319,18 @@ impl FdStat {
             rights_base: rights_base.bits(),
             rights_inheriting: rights_inheriting.bits(),
         }
+    }
+}
+
+wasm2rs_rt_memory_typed::wasm_union! {
+    /// A [`$prestat`] contains "information about a pre-opened capability."
+    ///
+    /// [`$prestat`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L742C1-L746C2
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    #[allow(clippy::exhaustive_enums)]
+    pub enum PreStat : u8 {
+        #[allow(missing_docs)]
+        Dir(PreStatDir) = 0,
     }
 }
 
@@ -584,6 +612,19 @@ pub trait Api {
         offset: FileSize,
     ) -> Result<u32> {
         let _ = (mem, fd, iovs, offset);
+        Err(Errno::_nosys)
+    }
+
+    /// "Return a description of the given preopened file descriptor."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_prestat_get()`](crate::Wasi::fd_prestat_get()).
+    /// - `"fd_prestat_get"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L180C3-L185C4
+    fn fd_prestat_get(&self, fd: Fd) -> Result<PreStat> {
+        let _ = fd;
         Err(Errno::_nosys)
     }
 }

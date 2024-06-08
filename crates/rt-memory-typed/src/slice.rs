@@ -12,7 +12,17 @@ pub struct Slice<T: Pointee<I>, I: Address = u32> {
     pub count: I,
 }
 
-//impl IntoIterator for Slice // returns Ptr
+impl<T: Pointee<I>, I: Address> Slice<T, I> {
+    /// Returns an [`Iterator`] yielding `T`s loaded from the given linear [`Memory`].
+    pub fn into_iter_load_from<M: Memory<I>>(self, memory: &M) -> IntoIter<'_, M, T, I> {
+        IntoIter {
+            slice: self,
+            memory,
+        }
+    }
+}
+
+//impl IntoIterator for Slice // yields Ptrs
 
 /// Yields instances of `T` from [`Memory`] by calling [`T::load_from()`] for every item in a
 /// [`Slice`].

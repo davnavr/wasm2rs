@@ -477,4 +477,25 @@ impl<A: Api> Wasi<A> {
             nread.into(),
         )))
     }
+
+    fn fd_prestat_get_impl(&self, fd: crate::Fd, buf: MutPtr<crate::PreStat>) -> crate::Result<()> {
+        buf.store(&self.memory, self.api.fd_prestat_get(fd)?)?;
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_prestat_get()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_prestat_get" (func
+    ///     (param $fd i32)
+    ///     (param $buf i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_prestat_get(&self, fd: i32, buf: i32) -> Result<A> {
+        Ok(result_to_error_code(
+            self.fd_prestat_get_impl(crate::Fd::from_i32(fd), buf.into()),
+        ))
+    }
 }

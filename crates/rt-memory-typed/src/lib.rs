@@ -35,7 +35,7 @@ macro_rules! wasm_struct {
             $(
                 $(#[$field_meta:meta])*
                 $field_vis:vis $field_name:ident: $field_type:ty,
-            )*
+            )+
         }
     )*} => {$(
 
@@ -44,7 +44,7 @@ $struct_vis struct $struct_name {
     $(
         $(#[$field_meta])*
         $field_vis $field_name: $field_type,
-    )*
+    )+
 }
 
 impl<I: $crate::memory::Address> $crate::Pointee<I> for $struct_name {
@@ -58,7 +58,7 @@ impl<I: $crate::memory::Address> $crate::Pointee<I> for $struct_name {
             }
 
             size += <$field_type as $crate::Pointee<I>>::SIZE;
-        )*
+        )+
 
         size
     };
@@ -70,7 +70,7 @@ impl<I: $crate::memory::Address> $crate::Pointee<I> for $struct_name {
             if align < <$field_type as $crate::Pointee<I>>::ALIGN.get() {
                 align = <$field_type as $crate::Pointee<I>>::ALIGN.get();
             }
-        )*
+        )+
 
         match ::core::num::NonZeroUsize::new(align) {
             Some(ok) => ok,
@@ -82,9 +82,9 @@ impl<I: $crate::memory::Address> $crate::Pointee<I> for $struct_name {
     where
         M: $crate::memory::Memory<I> + ?Sized,
     {
-       let mut offset = address;
+        let mut offset = address;
 
-       $(
+        $(
             let realign = offset % I::cast_from_usize(<$field_type as $crate::Pointee<I>>::ALIGN.get());
             if realign != I::ZERO {
                 // Need to align for next field
@@ -95,9 +95,9 @@ impl<I: $crate::memory::Address> $crate::Pointee<I> for $struct_name {
                 mem,
                 $crate::memory::EffectiveAddress::with_offset(offset, address).calculate()?
             )?;
-       )*
+        )+
 
-       Ok(Self { $($field_name),* })
+        Ok(Self { $($field_name),* })
     }
 
     fn store_into<M>(mem: &M, address: I, value: Self) -> $crate::memory::BoundsCheck<()>
@@ -118,9 +118,103 @@ impl<I: $crate::memory::Address> $crate::Pointee<I> for $struct_name {
                 $crate::memory::EffectiveAddress::with_offset(offset, address).calculate()?,
                 value.$field_name,
             )?;
-       )*
+        )+
 
         Ok(())
+    }
+}
+
+    )*};
+}
+
+/// Implements the [`Pointee`] trait for a tagged union passed to WebAssembly.
+#[macro_export]
+macro_rules! wasm_union {
+    {$(
+        $(#[$enum_meta:meta])*
+        $enum_vis:vis enum $enum_name:ident : $tag_type:ty {
+            $(
+                $(#[$case_meta:meta])*
+                $case_name:ident($case_type:ty) = $case_tag:literal,
+            )+
+        }
+    )*} => {$(
+
+$(#[$enum_meta])*
+$enum_vis enum $enum_name {
+    $(
+        $(#[$case_meta])*
+        $case_name($case_type),
+        /// Used when an unknown tag is encountered.
+        Unknown {
+            /// The unknown tag that was encountered.
+            tag: $tag_type
+        },
+    )+
+}
+
+impl $enum_name {
+    #[allow(missing_docs)]
+    pub const fn tag(&self) -> $tag_type {
+        match self {
+            $(Self::$case_name(_) => $case_tag,)+
+            Self::Unknown { tag } => *tag,
+        }
+    }
+}
+
+impl<I: $crate::memory::Address> $crate::Pointee<I> for $enum_name {
+    const ALIGN: ::core::num::NonZeroUsize = {
+        let mut align = <$tag_type as $crate::Pointee<I>>::ALIGN;
+
+        $(
+            if align.get() < <$case_type as $crate::Pointee<I>>::ALIGN.get() {
+                align = <$case_type as $crate::Pointee<I>>::ALIGN;
+            }
+        )+
+
+        align
+    };
+
+    const SIZE: usize = {
+        let mut largest_case_size = 0;
+
+        $(
+            if largest_case_size < <$case_type as $crate::Pointee<I>>::SIZE {
+                largest_case_size = <$case_type as $crate::Pointee<I>>::SIZE;
+            }
+        )+
+
+        // Align for the largest case.
+        <Self as $crate::Pointee<I>>::ALIGN.get() + largest_case_size
+    };
+
+    fn load_from<M>(mem: &M, mut address: I) -> $crate::memory::BoundsCheck<Self>
+    where
+        M: $crate::memory::Memory<I> + ?Sized,
+    {
+        let tag = <$tag_type as $crate::Pointee<I>>::load_from(mem, address)?;
+
+        address += I::cast_from_usize(<Self as $crate::Pointee<I>>::ALIGN.get());
+
+        match tag {
+            $($case_tag => <$case_type as $crate::Pointee<I>>::load_from(mem, address).map(Self::$case_name),)*
+            _ => Ok(Self::Unknown { tag }),
+        }
+    }
+
+    fn store_into<M>(mem: &M, mut address: I, value: Self) -> $crate::memory::BoundsCheck<()>
+    where
+        M: $crate::memory::Memory<I> + ?Sized,
+    {
+        <$tag_type as $crate::Pointee<I>>::store_into(mem, address, value.tag())?;
+
+        address += I::cast_from_usize(<Self as $crate::Pointee<I>>::ALIGN.get());
+
+        match value {
+            $(Self::$case_name(case) => <$case_type as $crate::Pointee<I>>::store_into(mem, address, case),)*
+            Self::Unknown { .. } => Ok(()),
+        }
     }
 }
 
