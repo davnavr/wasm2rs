@@ -687,4 +687,16 @@ pub trait Api {
         let _ = sig;
         Err(Errno::_nosys)
     }
+
+    /// "Temporarily yield execution of the calling thread."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::sched_yield()`](crate::Wasi::sched_yield()).
+    /// - `"sched_yield"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L477C3-L479C4
+    fn sched_yield(&self) -> Result<()> {
+        Err(Errno::_nosys)
+    }
 }

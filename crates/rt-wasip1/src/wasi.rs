@@ -1408,4 +1408,15 @@ impl<A: Api> Wasi<A> {
             Err(errno) => Ok(errno as i32),
         }
     }
+
+    /// Calls [`Api::sched_yield()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "sched_yield" (func (result i32)))
+    /// ```
+    pub fn sched_yield(&self) -> Result<A> {
+        Ok(result_to_error_code(self.api.sched_yield()))
+    }
 }
