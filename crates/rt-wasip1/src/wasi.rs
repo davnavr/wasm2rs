@@ -236,6 +236,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $fd i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_close(&self, fd: i32) -> Result<A> {
         Ok(result_to_error_code(self.api.fd_close(Fd::from_i32(fd))))
     }
@@ -249,6 +250,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $fd i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_datasync(&self, fd: i32) -> Result<A> {
         Ok(result_to_error_code(self.api.fd_datasync(Fd::from_i32(fd))))
     }
@@ -268,6 +270,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $buf_ptr i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_fdstat_get(&self, fd: i32, buf_ptr: i32) -> Result<A> {
         Ok(result_to_error_code(
             self.fd_fdstat_get_impl(Fd::from_i32(fd), buf_ptr.into()),
@@ -291,6 +294,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $flags i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_fdstat_set_flags(&self, fd: i32, flags: i32) -> Result<A> {
         Ok(result_to_error_code(
             self.fd_fdstat_set_flags_impl(Fd::from_i32(fd), flags as u32),
@@ -308,6 +312,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $fs_rights_inheriting i64)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_fdstat_set_rights(
         &self,
         fd: i32,
@@ -336,6 +341,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $buf i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_filestat_get(&self, fd: i32, buf: i32) -> Result<A> {
         Ok(result_to_error_code(
             self.fd_filestat_get_impl(Fd::from_i32(fd), buf.into()),
@@ -352,6 +358,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $st_size i64)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_filestat_set_size(&self, fd: i32, st_size: i64) -> Result<A> {
         Ok(result_to_error_code(
             self.api
@@ -385,6 +392,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $fst_flags i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_filestat_set_times(
         &self,
         fd: i32,
@@ -434,6 +442,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $nread i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_pread(
         &self,
         fd: i32,
@@ -466,6 +475,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $buf i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_prestat_get(&self, fd: i32, buf: i32) -> Result<A> {
         Ok(result_to_error_code(
             self.fd_prestat_get_impl(Fd::from_i32(fd), buf.into()),
@@ -483,6 +493,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $path_len i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_prestat_dir_name(&self, fd: i32, path: i32, path_len: i32) -> api::Result<()> {
         self.api.fd_prestat_dir_name(
             &self.memory,
@@ -528,6 +539,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $nwritten i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_pwrite(
         &self,
         fd: i32,
@@ -574,6 +586,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $nread i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_read(&self, fd: i32, iovs: i32, iovs_len: i32, nread: i32) -> Result<A> {
         Ok(result_to_error_code(self.fd_read_impl(
             Fd::from_i32(fd),
@@ -617,6 +630,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $buf_used i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_readdir(
         &self,
         fd: i32,
@@ -644,6 +658,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $to i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_renumber(&self, fd: i32, to: i32) -> Result<A> {
         Ok(result_to_error_code(
             self.api.fd_renumber(Fd::from_i32(fd), Fd::from_i32(to)),
@@ -677,6 +692,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $new_offset i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_seek(&self, fd: i32, offset: i64, whence: i32, new_offset: i32) -> Result<A> {
         Ok(result_to_error_code(self.fd_seek_impl(
             Fd::from_i32(fd),
@@ -695,6 +711,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $fd i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_sync(&self, fd: i32) -> Result<A> {
         Ok(result_to_error_code(
             self.api.fd_sync(api::Fd::from_i32(fd)),
@@ -716,6 +733,7 @@ impl<A: Api> Wasi<A> {
     ///     (param $offset i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_tell(&self, fd: i32, offset: i32) -> Result<A> {
         Ok(result_to_error_code(
             self.fd_tell_impl(api::Fd::from_i32(fd), offset.into()),
@@ -751,12 +769,562 @@ impl<A: Api> Wasi<A> {
     ///     (param $nwritten i32)
     ///     (result i32)
     /// ))
+    /// ```
     pub fn fd_write(&self, fd: i32, iovs: i32, iovs_len: i32, nwritten: i32) -> Result<A> {
         Ok(result_to_error_code(self.fd_write_impl(
             Fd::from_i32(fd),
             iovs.into(),
             iovs_len as u32,
             nwritten.into(),
+        )))
+    }
+
+    fn path_create_directory_impl(
+        &self,
+        fd: api::Fd,
+        path: Ptr<u8>,
+        path_len: u32,
+    ) -> api::Result<()> {
+        let path = api::Path {
+            items: path,
+            count: path_len,
+        };
+
+        self.api.path_create_directory(&self.memory, fd, path)
+    }
+
+    /// Calls [`Api::path_create_directory()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_create_directory" (func
+    ///     (param $fd i32)
+    ///     (param $path i32)
+    ///     (param $path_len i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn path_create_directory(&self, fd: i32, path: i32, path_len: i32) -> Result<A> {
+        Ok(result_to_error_code(self.path_create_directory_impl(
+            api::Fd::from_i32(fd),
+            path.into(),
+            path_len as u32,
+        )))
+    }
+
+    fn path_filestat_get_impl(
+        &self,
+        fd: api::Fd,
+        flags: u32,
+        path: Ptr<u8>,
+        path_len: u32,
+        buf: MutPtr<api::FileStat>,
+    ) -> api::Result<()> {
+        let path = api::Path {
+            items: path,
+            count: path_len,
+        };
+
+        buf.store(
+            &self.memory,
+            self.api.path_filestat_get(
+                &self.memory,
+                fd,
+                api::LookupFlags::from_bits_retain(flags),
+                path,
+            )?,
+        )?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::path_filestat_get()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_filestat_get" (func
+    ///     (param $fd i32)
+    ///     (param $flags i32)
+    ///     (param $path i32)
+    ///     (param $path_len i32)
+    ///     (param $buf i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn path_filestat_get(
+        &self,
+        fd: i32,
+        flags: i32,
+        path: i32,
+        path_len: i32,
+        buf: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.path_filestat_get_impl(
+            api::Fd::from_i32(fd),
+            flags as u32,
+            path.into(),
+            path_len as u32,
+            buf.into(),
+        )))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn path_filestat_set_times_impl(
+        &self,
+        fd: api::Fd,
+        flags: u32,
+        path: Ptr<u8>,
+        path_len: u32,
+        atim: api::Timestamp,
+        mtim: api::Timestamp,
+        fst_flags: u32,
+    ) -> api::Result<()> {
+        let fst_flags = api::FstFlags::from_bits_retain(
+            u16::try_from(fst_flags).map_err(|_| api::Errno::_inval)?,
+        );
+        let path = api::Path {
+            items: path,
+            count: path_len,
+        };
+
+        self.api.path_filestat_set_times(
+            &self.memory,
+            fd,
+            api::LookupFlags::from_bits_retain(flags),
+            path,
+            atim,
+            mtim,
+            fst_flags,
+        )?;
+        Ok(())
+    }
+
+    /// Calls [`Api::path_filestat_set_times()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_filestat_set_times" (func
+    ///     (param $fd i32)
+    ///     (param $flags i32)
+    ///     (param $path i32)
+    ///     (param $path_len i32)
+    ///     (param $atim i64)
+    ///     (param $mtim i64)
+    ///     (param $fst_flags i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    #[allow(clippy::too_many_arguments)]
+    pub fn path_filestat_set_times(
+        &self,
+        fd: i32,
+        flags: i32,
+        path: i32,
+        path_len: i32,
+        atim: i64,
+        mtim: i64,
+        fst_flags: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.path_filestat_set_times_impl(
+            api::Fd::from_i32(fd),
+            flags as u32,
+            path.into(),
+            path_len as u32,
+            api::Timestamp::from_i64(atim),
+            api::Timestamp::from_i64(mtim),
+            fst_flags as u32,
+        )))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn path_link_impl(
+        &self,
+        old_fd: api::Fd,
+        old_flags: u32,
+        old_path: Ptr<u8>,
+        old_path_len: u32,
+        new_fd: api::Fd,
+        new_path: Ptr<u8>,
+        new_path_len: u32,
+    ) -> api::Result<()> {
+        let old_path = api::Path {
+            items: old_path,
+            count: old_path_len,
+        };
+        let new_path = api::Path {
+            items: new_path,
+            count: new_path_len,
+        };
+
+        self.api.path_link(
+            &self.memory,
+            old_fd,
+            api::LookupFlags::from_bits_retain(old_flags),
+            old_path,
+            new_fd,
+            new_path,
+        )?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::path_link()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_link" (func
+    ///     (param $old_fd i32)
+    ///     (param $old_flags i32)
+    ///     (param $old_path i32)
+    ///     (param $old_path_len i32)
+    ///     (param $new_fd i32)
+    ///     (param $new_path i32)
+    ///     (param $new_path_len i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    #[allow(clippy::too_many_arguments)]
+    pub fn path_link(
+        &self,
+        old_fd: i32,
+        old_flags: i32,
+        old_path: i32,
+        old_path_len: i32,
+        new_fd: i32,
+        new_path: i32,
+        new_path_len: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.path_link_impl(
+            api::Fd::from_i32(old_fd),
+            old_flags as u32,
+            old_path.into(),
+            old_path_len as u32,
+            api::Fd::from_i32(new_fd),
+            new_path.into(),
+            new_path_len as u32,
+        )))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn path_open_impl(
+        &self,
+        dir_fd: api::Fd,
+        dir_flags: u32,
+        path: Ptr<u8>,
+        path_len: u32,
+        o_flags: u32,
+        rights_base: api::Rights,
+        rights_inheriting: api::Rights,
+        fd_flags: u32,
+        opened_fd: MutPtr<Fd>,
+    ) -> api::Result<()> {
+        let path = api::Path {
+            items: path,
+            count: path_len,
+        };
+        let o_flags =
+            api::OFlags::from_bits_retain(u16::try_from(o_flags).map_err(|_| api::Errno::_inval)?);
+        let fd_flags = api::FdFlags::from_bits_retain(
+            u16::try_from(fd_flags).map_err(|_| api::Errno::_inval)?,
+        );
+
+        opened_fd.store(
+            &self.memory,
+            self.api.path_open(
+                &self.memory,
+                dir_fd,
+                api::LookupFlags::from_bits_retain(dir_flags),
+                path,
+                o_flags,
+                rights_base,
+                rights_inheriting,
+                fd_flags,
+            )?,
+        )?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::path_open()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_open" (func
+    ///     (param $dir_fd i32)
+    ///     (param $dir_flags i32)
+    ///     (param $path i32)
+    ///     (param $path_len i32)
+    ///     (param $fs_rights_base i64)
+    ///     (param $fs_rights_inheriting i64)
+    ///     (param $fs_flags i32)
+    ///     (param $fd i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    #[allow(clippy::too_many_arguments)]
+    pub fn path_open(
+        &self,
+        dir_fd: i32,
+        dir_flags: i32,
+        path: i32,
+        path_len: i32,
+        o_flags: i32,
+        fs_rights_base: i64,
+        fs_rights_inheriting: i64,
+        fs_flags: i32,
+        opened_fd: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.path_open_impl(
+            api::Fd::from_i32(dir_fd),
+            dir_flags as u32,
+            path.into(),
+            path_len as u32,
+            o_flags as u32,
+            api::Rights::from_bits_retain(fs_rights_base as u64),
+            api::Rights::from_bits_retain(fs_rights_inheriting as u64),
+            fs_flags as u32,
+            opened_fd.into(),
+        )))
+    }
+
+    fn path_readlink_impl(
+        &self,
+        dir_fd: api::Fd,
+        path: Ptr<u8>,
+        path_len: u32,
+        buf: MutPtr<u8>,
+        buf_len: u32,
+        buf_used: MutPtr<u32>,
+    ) -> api::Result<()> {
+        let path = api::Path {
+            items: path,
+            count: path_len,
+        };
+        let buf = wasm2rs_rt_memory_typed::slice::MutSlice {
+            items: buf,
+            count: buf_len,
+        };
+
+        buf_used.store(
+            &self.memory,
+            self.api.path_readlink(&self.memory, dir_fd, path, buf)?,
+        )?;
+        Ok(())
+    }
+
+    /// Calls [`Api::path_readlink()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_readlink" (func
+    ///     (param $dir_fd i32)
+    ///     (param $path i32)
+    ///     (param $path_len i32)
+    ///     (param $buf i32)
+    ///     (param $buf_len i32)
+    ///     (param $buf_used i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn path_readlink(
+        &self,
+        dir_fd: i32,
+        path: i32,
+        path_len: i32,
+        buf: i32,
+        buf_len: i32,
+        buf_used: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.path_readlink_impl(
+            api::Fd::from_i32(dir_fd),
+            path.into(),
+            path_len as u32,
+            buf.into(),
+            buf_len as u32,
+            buf_used.into(),
+        )))
+    }
+
+    fn path_remove_directory_impl(
+        &self,
+        fd: api::Fd,
+        path: Ptr<u8>,
+        path_len: u32,
+    ) -> api::Result<()> {
+        let path = api::Path {
+            items: path,
+            count: path_len,
+        };
+
+        self.api.path_remove_directory(&self.memory, fd, path)?;
+        Ok(())
+    }
+
+    /// Calls [`Api::path_remove_directory()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_remove_directory" (func
+    ///     (param $fd i32)
+    ///     (param $path i32)
+    ///     (param $path_len i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn path_remove_directory(&self, fd: i32, path: i32, path_len: i32) -> Result<A> {
+        Ok(result_to_error_code(self.path_remove_directory_impl(
+            api::Fd::from_i32(fd),
+            path.into(),
+            path_len as u32,
+        )))
+    }
+
+    fn path_rename_impl(
+        &self,
+        old_fd: api::Fd,
+        old_path: Ptr<u8>,
+        old_path_len: u32,
+        new_fd: api::Fd,
+        new_path: Ptr<u8>,
+        new_path_len: u32,
+    ) -> api::Result<()> {
+        let old_path = api::Path {
+            items: old_path,
+            count: old_path_len,
+        };
+        let new_path = api::Path {
+            items: new_path,
+            count: new_path_len,
+        };
+
+        self.api
+            .path_rename(&self.memory, old_fd, old_path, new_fd, new_path)?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::path_rename()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_rename" (func
+    ///     (param $old_fd i32)
+    ///     (param $old_path i32)
+    ///     (param $old_path_len i32)
+    ///     (param $new_fd i32)
+    ///     (param $new_path i32)
+    ///     (param $new_path_len i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn path_rename(
+        &self,
+        old_fd: i32,
+        old_path: i32,
+        old_path_len: i32,
+        new_fd: i32,
+        new_path: i32,
+        new_path_len: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.path_rename_impl(
+            api::Fd::from_i32(old_fd),
+            old_path.into(),
+            old_path_len as u32,
+            api::Fd::from_i32(new_fd),
+            new_path.into(),
+            new_path_len as u32,
+        )))
+    }
+
+    fn path_symlink_impl(
+        &self,
+        old_path: Ptr<u8>,
+        old_path_len: u32,
+        fd: api::Fd,
+        new_path: Ptr<u8>,
+        new_path_len: u32,
+    ) -> api::Result<()> {
+        let old_path = api::Path {
+            items: old_path,
+            count: old_path_len,
+        };
+        let new_path = api::Path {
+            items: new_path,
+            count: new_path_len,
+        };
+
+        self.api
+            .path_symlink(&self.memory, old_path, fd, new_path)?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::path_symlink()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_symlink" (func
+    ///     (param $old_path i32)
+    ///     (param $old_path_len i32)
+    ///     (param $fd i32)
+    ///     (param $new_path i32)
+    ///     (param $new_path_len i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn path_symlink(
+        &self,
+        old_path: i32,
+        old_path_len: i32,
+        fd: i32,
+        new_path: i32,
+        new_path_len: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.path_symlink_impl(
+            old_path.into(),
+            old_path_len as u32,
+            api::Fd::from_i32(fd),
+            new_path.into(),
+            new_path_len as u32,
+        )))
+    }
+
+    fn path_unlink_file_impl(&self, fd: api::Fd, path: Ptr<u8>, path_len: u32) -> api::Result<()> {
+        let path = api::Path {
+            items: path,
+            count: path_len,
+        };
+
+        self.api.path_unlink_file(&self.memory, fd, path)?;
+        Ok(())
+    }
+
+    /// Calls [`Api::path_unlink_file()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "path_unlink_file" (func
+    ///     (param $fd i32)
+    ///     (param $path i32)
+    ///     (param $path_len i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn path_unlink_file(&self, fd: i32, path: i32, path_len: i32) -> Result<A> {
+        Ok(result_to_error_code(self.path_unlink_file_impl(
+            api::Fd::from_i32(fd),
+            path.into(),
+            path_len as u32,
         )))
     }
 }

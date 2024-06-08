@@ -6,6 +6,13 @@ use wasm2rs_rt_memory_typed::slice;
 /// [`Api`]: crate::api::Api
 pub type Result<T> = core::result::Result<T, Errno>;
 
+/// A string type representing paths to files or directories in the WASI [`Api`].
+///
+/// The contents of the string are typically assumed to be UTF-8.
+///
+/// [`Api`]: crate::api::Api
+pub type Path = slice::Slice<u8>;
+
 macro_rules! wasm_layout_check {
     {$($type:ty => $size:literal ^ $align:literal),+} => {$(
 
@@ -64,17 +71,25 @@ pub type Device = u64;
 pub type LinkCount = u64;
 
 wasm2rs_rt_memory_typed::wasm_transparent_struct! {
-    /// A [`$timestamp`] in nanoseconds.
-    ///
-    /// [`$timestamp`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L14
-    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-    pub struct Timestamp(pub u64);
 
-    /// A [`$dircookie`] is "a reference to the offset of a directory entry."
-    ///
-    /// [`$dircookie`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L320
-    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-    pub struct DirCookie(pub u64);
+/// A [`$fd`], which represents a file descriptor handle.
+///
+/// [`$fd`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L277
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct Fd(pub u32);
+
+/// A [`$timestamp`] in nanoseconds.
+///
+/// [`$timestamp`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L14
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct Timestamp(pub u64);
+
+/// A [`$dircookie`] is "a reference to the offset of a directory entry."
+///
+/// [`$dircookie`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L320
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct DirCookie(pub u64);
+
 }
 
 impl Timestamp {
@@ -101,13 +116,6 @@ impl DirCookie {
 
 wasm_layout_check!(Timestamp => 8 ^ 8);
 wasm_layout_check!(DirCookie => 8 ^ 8);
-
-/// A [`$fd`], which represents a file descriptor handle.
-///
-/// [`$fd`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L277
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[repr(transparent)]
-pub struct Fd(pub u32);
 
 #[allow(missing_docs)]
 impl Fd {
@@ -292,6 +300,29 @@ struct FstFlags(u16) = {
     MTIM = 2,
     #[allow(missing_docs)]
     MTIM_NOW = 3,
+}
+
+/// Corresponds to [`$lookupflags`], which are used for "determining the method of how paths are
+/// resolved."
+///
+/// [`$lookupflags`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L434C1-L439C2
+struct LookupFlags(u32) = {
+    /// "As long as the resolved path corresponds to a symbolic link, it is expanded."
+    SYMLINK_FOLLOW = 0,
+}
+
+/// Corresponds to [`$oflags`], used with [`path_open`](crate::api::Api::path_open).
+///
+/// [`$oflags`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L434C1-L439C2
+struct OFlags(u16) = {
+    /// "Create file if it does not exist."
+    CREAT = 0,
+    /// "Fail if not a directory."
+    DIRECTORY = 1,
+    /// "Fail if file already exists."
+    EXCL = 2,
+    /// "Truncate file to size 0."
+    TRUNC = 3,
 }
 
 }

@@ -13,7 +13,7 @@ pub use errno::Errno;
 pub use types::{
     Advice, CIoVec, CIoVecArray, ClockId, DataSizes, Device, DirCookie, Fd, FdFlags, FdStat,
     FileDelta, FileSize, FileStat, FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount,
-    PreStat, PreStatDir, Result, Rights, Timestamp, Whence,
+    LookupFlags, OFlags, Path, PreStat, PreStatDir, Result, Rights, Timestamp, Whence,
 };
 
 use wasm2rs_rt_memory_typed::slice;
@@ -441,6 +441,205 @@ pub trait Api {
     /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L290C3-L297C4
     fn fd_write(&self, mem: &Self::Memory, fd: Fd, iovs: CIoVecArray) -> Result<FileSize> {
         let _ = (fd, mem, iovs);
+        Err(Errno::_nosys)
+    }
+
+    /// "Create a directory."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_create_directory()`](crate::Wasi::path_create_directory()).
+    /// - `"path_create_directory"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L301C3-L306C4
+    fn path_create_directory(&self, mem: &Self::Memory, fd: Fd, path: Path) -> Result<()> {
+        let _ = (mem, fd, path);
+        Err(Errno::_nosys)
+    }
+
+    /// "Create a directory."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_filestat_get()`](crate::Wasi::path_filestat_get()).
+    /// - `"path_filestat_get"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L310C3-L319C4
+    fn path_filestat_get(
+        &self,
+        mem: &Self::Memory,
+        fd: Fd,
+        flags: LookupFlags,
+        path: Path,
+    ) -> Result<FileStat> {
+        let _ = (mem, fd, flags, path);
+        Err(Errno::_nosys)
+    }
+
+    /// "Adjust the timestamps of a file or directory."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_filestat_set_times()`](crate::Wasi::path_filestat_set_times()).
+    /// - `"path_filestat_set_times"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L323C3-L336C4
+    #[allow(clippy::too_many_arguments)]
+    fn path_filestat_set_times(
+        &self,
+        mem: &Self::Memory,
+        fd: Fd,
+        flags: LookupFlags,
+        path: Path,
+        atim: Timestamp,
+        mtim: Timestamp,
+        fst_flags: FstFlags,
+    ) -> Result<()> {
+        let _ = (mem, fd, flags, path, atim, mtim, fst_flags);
+        Err(Errno::_nosys)
+    }
+
+    /// "Create a hard link."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_link()`](crate::Wasi::path_link()).
+    /// - `"path_link"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L340C3-L351C4
+    fn path_link(
+        &self,
+        mem: &Self::Memory,
+        old_fd: Fd,
+        old_flags: LookupFlags,
+        old_path: Path,
+        new_fd: Fd,
+        new_path: Path,
+    ) -> Result<()> {
+        let _ = (mem, old_fd, old_flags, old_path, new_fd, new_path);
+        Err(Errno::_nosys)
+    }
+
+    /// "Open a file or directory."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_open()`](crate::Wasi::path_open()).
+    /// - `"path_open"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L362C3-L385C4
+    #[allow(clippy::too_many_arguments)]
+    fn path_open(
+        &self,
+        mem: &Self::Memory,
+        dir_fd: Fd,
+        dir_flags: LookupFlags,
+        path: Path,
+        o_flags: OFlags,
+        rights_base: Rights,
+        rights_inheriting: Rights,
+        fd_flags: FdFlags,
+    ) -> Result<Fd> {
+        let _ = mem;
+        let _ = dir_fd;
+        let _ = dir_flags;
+        let _ = path;
+        let _ = o_flags;
+        let _ = rights_base;
+        let _ = rights_inheriting;
+        let _ = fd_flags;
+        Err(Errno::_nosys)
+    }
+
+    /// "Read the contents of a symbolic link."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_readlink()`](crate::Wasi::path_readlink()).
+    /// - `"path_readlink"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L389C3-L399C4
+    fn path_readlink(
+        &self,
+        mem: &Self::Memory,
+        dir_fd: Fd,
+        path: Path,
+        buf: slice::MutSlice<u8>,
+    ) -> Result<u32> {
+        let _ = (mem, dir_fd, path, buf);
+        Err(Errno::_nosys)
+    }
+
+    /// "Remove a directory."
+    ///
+    /// # Errors
+    ///
+    /// If the directory is not empty, [`Errno::_notempty`] is returned.
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_remove_directory()`](crate::Wasi::path_remove_directory()).
+    /// - `"path_remove_directory"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L404C3-L409C4
+    fn path_remove_directory(&self, mem: &Self::Memory, fd: Fd, path: Path) -> Result<u32> {
+        let _ = (mem, fd, path);
+        Err(Errno::_nosys)
+    }
+
+    /// "Rename a file or directory."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_rename()`](crate::Wasi::path_rename()).
+    /// - `"path_rename"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L413C3-L422C4
+    fn path_rename(
+        &self,
+        mem: &Self::Memory,
+        old_fd: Fd,
+        old_path: Path,
+        new_fd: Fd,
+        new_path: Path,
+    ) -> Result<()> {
+        let _ = (mem, old_fd, old_path, new_fd, new_path);
+        Err(Errno::_nosys)
+    }
+
+    /// "Create a symbolic link."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_symlink()`](crate::Wasi::path_symlink()).
+    /// - `"path_symlink"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L426C3-L433C4
+    fn path_symlink(
+        &self,
+        mem: &Self::Memory,
+        old_path: Path,
+        fd: Fd,
+        new_path: Path,
+    ) -> Result<()> {
+        let _ = (mem, old_path, fd, new_path);
+        Err(Errno::_nosys)
+    }
+
+    /// "Unlink a file."
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::_isdir`] "if the path refers to a directory."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::path_unlink_file()`](crate::Wasi::path_unlink_file()).
+    /// - `"path_unlink_file"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L439C3-L444C4
+    fn path_unlink_file(&self, mem: &Self::Memory, fd: Fd, path: Path) -> Result<()> {
+        let _ = (mem, fd, path);
         Err(Errno::_nosys)
     }
 }
