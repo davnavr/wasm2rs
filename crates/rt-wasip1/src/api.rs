@@ -14,8 +14,9 @@ pub use types::{
     Advice, CIoVec, CIoVecArray, ClockId, DataSizes, Device, DirCookie, Event, EventFdReadWrite,
     EventPoll, EventRwFlags, EventType, ExitCode, Fd, FdFlags, FdStat, FileDelta, FileSize,
     FileStat, FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount, LookupFlags, OFlags, Path,
-    PreStat, PreStatDir, Result, Rights, Signal, SubClockFlags, Subscription, SubscriptionClock,
-    SubscriptionFdReadWrite, SubscriptionU, Timestamp, UserData, Whence,
+    PreStat, PreStatDir, Result, RiFlags, Rights, RoFlags, SdFlags, SiFlags, Signal, SubClockFlags,
+    Subscription, SubscriptionClock, SubscriptionFdReadWrite, SubscriptionU, Timestamp, UserData,
+    Whence,
 };
 
 use wasm2rs_rt_memory_typed::slice;
@@ -710,6 +711,70 @@ pub trait Api {
     /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L487C3-L492C4
     fn random_get(&self, mem: &Self::Memory, buf: slice::MutSlice<u8>) -> Result<()> {
         let _ = (mem, buf);
+        Err(Errno::_nosys)
+    }
+
+    /// "Accept a new incoming connection."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::sock_accept()`](crate::Wasi::sock_accept()).
+    /// - `"sock_accept"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/v0.2.0/legacy/preview1/witx/wasi_snapshot_preview1.witx#L500C3-L507C4
+    fn sock_accept(&self, sock: Fd, flags: FdFlags) -> Result<Fd> {
+        let _ = (sock, flags);
+        Err(Errno::_nosys)
+    }
+
+    /// "Receive a message from a socket."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::sock_recv()`](crate::Wasi::sock_recv()).
+    /// - `"sock_recv"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L497C3-L508C4
+    fn sock_recv(
+        &self,
+        mem: &Self::Memory,
+        sock: Fd,
+        ri_data: IoVecArray,
+        ri_flags: RiFlags,
+    ) -> Result<(u32, RoFlags)> {
+        let _ = (mem, sock, ri_data, ri_flags);
+        Err(Errno::_nosys)
+    }
+
+    /// "Send a message on a socket."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::sock_send()`](crate::Wasi::sock_send()).
+    /// - `"sock_send"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L513C3-L522C4
+    fn sock_send(
+        &self,
+        mem: &Self::Memory,
+        sock: Fd,
+        si_data: CIoVecArray,
+        si_flags: SiFlags,
+    ) -> Result<u32> {
+        let _ = (mem, sock, si_data, si_flags);
+        Err(Errno::_nosys)
+    }
+
+    /// "Shut down socket send and receive channels."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::sock_shutdown()`](crate::Wasi::sock_shutdown()).
+    /// - `"sock_shutdown"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L526C3-L531C4
+    fn sock_shutdown(&self, sock: Fd, how: SdFlags) -> Result<()> {
+        let _ = (sock, how);
         Err(Errno::_nosys)
     }
 }

@@ -1448,4 +1448,170 @@ impl<A: Api> Wasi<A> {
             self.random_get_impl(buf.into(), buf_len as u32),
         ))
     }
+
+    fn sock_accept_impl(&self, sock: api::Fd, flags: u32, ro_fd: MutPtr<Fd>) -> api::Result<()> {
+        let flags =
+            api::FdFlags::from_bits_retain(u16::try_from(flags).map_err(|_| api::Errno::_inval)?);
+
+        ro_fd.store(&self.memory, self.api.sock_accept(sock, flags)?)?;
+        Ok(())
+    }
+
+    /// Calls [`Api::sock_accept()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "sock_accept" (func
+    ///     (param $sock i32)
+    ///     (param $flags i32)
+    ///     (param $ro_fd i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn sock_accept(&self, sock: i32, flags: i32, ro_fd: i32) -> Result<A> {
+        Ok(result_to_error_code(self.sock_accept_impl(
+            api::Fd::from_i32(sock),
+            flags as u32,
+            ro_fd.into(),
+        )))
+    }
+
+    fn sock_recv_impl(
+        &self,
+        sock: api::Fd,
+        ri_data: Ptr<api::IoVec>,
+        ri_data_len: u32,
+        ri_flags: u32,
+        ro_data_len: MutPtr<u32>,
+        ro_flags: MutPtr<api::RoFlags>,
+    ) -> api::Result<()> {
+        let ri_data = api::IoVecArray {
+            items: ri_data,
+            count: ri_data_len,
+        };
+        let ri_flags = api::RiFlags::from_bits_retain(
+            u16::try_from(ri_flags).map_err(|_| api::Errno::_inval)?,
+        );
+
+        let (out_data_len, out_flags) =
+            self.api.sock_recv(&self.memory, sock, ri_data, ri_flags)?;
+
+        ro_data_len.store(&self.memory, out_data_len)?;
+        ro_flags.store(&self.memory, out_flags)?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::sock_recv()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "sock_recv" (func
+    ///     (param $sock i32)
+    ///     (param $ri_data i32)
+    ///     (param $ri_data_len i32)
+    ///     (param $ri_flags i32)
+    ///     (param $ro_data_len i32)
+    ///     (param $ro_flags i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn sock_recv(
+        &self,
+        sock: i32,
+        ri_data: i32,
+        ri_data_len: i32,
+        ri_flags: i32,
+        ro_data_len: i32,
+        ro_flags: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.sock_recv_impl(
+            api::Fd::from_i32(sock),
+            ri_data.into(),
+            ri_data_len as u32,
+            ri_flags as u32,
+            ro_data_len.into(),
+            ro_flags.into(),
+        )))
+    }
+
+    fn sock_send_impl(
+        &self,
+        sock: api::Fd,
+        si_data: Ptr<api::CIoVec>,
+        si_data_len: u32,
+        si_flags: u32,
+        so_data_len: MutPtr<u32>,
+    ) -> api::Result<()> {
+        let si_data = api::CIoVecArray {
+            items: si_data,
+            count: si_data_len,
+        };
+        let si_flags = api::SiFlags::from_bits_retain(
+            u16::try_from(si_flags).map_err(|_| api::Errno::_inval)?,
+        );
+
+        so_data_len.store(
+            &self.memory,
+            self.api.sock_send(&self.memory, sock, si_data, si_flags)?,
+        )?;
+        Ok(())
+    }
+
+    /// Calls [`Api::sock_send()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "sock_send" (func
+    ///     (param $sock i32)
+    ///     (param $ri_data i32)
+    ///     (param $ri_data_len i32)
+    ///     (param $ri_flags i32)
+    ///     (param $ro_data_len i32)
+    ///     (param $ro_flags i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn sock_send(
+        &self,
+        sock: i32,
+        si_data: i32,
+        si_data_len: i32,
+        si_flags: i32,
+        so_data_len: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.sock_send_impl(
+            api::Fd::from_i32(sock),
+            si_data.into(),
+            si_data_len as u32,
+            si_flags as u32,
+            so_data_len.into(),
+        )))
+    }
+
+    fn sock_shutdown_impl(&self, sock: api::Fd, how: u32) -> api::Result<()> {
+        let how =
+            api::SdFlags::from_bits_retain(u8::try_from(how).map_err(|_| api::Errno::_inval)?);
+        self.api.sock_shutdown(sock, how)
+    }
+
+    /// Calls [`Api::sock_shutdown()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "sock_shutdown" (func
+    ///     (param $sock i32)
+    ///     (param $how i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn sock_shutdown(&self, sock: i32, how: i32) -> Result<A> {
+        Ok(result_to_error_code(
+            self.sock_shutdown_impl(api::Fd::from_i32(sock), how as u32),
+        ))
+    }
 }

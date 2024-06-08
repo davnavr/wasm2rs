@@ -611,6 +611,41 @@ struct SubClockFlags(u16) = {
     ABSTIME = 0,
 }
 
+/// A [`$riflags`] value is provided to [`sock_recv`](crate::api::Api::sock_recv).
+///
+/// [`$riflags`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L694C1-L701C2
+struct RiFlags(u16) = {
+    /// "Returns the message without removing it from the socket's receive queue."
+    RECV_PEEK = 0,
+    /// "On byte-stream sockets, block until the full amount of data can be returned."
+    RECV_WAITALL = 1,
+}
+
+/// A [`$roflags`] value is returned by [`sock_recv`](crate::api::Api::sock_recv).
+///
+/// [`$roflags`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L704C1-L709C2
+struct RoFlags(u16) = {
+    /// "Message data has been truncated."
+    RECV_DATA_TRUNCATED = 0,
+}
+
+/// A [`$siflags`] value is provided to [`sock_send`](crate::api::Api::sock_send).
+///
+/// No flags are currently defined, so a [`SiFlags`] value is expected to be set to zero.
+///
+/// [`$siflags`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L713
+struct SiFlags(u16) = {}
+
+/// A [`$sdflags`] value indicates "which channels on a socket to shut down."
+///
+/// [`$sdflags`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L716C1-L723C2
+struct SdFlags(u8) = {
+    /// "Disables further receive operations."
+    RD = 0,
+    /// "Disables further send operations."
+    WR = 1,
+}
+
 }
 
 wasm2rs_rt_memory_typed::wasm_struct! {
