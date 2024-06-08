@@ -4,6 +4,24 @@ use wasm2rs_rt_memory_typed::{slice::Slice, MutPtr, Ptr};
 /// Result type used by functions in the `wasi_snapshot_preview1` [`Api`].
 pub type Result<T> = core::result::Result<T, Errno>;
 
+macro_rules! wasm_layout_check {
+    {$($type:ty => $size:literal ^ $align:literal),+} => {$(
+
+impl $type {
+    const _SIZE_ALIGN_CHECK: () = {
+        if <$type as wasm2rs_rt_memory_typed::Pointee>::SIZE != $size {
+            panic!(concat!("expected WASM size to be", stringify!($size)));
+        }
+
+        if <$type as wasm2rs_rt_memory_typed::Pointee>::ALIGN.get() != $align {
+            panic!(concat!("expected WASM alignment to be", stringify!($align)));
+        }
+    };
+}
+
+    )+};
+}
+
 /// Specifies the counts and sizes for CLI argument or environment variable data returned by
 /// [`args_sizes_get`] and [`environ_sizes_get`].
 ///
@@ -62,6 +80,8 @@ impl From<Timestamp> for core::time::Duration {
         timestamp.to_duration()
     }
 }
+
+wasm_layout_check!(Timestamp => 8 ^ 8);
 
 /// A [`$fd`], which represents a file descriptor handle.
 ///
@@ -322,6 +342,12 @@ impl FdStat {
     }
 }
 
+wasm_layout_check! {
+    FdStat => 24 ^ 8,
+    FileStat => 64 ^ 8,
+    PreStatDir => 4 ^ 4
+}
+
 wasm2rs_rt_memory_typed::wasm_union! {
     /// A [`$prestat`] contains "information about a pre-opened capability."
     ///
@@ -332,6 +358,10 @@ wasm2rs_rt_memory_typed::wasm_union! {
         #[allow(missing_docs)]
         Dir(PreStatDir) = 0,
     }
+}
+
+wasm_layout_check! {
+    PreStat => 8 ^ 4
 }
 
 /// An array of [`IoVec`]s, used in [`fd_pread`](Api::fd_pread()).
