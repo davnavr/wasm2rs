@@ -1386,10 +1386,15 @@ impl<A: Api> Wasi<A> {
         Err(self.api.proc_exit(api::ExitCode(rval as u32)))
     }
 
-    fn proc_raise_impl(&self, sig: u32) -> api::Result<A::Trap> {
-        self.api.proc_raise(api::Signal::try_from(
-            u8::try_from(sig).map_err(|_| api::Errno::_inval)?,
-        )?)
+    fn proc_raise_impl(&self, sig: u32) -> core::result::Result<api::Result<()>, A::Trap> {
+        let signal = u8::try_from(sig)
+            .map_err(|_| api::Errno::_inval)
+            .and_then(api::Signal::try_from);
+
+        match signal {
+            Ok(sig) => self.api.proc_raise(sig),
+            Err(errno) => Ok(Err(errno)),
+        }
     }
 
     /// Calls [`Api::proc_raise()`].
@@ -1404,8 +1409,9 @@ impl<A: Api> Wasi<A> {
     /// ```
     pub fn proc_raise(&self, sig: i32) -> Result<A> {
         match self.proc_raise_impl(sig as u32) {
-            Ok(trap) => Err(trap),
-            Err(errno) => Ok(errno as i32),
+            Err(trap) => Err(trap),
+            Ok(Err(errno)) => Ok(errno as i32),
+            Ok(Ok(())) => Ok(SUCCESS),
         }
     }
 

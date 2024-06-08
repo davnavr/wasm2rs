@@ -684,9 +684,9 @@ pub trait Api {
     ///
     /// [`Trap`]: Api::Trap
     /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L469C3-L474C1
-    fn proc_raise(&self, sig: Signal) -> Result<Self::Trap> {
+    fn proc_raise(&self, sig: Signal) -> core::result::Result<Result<()>, Self::Trap> {
         let _ = sig;
-        Err(Errno::_nosys)
+        Ok(Err(Errno::_nosys))
     }
 
     /// "Temporarily yield execution of the calling thread."
