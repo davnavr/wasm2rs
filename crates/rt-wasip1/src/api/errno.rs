@@ -4,7 +4,7 @@ macro_rules! errno {
     )*) => {
         /// Error code returned by functions in the WASI [`Api`].
         ///
-        /// [`Api`]: crate::Api
+        /// [`Api`]: crate::api::Api
         #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
         #[repr(u16)]
         #[non_exhaustive]

@@ -1,5 +1,4 @@
-use crate::Api;
-use wasm2rs_rt_memory_typed::{MutPtr, Ptr};
+use crate::api::{self, Api, Fd, MutPtr, Ptr};
 
 /// Allows WebAssembly modules translated by `wasm2rs` to use a imported WASI functions provided by
 /// an [`Api`] implementation.
@@ -12,7 +11,7 @@ pub struct Wasi<A: Api> {
 /// Error code returned when an [`Api`] call is successful.
 const SUCCESS: i32 = 0;
 
-fn result_to_error_code(result: crate::Result<()>) -> i32 {
+fn result_to_error_code(result: api::Result<()>) -> i32 {
     match result {
         Ok(()) => SUCCESS,
         Err(errno) => errno as i32,
@@ -49,12 +48,8 @@ impl<A: Api> Wasi<A> {
         )))
     }
 
-    fn arg_sizes_get_impl(
-        &self,
-        argc: MutPtr<u32>,
-        argv_buf_size: MutPtr<u32>,
-    ) -> crate::Result<()> {
-        let crate::DataSizes { count, buf_size } = self.api.args_sizes_get()?;
+    fn arg_sizes_get_impl(&self, argc: MutPtr<u32>, argv_buf_size: MutPtr<u32>) -> api::Result<()> {
+        let api::DataSizes { count, buf_size } = self.api.args_sizes_get()?;
         argc.store(&self.memory, count)?;
         argv_buf_size.store(&self.memory, buf_size)?;
         Ok(())
@@ -100,8 +95,8 @@ impl<A: Api> Wasi<A> {
         &self,
         environ_count: MutPtr<u32>,
         environ_buf_size: MutPtr<u32>,
-    ) -> crate::Result<()> {
-        let crate::DataSizes { count, buf_size } = self.api.args_sizes_get()?;
+    ) -> api::Result<()> {
+        let api::DataSizes { count, buf_size } = self.api.args_sizes_get()?;
         environ_count.store(&self.memory, count)?;
         environ_buf_size.store(&self.memory, buf_size)?;
         Ok(())
@@ -128,10 +123,10 @@ impl<A: Api> Wasi<A> {
     fn clock_res_get_impl(
         &self,
         clock_id: u32,
-        resolution: MutPtr<crate::Timestamp>,
-    ) -> crate::Result<()> {
+        resolution: MutPtr<api::Timestamp>,
+    ) -> api::Result<()> {
         // `inval` used if clock is not supported, so it's used here when `clock_id` is garbage.
-        let id = crate::ClockId::try_from(clock_id)?;
+        let id = api::ClockId::try_from(clock_id)?;
         resolution.store(&self.memory, self.api.clock_res_get(id)?)?;
         Ok(())
     }
@@ -156,10 +151,10 @@ impl<A: Api> Wasi<A> {
     fn clock_time_get_impl(
         &self,
         clock_id: u32,
-        precision: crate::Timestamp,
-        time: MutPtr<crate::Timestamp>,
-    ) -> crate::Result<()> {
-        let id = crate::ClockId::try_from(clock_id)?;
+        precision: api::Timestamp,
+        time: MutPtr<api::Timestamp>,
+    ) -> api::Result<()> {
+        let id = api::ClockId::try_from(clock_id)?;
         time.store(&self.memory, self.api.clock_time_get(id, precision)?)?;
         Ok(())
     }
@@ -179,20 +174,13 @@ impl<A: Api> Wasi<A> {
     pub fn clock_time_get(&self, clock_id: i32, precision: i64, time: i32) -> Result<A> {
         Ok(result_to_error_code(self.clock_time_get_impl(
             clock_id as u32,
-            crate::Timestamp::from_i64(precision),
+            api::Timestamp::from_i64(precision),
             time.into(),
         )))
     }
 
-    fn fd_advise_impl(
-        &self,
-        fd: crate::Fd,
-        offset: u64,
-        len: u64,
-        advice: u32,
-    ) -> crate::Result<()> {
-        let advice =
-            crate::Advice::try_from(u8::try_from(advice).map_err(|_| crate::Errno::_inval)?)?;
+    fn fd_advise_impl(&self, fd: Fd, offset: u64, len: u64, advice: u32) -> api::Result<()> {
+        let advice = api::Advice::try_from(u8::try_from(advice).map_err(|_| api::Errno::_inval)?)?;
 
         self.api.fd_advise(fd, offset, len, advice)
     }
@@ -212,7 +200,7 @@ impl<A: Api> Wasi<A> {
     /// ```
     pub fn fd_advise(&self, fd: i32, offset: i64, len: i64, advice: i32) -> Result<A> {
         Ok(result_to_error_code(self.fd_advise_impl(
-            crate::Fd::from_i32(fd),
+            Fd::from_i32(fd),
             offset as u64,
             len as u64,
             advice as u32,
@@ -233,7 +221,7 @@ impl<A: Api> Wasi<A> {
     /// ```
     pub fn fd_allocate(&self, fd: i32, offset: i64, len: i64) -> Result<A> {
         Ok(result_to_error_code(self.api.fd_allocate(
-            crate::Fd::from_i32(fd),
+            Fd::from_i32(fd),
             offset as u64,
             len as u64,
         )))
@@ -249,9 +237,7 @@ impl<A: Api> Wasi<A> {
     ///     (result i32)
     /// ))
     pub fn fd_close(&self, fd: i32) -> Result<A> {
-        Ok(result_to_error_code(
-            self.api.fd_close(crate::Fd::from_i32(fd)),
-        ))
+        Ok(result_to_error_code(self.api.fd_close(Fd::from_i32(fd))))
     }
 
     /// Calls [`Api::fd_datasync()`].
@@ -264,16 +250,10 @@ impl<A: Api> Wasi<A> {
     ///     (result i32)
     /// ))
     pub fn fd_datasync(&self, fd: i32) -> Result<A> {
-        Ok(result_to_error_code(
-            self.api.fd_datasync(crate::Fd::from_i32(fd)),
-        ))
+        Ok(result_to_error_code(self.api.fd_datasync(Fd::from_i32(fd))))
     }
 
-    fn fd_fdstat_get_impl(
-        &self,
-        fd: crate::Fd,
-        buf_ptr: MutPtr<crate::FdStat>,
-    ) -> crate::Result<()> {
+    fn fd_fdstat_get_impl(&self, fd: Fd, buf_ptr: MutPtr<api::FdStat>) -> api::Result<()> {
         buf_ptr.store(&self.memory, self.api.fd_fdstat_get(fd)?)?;
         Ok(())
     }
@@ -289,16 +269,14 @@ impl<A: Api> Wasi<A> {
     ///     (result i32)
     /// ))
     pub fn fd_fdstat_get(&self, fd: i32, buf_ptr: i32) -> Result<A> {
-        Ok(result_to_error_code(self.fd_fdstat_get_impl(
-            crate::Fd::from_i32(fd),
-            buf_ptr.into(),
-        )))
+        Ok(result_to_error_code(
+            self.fd_fdstat_get_impl(Fd::from_i32(fd), buf_ptr.into()),
+        ))
     }
 
-    fn fd_fdstat_set_flags_impl(&self, fd: crate::Fd, flags: u32) -> crate::Result<()> {
-        let flags = crate::FdFlags::from_bits_retain(
-            u16::try_from(flags).map_err(|_| crate::Errno::_inval)?,
-        );
+    fn fd_fdstat_set_flags_impl(&self, fd: Fd, flags: u32) -> api::Result<()> {
+        let flags =
+            api::FdFlags::from_bits_retain(u16::try_from(flags).map_err(|_| api::Errno::_inval)?);
 
         self.api.fd_fdstat_set_flags(fd, flags)
     }
@@ -314,10 +292,9 @@ impl<A: Api> Wasi<A> {
     ///     (result i32)
     /// ))
     pub fn fd_fdstat_set_flags(&self, fd: i32, flags: i32) -> Result<A> {
-        Ok(result_to_error_code(self.fd_fdstat_set_flags_impl(
-            crate::Fd::from_i32(fd),
-            flags as u32,
-        )))
+        Ok(result_to_error_code(
+            self.fd_fdstat_set_flags_impl(Fd::from_i32(fd), flags as u32),
+        ))
     }
 
     /// Calls [`Api::fd_fdstat_set_rights()`].
@@ -338,17 +315,13 @@ impl<A: Api> Wasi<A> {
         fs_rights_inheriting: i64,
     ) -> Result<A> {
         Ok(result_to_error_code(self.api.fd_fdstat_set_rights(
-            crate::Fd::from_i32(fd),
-            crate::Rights::from_bits_retain(fs_rights_base as u64),
-            crate::Rights::from_bits_retain(fs_rights_inheriting as u64),
+            Fd::from_i32(fd),
+            api::Rights::from_bits_retain(fs_rights_base as u64),
+            api::Rights::from_bits_retain(fs_rights_inheriting as u64),
         )))
     }
 
-    fn fd_filestat_get_impl(
-        &self,
-        fd: crate::Fd,
-        buf: MutPtr<crate::FileStat>,
-    ) -> crate::Result<()> {
+    fn fd_filestat_get_impl(&self, fd: Fd, buf: MutPtr<api::FileStat>) -> api::Result<()> {
         buf.store(&self.memory, self.api.fd_filestat_get(fd)?)?;
         Ok(())
     }
@@ -365,7 +338,7 @@ impl<A: Api> Wasi<A> {
     /// ))
     pub fn fd_filestat_get(&self, fd: i32, buf: i32) -> Result<A> {
         Ok(result_to_error_code(
-            self.fd_filestat_get_impl(crate::Fd::from_i32(fd), buf.into()),
+            self.fd_filestat_get_impl(Fd::from_i32(fd), buf.into()),
         ))
     }
 
@@ -380,21 +353,21 @@ impl<A: Api> Wasi<A> {
     ///     (result i32)
     /// ))
     pub fn fd_filestat_set_size(&self, fd: i32, st_size: i64) -> Result<A> {
-        Ok(result_to_error_code(self.api.fd_filestat_set_size(
-            crate::Fd::from_i32(fd),
-            st_size as u64,
-        )))
+        Ok(result_to_error_code(
+            self.api
+                .fd_filestat_set_size(Fd::from_i32(fd), st_size as u64),
+        ))
     }
 
     fn fd_filestat_set_times_impl(
         &self,
-        fd: crate::Fd,
-        atim: crate::Timestamp,
-        mtim: crate::Timestamp,
+        fd: Fd,
+        atim: api::Timestamp,
+        mtim: api::Timestamp,
         fst_flags: u32,
-    ) -> crate::Result<()> {
-        let flags = crate::FstFlags::from_bits_retain(
-            u16::try_from(fst_flags).map_err(|_| crate::Errno::_inval)?,
+    ) -> api::Result<()> {
+        let flags = api::FstFlags::from_bits_retain(
+            u16::try_from(fst_flags).map_err(|_| api::Errno::_inval)?,
         );
 
         self.api.fd_filestat_set_times(fd, atim, mtim, flags)
@@ -420,22 +393,22 @@ impl<A: Api> Wasi<A> {
         fst_flags: i32,
     ) -> Result<A> {
         Ok(result_to_error_code(self.fd_filestat_set_times_impl(
-            crate::Fd::from_i32(fd),
-            crate::Timestamp::from_i64(atim),
-            crate::Timestamp::from_i64(mtim),
+            Fd::from_i32(fd),
+            api::Timestamp::from_i64(atim),
+            api::Timestamp::from_i64(mtim),
             fst_flags as u32,
         )))
     }
 
     fn fd_pread_impl(
         &self,
-        fd: crate::Fd,
-        iovs: Ptr<crate::IoVec>,
+        fd: Fd,
+        iovs: Ptr<api::IoVec>,
         iovs_len: u32,
-        offset: crate::FileSize,
+        offset: api::FileSize,
         nread: MutPtr<u32>,
-    ) -> crate::Result<()> {
-        let iovs = crate::IoVecArray {
+    ) -> api::Result<()> {
+        let iovs = api::IoVecArray {
             items: iovs,
             count: iovs_len,
         };
@@ -470,7 +443,7 @@ impl<A: Api> Wasi<A> {
         nread: i32,
     ) -> Result<A> {
         Ok(result_to_error_code(self.fd_pread_impl(
-            crate::Fd::from_i32(fd),
+            Fd::from_i32(fd),
             iovs.into(),
             iovs_len as u32,
             offset as u64,
@@ -478,7 +451,7 @@ impl<A: Api> Wasi<A> {
         )))
     }
 
-    fn fd_prestat_get_impl(&self, fd: crate::Fd, buf: MutPtr<crate::PreStat>) -> crate::Result<()> {
+    fn fd_prestat_get_impl(&self, fd: Fd, buf: MutPtr<api::PreStat>) -> api::Result<()> {
         buf.store(&self.memory, self.api.fd_prestat_get(fd)?)?;
         Ok(())
     }
@@ -495,7 +468,7 @@ impl<A: Api> Wasi<A> {
     /// ))
     pub fn fd_prestat_get(&self, fd: i32, buf: i32) -> Result<A> {
         Ok(result_to_error_code(
-            self.fd_prestat_get_impl(crate::Fd::from_i32(fd), buf.into()),
+            self.fd_prestat_get_impl(Fd::from_i32(fd), buf.into()),
         ))
     }
 
@@ -510,10 +483,10 @@ impl<A: Api> Wasi<A> {
     ///     (param $path_len i32)
     ///     (result i32)
     /// ))
-    pub fn fd_prestat_dir_name(&self, fd: i32, path: i32, path_len: i32) -> crate::Result<()> {
+    pub fn fd_prestat_dir_name(&self, fd: i32, path: i32, path_len: i32) -> api::Result<()> {
         self.api.fd_prestat_dir_name(
             &self.memory,
-            crate::Fd::from_i32(fd),
+            Fd::from_i32(fd),
             wasm2rs_rt_memory_typed::slice::MutSlice {
                 items: path.into(),
                 count: path_len as u32,
@@ -523,13 +496,13 @@ impl<A: Api> Wasi<A> {
 
     fn fd_pwrite_impl(
         &self,
-        fd: crate::Fd,
-        iovs: Ptr<crate::CIoVec>,
+        fd: Fd,
+        iovs: Ptr<api::CIoVec>,
         iovs_len: u32,
-        offset: crate::FileSize,
+        offset: api::FileSize,
         nwritten: MutPtr<u32>,
-    ) -> crate::Result<()> {
-        let iovs = crate::CIoVecArray {
+    ) -> api::Result<()> {
+        let iovs = api::CIoVecArray {
             items: iovs,
             count: iovs_len,
         };
@@ -562,7 +535,7 @@ impl<A: Api> Wasi<A> {
         nwritten: i32,
     ) -> Result<A> {
         Ok(result_to_error_code(self.fd_pwrite_impl(
-            crate::Fd::from_i32(fd),
+            Fd::from_i32(fd),
             iovs.into(),
             iovs_len as u32,
             offset as u64,

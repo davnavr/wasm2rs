@@ -21,17 +21,11 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-mod api;
-mod errno;
 mod wasi;
 
-pub use api::{
-    Advice, Api, CIoVec, CIoVecArray, ClockId, DataSizes, Device, Fd, FdFlags, FdStat, FileSize,
-    FileStat, FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount, PreStat, PreStatDir, Result,
-    Rights, Timestamp,
-};
-pub use errno::Errno;
 pub use wasi::Wasi;
+
+pub mod api;
 
 /// Provides access to items in the [`wasm2rs_rt_memory`] crate.
 pub mod memory {
