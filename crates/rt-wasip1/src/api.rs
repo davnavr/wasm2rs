@@ -699,4 +699,17 @@ pub trait Api {
     fn sched_yield(&self) -> Result<()> {
         Err(Errno::_nosys)
     }
+
+    /// "Write high-quality random data into a buffer."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::random_get()`](crate::Wasi::random_get()).
+    /// - `"random_get"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L487C3-L492C4
+    fn random_get(&self, mem: &Self::Memory, buf: slice::MutSlice<u8>) -> Result<()> {
+        let _ = (mem, buf);
+        Err(Errno::_nosys)
+    }
 }

@@ -1419,4 +1419,33 @@ impl<A: Api> Wasi<A> {
     pub fn sched_yield(&self) -> Result<A> {
         Ok(result_to_error_code(self.api.sched_yield()))
     }
+
+    fn random_get_impl(&self, buf: MutPtr<u8>, buf_len: u32) -> api::Result<()> {
+        self.api.random_get(
+            &self.memory,
+            wasm2rs_rt_memory_typed::slice::MutSlice {
+                items: buf,
+                count: buf_len,
+            },
+        )?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::random_get()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "random_get" (func
+    ///     (param $buf i32)
+    ///     (param $buf_len i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn random_get(&self, buf: i32, buf_len: i32) -> Result<A> {
+        Ok(result_to_error_code(
+            self.random_get_impl(buf.into(), buf_len as u32),
+        ))
+    }
 }
