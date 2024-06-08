@@ -1371,4 +1371,41 @@ impl<A: Api> Wasi<A> {
             nevents.into(),
         )))
     }
+
+    /// Calls [`Api::proc_exit()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "proc_exit" (func
+    ///     (param $rval i32)
+    ///     ;; (@witx noreturn)
+    /// ))
+    /// ```
+    pub fn proc_exit(&self, rval: i32) -> core::result::Result<core::convert::Infallible, A::Trap> {
+        Err(self.api.proc_exit(api::ExitCode(rval as u32)))
+    }
+
+    fn proc_raise_impl(&self, sig: u32) -> api::Result<A::Trap> {
+        self.api.proc_raise(api::Signal::try_from(
+            u8::try_from(sig).map_err(|_| api::Errno::_inval)?,
+        )?)
+    }
+
+    /// Calls [`Api::proc_raise()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "proc_raise" (func
+    ///     (param $sig i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn proc_raise(&self, sig: i32) -> Result<A> {
+        match self.proc_raise_impl(sig as u32) {
+            Ok(trap) => Err(trap),
+            Err(errno) => Ok(errno as i32),
+        }
+    }
 }

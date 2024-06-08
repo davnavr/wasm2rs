@@ -12,9 +12,9 @@ mod types;
 pub use errno::Errno;
 pub use types::{
     Advice, CIoVec, CIoVecArray, ClockId, DataSizes, Device, DirCookie, Event, EventFdReadWrite,
-    EventPoll, EventRwFlags, EventType, Fd, FdFlags, FdStat, FileDelta, FileSize, FileStat,
-    FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount, LookupFlags, OFlags, Path, PreStat,
-    PreStatDir, Result, Rights, SubClockFlags, Subscription, SubscriptionClock,
+    EventPoll, EventRwFlags, EventType, ExitCode, Fd, FdFlags, FdStat, FileDelta, FileSize,
+    FileStat, FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount, LookupFlags, OFlags, Path,
+    PreStat, PreStatDir, Result, Rights, Signal, SubClockFlags, Subscription, SubscriptionClock,
     SubscriptionFdReadWrite, SubscriptionU, Timestamp, UserData, Whence,
 };
 
@@ -32,6 +32,10 @@ pub trait Api {
 
     /// Type used to report WebAssembly [`Trap`]s. Rather than trapping, WASI functions are
     /// expected to return an [`Errno`].
+    ///
+    /// The exception to this is [`proc_exit()`](Api::proc_exit()), which uses a [`Trap`] value to
+    /// carry the [`ExitCode`] information all the way to the embedder of the translated
+    /// WebAssembly module.
     ///
     /// [`Trap`]: wasm2rs_rt_core::trap
     type Trap: wasm2rs_rt_core::trap::TrapInfo;
@@ -655,6 +659,32 @@ pub trait Api {
     /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L447C3-L457C4
     fn poll_oneoff(&self, mem: &Self::Memory, events: EventPoll) -> Result<u32> {
         let _ = (mem, events);
+        Err(Errno::_nosys)
+    }
+
+    /// "Terminate the process normally."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::proc_exit()`](crate::Wasi::proc_exit()).
+    /// - `"proc_exit"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L462C3-L466C1
+    fn proc_exit(&self, rval: ExitCode) -> Self::Trap;
+
+    /// "Send a signal to the process of the calling thread."
+    ///
+    /// A [`Trap`] value can be returned to terminate the process.
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::proc_raise()`](crate::Wasi::proc_raise()).
+    /// - `"proc_raise"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`Trap`]: Api::Trap
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L469C3-L474C1
+    fn proc_raise(&self, sig: Signal) -> Result<Self::Trap> {
+        let _ = sig;
         Err(Errno::_nosys)
     }
 }
