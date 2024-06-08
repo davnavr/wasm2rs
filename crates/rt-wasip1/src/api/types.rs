@@ -43,6 +43,11 @@ pub struct DataSizes {
 /// [`$timestamp`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L11
 pub type FileSize = u64;
 
+/// A [`$filedelta`] is a "relative offset within a file."
+///
+/// [`$filedelta`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L303
+pub type FileDelta = i64;
+
 /// An [`$inode`] is a "file serial number that is unique within its file system."
 ///
 /// [`$inode`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L326
@@ -64,6 +69,12 @@ wasm2rs_rt_memory_typed::wasm_transparent_struct! {
     /// [`$timestamp`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L14
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
     pub struct Timestamp(pub u64);
+
+    /// A [`$dircookie`] is "a reference to the offset of a directory entry."
+    ///
+    /// [`$dircookie`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L320
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+    pub struct DirCookie(pub u64);
 }
 
 impl Timestamp {
@@ -83,7 +94,13 @@ impl From<Timestamp> for core::time::Duration {
     }
 }
 
+impl DirCookie {
+    /// "Signifies the start of the directory"
+    pub const START: Self = Self(0);
+}
+
 wasm_layout_check!(Timestamp => 8 ^ 8);
+wasm_layout_check!(DirCookie => 8 ^ 8);
 
 /// A [`$fd`], which represents a file descriptor handle.
 ///
@@ -146,6 +163,17 @@ enum ClockId(u32) = {
     Monotonic = 1,
     ProcessCpuTimeId = 2,
     ThreadCpuTimeId = 3,
+}
+
+/// Corresponds to [`$whence`], which specifies "the position relative to which to set the offset
+/// of the file descriptor."
+///
+/// [`$whence`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L306C1-L315C2
+#[allow(missing_docs)]
+enum Whence(u8) = {
+    Set = 0,
+    Cur = 1,
+    End = 2,
 }
 
 /// An [`$advice`] provides file access advisory information.

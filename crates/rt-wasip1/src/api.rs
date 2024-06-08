@@ -11,9 +11,9 @@ mod types;
 
 pub use errno::Errno;
 pub use types::{
-    Advice, CIoVec, CIoVecArray, ClockId, DataSizes, Device, Fd, FdFlags, FdStat, FileSize,
-    FileStat, FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount, PreStat, PreStatDir, Result,
-    Rights, Timestamp,
+    Advice, CIoVec, CIoVecArray, ClockId, DataSizes, Device, DirCookie, Fd, FdFlags, FdStat,
+    FileDelta, FileSize, FileStat, FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount,
+    PreStat, PreStatDir, Result, Rights, Timestamp, Whence,
 };
 
 use wasm2rs_rt_memory_typed::slice;
@@ -343,6 +343,104 @@ pub trait Api {
         offset: FileSize,
     ) -> Result<u32> {
         let _ = (mem, fd, iovs, offset);
+        Err(Errno::_nosys)
+    }
+
+    /// "Read from a file descriptor."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_read()`](crate::Wasi::fd_read()).
+    /// - `"fd_read"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L211C3-L218C4
+    fn fd_read(&self, mem: &Self::Memory, fd: Fd, iovs: IoVecArray) -> Result<u32> {
+        let _ = (mem, fd, iovs);
+        Err(Errno::_nosys)
+    }
+
+    /// "Read directory entries from a directory."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_readdir()`](crate::Wasi::fd_readdir()).
+    /// - `"fd_readdir"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L230C3-L240C4
+    fn fd_readdir(
+        &self,
+        mem: &Self::Memory,
+        fd: Fd,
+        buf: slice::MutSlice<u8>,
+        cookie: DirCookie,
+    ) -> Result<u32> {
+        // TODO: Make a newtype helper for writing DirEntry + names into `buf`.
+        let _ = (mem, fd, buf, cookie);
+        Err(Errno::_nosys)
+    }
+
+    /// "Atomically replace a file descriptor by renumbering another file descriptor."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_renumber()`](crate::Wasi::fd_renumber()).
+    /// - `"fd_renumber"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L252C3-L257C4
+    fn fd_renumber(&self, fd: Fd, to: Fd) -> Result<()> {
+        let _ = (fd, to);
+        Err(Errno::_nosys)
+    }
+
+    /// "Move the offset of a file descriptor."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_seek()`](crate::Wasi::fd_seek()).
+    /// - `"fd_seek"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L261C3-L270C4
+    fn fd_seek(&self, fd: Fd, offset: FileDelta, whence: Whence) -> Result<FileSize> {
+        let _ = (fd, offset, whence);
+        Err(Errno::_nosys)
+    }
+
+    /// "Synchronize the data and metadata of a file to disk."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_sync()`](crate::Wasi::fd_sync()).
+    /// - `"fd_sync"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]:https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L274C3-L277C4
+    fn fd_sync(&self, fd: Fd) -> Result<()> {
+        let _ = fd;
+        Err(Errno::_nosys)
+    }
+
+    /// "Return the current offset of a file descriptor."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_tell()`](crate::Wasi::fd_tell()).
+    /// - `"fd_tell"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L281C3-L286C4
+    fn fd_tell(&self, fd: Fd) -> Result<FileSize> {
+        let _ = fd;
+        Err(Errno::_nosys)
+    }
+
+    /// "Write to a file descriptor."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::fd_write()`](crate::Wasi::fd_write()).
+    /// - `"fd_write"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L290C3-L297C4
+    fn fd_write(&self, mem: &Self::Memory, fd: Fd, iovs: CIoVecArray) -> Result<FileSize> {
+        let _ = (fd, mem, iovs);
         Err(Errno::_nosys)
     }
 }

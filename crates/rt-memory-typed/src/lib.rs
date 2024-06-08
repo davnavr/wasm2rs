@@ -225,10 +225,10 @@ impl<I: $crate::memory::Address> $crate::Pointee<I> for $enum_name {
 /// implementing [`Pointee`].
 #[macro_export]
 macro_rules! wasm_transparent_struct {
-    {
+    {$(
         $(#[$struct_meta:meta])*
         $struct_vis:vis struct $struct_name:ident($field_vis:vis $field_type:ty);
-    } => {
+    )*} => {$(
 
 $(#[$struct_meta])*
 #[repr(transparent)]
@@ -256,5 +256,5 @@ where
     }
 }
 
-    };
+    )*};
 }

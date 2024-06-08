@@ -506,10 +506,12 @@ impl<A: Api> Wasi<A> {
             items: iovs,
             count: iovs_len,
         };
+
         nwritten.store(
             &self.memory,
             self.api.fd_pwrite(&self.memory, fd, iovs, offset)?,
         )?;
+
         Ok(())
     }
 
@@ -539,6 +541,221 @@ impl<A: Api> Wasi<A> {
             iovs.into(),
             iovs_len as u32,
             offset as u64,
+            nwritten.into(),
+        )))
+    }
+
+    fn fd_read_impl(
+        &self,
+        fd: Fd,
+        iovs: Ptr<api::IoVec>,
+        iovs_len: u32,
+        nread: MutPtr<u32>,
+    ) -> api::Result<()> {
+        let iovs = api::IoVecArray {
+            items: iovs,
+            count: iovs_len,
+        };
+
+        nread.store(&self.memory, self.api.fd_read(&self.memory, fd, iovs)?)?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_read()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_read" (func
+    ///     (param $fd i32)
+    ///     (param $iovs i32)
+    ///     (param $iovs_len i32)
+    ///     (param $nread i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_read(&self, fd: i32, iovs: i32, iovs_len: i32, nread: i32) -> Result<A> {
+        Ok(result_to_error_code(self.fd_read_impl(
+            Fd::from_i32(fd),
+            iovs.into(),
+            iovs_len as u32,
+            nread.into(),
+        )))
+    }
+
+    fn fd_readdir_impl(
+        &self,
+        fd: api::Fd,
+        buf: api::MutPtr<u8>,
+        buf_len: u32,
+        cookie: api::DirCookie,
+        buf_used: api::MutPtr<u32>,
+    ) -> api::Result<()> {
+        let buf = wasm2rs_rt_memory_typed::slice::MutSlice {
+            items: buf,
+            count: buf_len,
+        };
+
+        buf_used.store(
+            &self.memory,
+            self.api.fd_readdir(&self.memory, fd, buf, cookie)?,
+        )?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_readdir()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_readdir" (func
+    ///     (param $fd i32)
+    ///     (param $buf i32)
+    ///     (param $buf_len i32)
+    ///     (param $cookie i64)
+    ///     (param $buf_used i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_readdir(
+        &self,
+        fd: i32,
+        buf: i32,
+        buf_len: i32,
+        cookie: i64,
+        buf_used: i32,
+    ) -> Result<A> {
+        Ok(result_to_error_code(self.fd_readdir_impl(
+            Fd::from_i32(fd),
+            buf.into(),
+            buf_len as u32,
+            api::DirCookie(cookie as u64),
+            buf_used.into(),
+        )))
+    }
+
+    /// Calls [`Api::fd_renumber()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_renumber" (func
+    ///     (param $fd i32)
+    ///     (param $to i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_renumber(&self, fd: i32, to: i32) -> Result<A> {
+        Ok(result_to_error_code(
+            self.api.fd_renumber(Fd::from_i32(fd), Fd::from_i32(to)),
+        ))
+    }
+
+    fn fd_seek_impl(
+        &self,
+        fd: api::Fd,
+        offset: api::FileDelta,
+        whence: u32,
+        new_offset: MutPtr<u64>,
+    ) -> api::Result<()> {
+        let whence = u8::try_from(whence)
+            .map_err(|_| api::Errno::_inval)
+            .and_then(api::Whence::try_from)?;
+
+        new_offset.store(&self.memory, self.api.fd_seek(fd, offset, whence)?)?;
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_seek()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_seek" (func
+    ///     (param $fd i32)
+    ///     (param $offset i64)
+    ///     (param $whence i32)
+    ///     (param $new_offset i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_seek(&self, fd: i32, offset: i64, whence: i32, new_offset: i32) -> Result<A> {
+        Ok(result_to_error_code(self.fd_seek_impl(
+            Fd::from_i32(fd),
+            offset,
+            whence as u32,
+            new_offset.into(),
+        )))
+    }
+
+    /// Calls [`Api::fd_sync()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_sync" (func
+    ///     (param $fd i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_sync(&self, fd: i32) -> Result<A> {
+        Ok(result_to_error_code(
+            self.api.fd_sync(api::Fd::from_i32(fd)),
+        ))
+    }
+
+    fn fd_tell_impl(&self, fd: api::Fd, offset: MutPtr<u64>) -> api::Result<()> {
+        offset.store(&self.memory, self.api.fd_tell(fd)?)?;
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_tell()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_tell" (func
+    ///     (param $fd i32)
+    ///     (param $offset i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_tell(&self, fd: i32, offset: i32) -> Result<A> {
+        Ok(result_to_error_code(
+            self.fd_tell_impl(api::Fd::from_i32(fd), offset.into()),
+        ))
+    }
+
+    fn fd_write_impl(
+        &self,
+        fd: api::Fd,
+        iovs: Ptr<api::CIoVec>,
+        iovs_len: u32,
+        nwritten: MutPtr<u64>,
+    ) -> api::Result<()> {
+        let iovs = api::CIoVecArray {
+            items: iovs,
+            count: iovs_len,
+        };
+
+        nwritten.store(&self.memory, self.api.fd_write(&self.memory, fd, iovs)?)?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::fd_write()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "fd_write" (func
+    ///     (param $fd i32)
+    ///     (param $iovs i32)
+    ///     (param $iovs_len i32)
+    ///     (param $nwritten i32)
+    ///     (result i32)
+    /// ))
+    pub fn fd_write(&self, fd: i32, iovs: i32, iovs_len: i32, nwritten: i32) -> Result<A> {
+        Ok(result_to_error_code(self.fd_write_impl(
+            Fd::from_i32(fd),
+            iovs.into(),
+            iovs_len as u32,
             nwritten.into(),
         )))
     }
