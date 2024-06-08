@@ -16,6 +16,33 @@ macro_rules! errno {
             ),*
         }
 
+        impl Errno {
+            /// Attempts to convert the given integer value into an [`Errno`].
+            ///
+            /// Returns `Some(Err)` if a matching [`Errno`] was found, or `Some(Ok(()))` if the
+            /// integer value was `0`, indicating a success.
+            ///
+            /// # Errors
+            ///
+            /// Returns `None` if the integer does not correspond to a known [`Errno`] value.
+            pub const fn try_from_raw(raw: u16) -> Option<Result<(), Self>> {
+                if raw == 0 {
+                    Some(Ok(()))
+                }
+
+                $(
+                    // Can't match against non-existant `$num` case.
+                    else if raw == Self::$case as u16 {
+                        Some(Err(Self::$case))
+                    }
+                )*
+
+                else {
+                    None
+                }
+            }
+        }
+
         impl core::fmt::Display for Errno {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 if f.alternate() {

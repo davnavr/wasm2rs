@@ -70,6 +70,13 @@ pub type Device = u64;
 /// [`$linkcount`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L456
 pub type LinkCount = u64;
 
+/// A [`$userdata`] value contains a "user-provided value that may be attached to objects that is
+/// retained when extracted from the implementation." See the documentation for the
+/// [`Subscription`] struct for more information.
+///
+/// [`$userdata`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L482
+pub type UserData = u64;
+
 wasm2rs_rt_memory_typed::wasm_transparent_struct! {
 
 /// A [`$fd`], which represents a file descriptor handle.
@@ -212,6 +219,16 @@ enum FileType(u8) = {
     SymbolicLink = 7,
 }
 
+/// An [`$eventtype`] indicates the "type of a subscription to an event or its occurrence."
+///
+/// [`$eventtype`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L485C1-L497C2
+#[allow(missing_docs)]
+enum EventType(u8) = {
+    Clock = 0,
+    FdRead = 1,
+    FdWrite = 2,
+}
+
 }
 
 macro_rules! int_flags {
@@ -247,6 +264,26 @@ impl $name {
         } else {
             Err(Errno::_inval)
         }
+    }
+}
+
+impl<I: wasm2rs_rt_memory::Address> wasm2rs_rt_memory_typed::Pointee<I> for $name {
+    const SIZE: usize = <$int as wasm2rs_rt_memory_typed::Pointee<I>>::SIZE;
+
+    const ALIGN: core::num::NonZeroUsize = <$int as wasm2rs_rt_memory_typed::Pointee<I>>::ALIGN;
+
+    fn load_from<M>(mem: &M, address: I) -> wasm2rs_rt_memory::BoundsCheck<Self>
+    where
+        M: wasm2rs_rt_memory::Memory<I> + ?Sized,
+    {
+        <$int as wasm2rs_rt_memory_typed::Pointee<I>>::load_from(mem, address).map(Self::from_bits_retain)
+    }
+
+    fn store_into<M>(mem: &M, address: I, value: Self) -> wasm2rs_rt_memory::BoundsCheck<()>
+    where
+        M: wasm2rs_rt_memory::Memory<I> + ?Sized,
+    {
+        <$int as wasm2rs_rt_memory_typed::Pointee<I>>::store_into(mem, address, value.bits())
     }
 }
 
@@ -325,6 +362,24 @@ struct OFlags(u16) = {
     TRUNC = 3,
 }
 
+/// An [`$eventrwflags`] value indicates "the state of the file descriptor subscribed to with
+/// [`EventType::FdRead`] or [`EventType::FdWrite`]."
+///
+/// [`$eventrwflags`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L501C1-L506C2
+struct EventRwFlags(u16) = {
+    /// "The peer of this socket has closed or disconnected."
+    FdReadWriteHangup = 0,
+}
+
+/// A [`$subclockflags`] value contains "flags determining how to interpret the timestamp provided
+/// in [`SubscriptionClock::timeout`]."
+///
+/// [`$subclockflags`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L536C1-L545C2
+struct SubClockFlags(u16) = {
+    #[allow(missing_docs)]
+    ABSTIME = 0,
+}
+
 }
 
 wasm2rs_rt_memory_typed::wasm_struct! {
@@ -394,6 +449,77 @@ wasm2rs_rt_memory_typed::wasm_struct! {
         /// [`fd_prestat_dir_name`]: Api::fd_prestat_dir_name()
         pub pr_name_len: u32,
     }
+
+    /// An [`$event_fd_readwrite`] structure contains "the contents of an [`Event`] when type is
+    /// [`EventType::FdRead`] or [`EventType::FdWrite`]."
+    ///
+    /// [`$event_fd_readwrite`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L510C1-L517C2
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct EventFdReadWrite {
+        /// "The number of bytes available for reading or writing."
+        pub nbytes: FileSize,
+        /// "The state of the file descriptor."
+        pub flags: EventRwFlags,
+    }
+
+    /// An [`$event`] structure describes "an event that occurred."
+    ///
+    /// [`$event`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L520C1-L532C2
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct Event {
+        /// "User-provided value that got attached to" [`Subscription::user_data`].
+        pub user_data: UserData,
+        /// Indicates if "an error that occurred while processing the subscription request."
+        ///
+        /// The [`Errno`] value can be obtained by calling [`Errno::try_from_raw()`].
+        pub error: u16,
+        /// An [`EventType`] indicating "the type of event that occurred."
+        pub r#type: u8,
+        /// "The contents of the event, if it is an [`EventType::FdRead`] or
+        /// [`EventType::FdWrite`]. [`EventType::Clock`] events ignore this field."
+        pub fd_readwrite: EventFdReadWrite,
+    }
+
+    /// A [`$subscription_clock`] structure contains "the contents of a [`Subscription`] when (the)
+    /// type is [`EventType::Clock`]."
+    ///
+    /// [`$subscription_clock`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L548C1-L560C2
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct SubscriptionClock {
+        /// "The clock against which to compare the timestamp."
+        ///
+        /// The acutal [`ClockId`] can be obtained by calling `ClockId::try_from()`.
+        pub id: u32,
+        /// "The absolute or relative timestamp."
+        pub timeout: Timestamp,
+        /// "The amount of time that the implementation may wait additionally to coalesce with
+        /// other events."
+        pub precision: Timestamp,
+        /// "Flags specifying whether the timeout is absolute or relative".
+        pub flags: SubClockFlags,
+    }
+
+    /// A [`$subscription_fd_readwrite`] structure contains "the contents of a [`Subscription`]
+    /// when (the) type is type is [`EventType::FdRead`] or [`EventType::FdWrite`]."
+    ///
+    /// [`$subscription_fd_readwrite`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L564C12-L564C37
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct SubscriptionFdReadWrite {
+        /// "The file descriptor on which to wait for it to become ready for reading or writing."
+        pub file_description: Fd,
+    }
+
+    /// A [`$subscription`] describes a "subscription to an event." It is used with the
+    /// [`poll_oneoff`](crate::api::Api::poll_oneoff) function.
+    ///
+    /// [`$subscription`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L581C1-L589C2
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub struct Subscription {
+        #[allow(missing_docs)]
+        pub user_data: UserData,
+        /// "The type of the event to which to subscribe, and its contents".
+        pub contents: SubscriptionU,
+    }
 }
 
 impl FdStat {
@@ -418,7 +544,12 @@ wasm_layout_check! {
     FileStat => 64 ^ 8,
     IoVec => 8 ^ 4,
     CIoVec => 8 ^ 4,
-    PreStatDir => 4 ^ 4
+    PreStatDir => 4 ^ 4,
+    EventFdReadWrite => 16 ^ 8,
+    Event => 32 ^ 8,
+    SubscriptionClock => 32 ^ 8,
+    SubscriptionFdReadWrite => 4 ^ 4,
+    Subscription => 48 ^ 8
 }
 
 wasm2rs_rt_memory_typed::wasm_union! {
@@ -431,10 +562,23 @@ wasm2rs_rt_memory_typed::wasm_union! {
         #[allow(missing_docs)]
         Dir(PreStatDir) = 0,
     }
+
+    /// A [`$subscription_u`] contains "the contents of a" [`Subscription`].
+    ///
+    /// [`$subscription_u`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L572C1-L578C2
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    #[allow(clippy::exhaustive_enums)]
+    #[allow(missing_docs)]
+    pub enum SubscriptionU : u8 {
+        Clock(SubscriptionClock) = 0,
+        FdRead(SubscriptionFdReadWrite) = 1,
+        FdWrite(SubscriptionFdReadWrite) = 2,
+    }
 }
 
 wasm_layout_check! {
-    PreStat => 8 ^ 4
+    PreStat => 8 ^ 4,
+    SubscriptionU => 40 ^ 8
 }
 
 /// An array of [`IoVec`]s, used in functions like [`fd_read`] or [`fd_pread`].
@@ -448,3 +592,31 @@ pub type IoVecArray = slice::Slice<IoVec>;
 /// [`fd_write`]: crate::api::Api::fd_write()
 /// [`fd_pwrite`]: crate::api::Api::fd_pwrite()
 pub type CIoVecArray = slice::Slice<CIoVec>;
+
+/// Contains the arguments to [`poll_oneoff`].
+///
+/// [`poll_oneoff`]: crate::api::Api::poll_oneoff()
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EventPoll {
+    /// "The events to which to subscribe."
+    pub subscriptions: Ptr<Subscription>,
+    /// Stores "the events that have occurred" after the [`poll_oneoff`] call.
+    ///
+    /// [`poll_oneoff`]: crate::api::Api::poll_oneoff()
+    pub events: MutPtr<Event>,
+    /// Stores the total "number of [`subscriptions`] and [`events`]."
+    ///
+    /// [`subscriptions`]: EventPoll::subscriptions
+    /// [`events`]: EventPoll::events
+    pub count: u32,
+}
+
+impl EventPoll {
+    /// Gets a slice of the [`subscriptions`](EventPoll::subscriptions).
+    pub fn subscriptions_slice(&self) -> slice::Slice<Subscription> {
+        slice::Slice {
+            items: self.subscriptions,
+            count: self.count,
+        }
+    }
+}

@@ -1327,4 +1327,48 @@ impl<A: Api> Wasi<A> {
             path_len as u32,
         )))
     }
+
+    fn poll_oneoff_impl(
+        &self,
+        r#in: Ptr<api::Subscription>,
+        out: MutPtr<api::Event>,
+        nsubscriptions: u32,
+        nevents: MutPtr<u32>,
+    ) -> api::Result<()> {
+        nevents.store(
+            &self.memory,
+            self.api.poll_oneoff(
+                &self.memory,
+                api::EventPoll {
+                    subscriptions: r#in,
+                    events: out,
+                    count: nsubscriptions,
+                },
+            )?,
+        )?;
+
+        Ok(())
+    }
+
+    /// Calls [`Api::poll_oneoff()`].
+    ///
+    /// # Signature
+    ///
+    /// ```wat
+    /// (import "wasi_snapshot_preview1" "poll_oneoff" (func
+    ///     (param $in i32)
+    ///     (param $out i32)
+    ///     (param $nsubscriptions i32)
+    ///     (param $nevents i32)
+    ///     (result i32)
+    /// ))
+    /// ```
+    pub fn poll_oneoff(&self, r#in: i32, out: i32, nsubscriptions: i32, nevents: i32) -> Result<A> {
+        Ok(result_to_error_code(self.poll_oneoff_impl(
+            r#in.into(),
+            out.into(),
+            nsubscriptions as u32,
+            nevents.into(),
+        )))
+    }
 }

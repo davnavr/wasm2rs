@@ -11,9 +11,11 @@ mod types;
 
 pub use errno::Errno;
 pub use types::{
-    Advice, CIoVec, CIoVecArray, ClockId, DataSizes, Device, DirCookie, Fd, FdFlags, FdStat,
-    FileDelta, FileSize, FileStat, FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount,
-    LookupFlags, OFlags, Path, PreStat, PreStatDir, Result, Rights, Timestamp, Whence,
+    Advice, CIoVec, CIoVecArray, ClockId, DataSizes, Device, DirCookie, Event, EventFdReadWrite,
+    EventPoll, EventRwFlags, EventType, Fd, FdFlags, FdStat, FileDelta, FileSize, FileStat,
+    FileType, FstFlags, Inode, IoVec, IoVecArray, LinkCount, LookupFlags, OFlags, Path, PreStat,
+    PreStatDir, Result, Rights, SubClockFlags, Subscription, SubscriptionClock,
+    SubscriptionFdReadWrite, SubscriptionU, Timestamp, UserData, Whence,
 };
 
 use wasm2rs_rt_memory_typed::slice;
@@ -640,6 +642,19 @@ pub trait Api {
     /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L439C3-L444C4
     fn path_unlink_file(&self, mem: &Self::Memory, fd: Fd, path: Path) -> Result<()> {
         let _ = (mem, fd, path);
+        Err(Errno::_nosys)
+    }
+
+    /// "Concurrently poll for the occurrence of a set of events."
+    ///
+    /// # See Also
+    ///
+    /// - [`Wasi::poll_oneoff()`](crate::Wasi::poll_oneoff()).
+    /// - `"poll_oneoff"` in [`wasi_snapshot_preview1.witx`]
+    ///
+    /// [`wasi_snapshot_preview1.witx`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/wasi_snapshot_preview1.witx#L447C3-L457C4
+    fn poll_oneoff(&self, mem: &Self::Memory, events: EventPoll) -> Result<u32> {
+        let _ = (mem, events);
         Err(Errno::_nosys)
     }
 }

@@ -145,12 +145,12 @@ $enum_vis enum $enum_name {
     $(
         $(#[$case_meta])*
         $case_name($case_type),
-        /// Used when an unknown tag is encountered.
-        Unknown {
-            /// The unknown tag that was encountered.
-            tag: $tag_type
-        },
     )+
+    /// Used when an unknown tag is encountered.
+    Unknown {
+        /// The unknown tag that was encountered.
+        tag: $tag_type
+    },
 }
 
 impl $enum_name {
