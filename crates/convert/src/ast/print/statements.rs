@@ -265,7 +265,7 @@ pub(crate) fn print_statements(
 
                 out.write_str(", ");
                 print::print_frame(out, Some(function), offset, context.debug_info);
-                out.write_str(")?");
+                out.write_str(")?;");
             }
             Statement::Branch {
                 target: crate::ast::BranchTarget::Return,
