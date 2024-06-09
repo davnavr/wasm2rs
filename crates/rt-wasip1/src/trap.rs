@@ -37,3 +37,53 @@ where
         Self::Abort(E::trap(cause, frame))
     }
 }
+
+#[cfg(feature = "std")]
+impl<E: trap::TrapInfo> std::process::Termination for Trap<E> {
+    fn report(self) -> std::process::ExitCode {
+        use std::io::Write as _;
+
+        match self {
+            Self::ProcExit(exit_code) => {
+                if exit_code != api::ExitCode::SUCCESS {
+                    let _ = writeln!(
+                        std::io::stderr().lock(),
+                        "Process exited with code {} ({:#X})",
+                        exit_code.0 as i32,
+                        exit_code.0
+                    );
+                }
+
+                exit_code.to_exit_code_lossy()
+            }
+            Self::Abort(trap) => {
+                struct TrapDisplay<E: trap::TrapInfo>(E);
+
+                impl<E: trap::TrapInfo> core::fmt::Display for TrapDisplay<E> {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        if let Some(err) = self.0.as_error() {
+                            core::fmt::Display::fmt(err, f)
+                        } else {
+                            core::fmt::Debug::fmt(&self.0, f)
+                        }
+                    }
+                }
+
+                let _ = writeln!(
+                    std::io::stderr().lock(),
+                    "Trap occurred: {}",
+                    TrapDisplay(trap)
+                );
+                std::process::ExitCode::FAILURE
+            }
+            Self::ProcRaise(signal) => {
+                let _ = writeln!(
+                    std::io::stderr().lock(),
+                    "Signal raised: {signal:?} ({})",
+                    signal as u8
+                );
+                std::process::ExitCode::FAILURE
+            }
+        }
+    }
+}
