@@ -21,9 +21,17 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+mod trap;
 mod wasi;
 
+#[cfg(feature = "std")]
+mod std_api;
+
+pub use trap::Trap;
 pub use wasi::Wasi;
+
+#[cfg(feature = "std")]
+pub use std_api::{StdApi, StdApiBuilder};
 
 pub mod api;
 

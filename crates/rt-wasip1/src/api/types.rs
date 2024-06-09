@@ -47,7 +47,7 @@ pub struct DataSizes {
 
 /// A [`$filesize`], measuring the length of a file or a region into a file.
 ///
-/// [`$timestamp`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L11
+/// [`$filesize`]: https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/witx/typenames.witx#L11
 pub type FileSize = u64;
 
 /// A [`$filedelta`] is a "relative offset within a file."
