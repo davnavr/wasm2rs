@@ -663,6 +663,43 @@ pub struct Intermediate<'conv, 'wasm> {
     context: &'conv crate::context::Context<'wasm>,
 }
 
+/// Specifies where the output Rust source code is written to.
+#[non_exhaustive]
+pub enum Output<'a> {
+    /// All Rust source code is written to a single file.
+    SingleFile(&'a mut dyn std::io::Write),
+    #[allow(missing_docs)]
+    Split {
+        macro_file: &'a mut dyn std::io::Write,
+        impl_file_path: String,
+        impl_file: &'a mut dyn std::io::Write,
+    },
+}
+
+impl<'a> From<&'a mut dyn std::io::Write> for Output<'a> {
+    fn from(output: &'a mut dyn std::io::Write) -> Self {
+        Self::SingleFile(output)
+    }
+}
+
+impl<'a, W: std::io::Write> From<&'a mut W> for Output<'a> {
+    fn from(output: &'a mut W) -> Self {
+        Self::SingleFile(output as &'a mut dyn std::io::Write)
+    }
+}
+
+impl std::fmt::Debug for Output<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SingleFile(_) => f.debug_struct("SingleFile").finish_non_exhaustive(),
+            Self::Split { impl_file_path, .. } => f
+                .debug_struct("Split")
+                .field("impl_file_path", impl_file_path)
+                .finish_non_exhaustive(),
+        }
+    }
+}
+
 impl Convert<'_> {
     fn convert_function_definitions<'wasm, 'types>(
         &self,
@@ -768,12 +805,13 @@ impl Convert<'_> {
     }
 
     // TODO: Move this to `print.rs`
-    fn print_ast(
+    fn print_ast<'a>(
         &self,
         allocations: &Allocations,
         context: &crate::context::Context,
         function_definitions: Vec<code::Definition>,
-        output: &mut dyn std::io::Write,
+        output: &'a mut dyn std::io::Write,
+        impl_output: Option<(&'a mut dyn std::io::Write, &'a str)>,
     ) -> crate::Result<()> {
         use crate::buffer::Writer;
         use crate::write::Write as _;
@@ -1041,6 +1079,25 @@ impl Convert<'_> {
             "pub struct Instance(::core::option::Option<embedder::Module<Module>>);\n\n"
         ));
 
+        if let Some((_, impl_file_name)) = impl_output {
+            writeln!(
+                o,
+                "{sp}::core::include!(\"{}\");",
+                impl_file_name.escape_default()
+            );
+        }
+
+        let mut output = o.into_inner()?;
+        let has_impl_out = impl_output.is_some();
+
+        let impl_out = if let Some((writer, _)) = impl_output {
+            writer
+        } else {
+            &mut output
+        };
+
+        let mut o = crate::write::IoWrite::new(impl_out);
+
         writeln!(o, "impl Module {{");
 
         // Write constant globals.
@@ -1237,15 +1294,18 @@ impl Convert<'_> {
         }
 
         // Write function definitions and their bodies.
-        let output = o.into_inner()?;
-        output.flush()?; // If a `BufWriter` is being used, this might allow it to be bypassed.
+        let impl_output = o.into_inner()?;
+
+        // If a `BufWriter` is being used, this might allow the buffer to be bypassed.
+        impl_output.flush()?;
+
         crate::buffer::write_all_vectored(
-            output,
+            impl_output,
             &function_items,
             &mut Vec::with_capacity(function_items.len()),
         )?;
 
-        let mut o = crate::write::IoWrite::new(output);
+        let mut o = crate::write::IoWrite::new(impl_output);
 
         // Write function symbols used in stack traces.
         if self.debug_info != DebugInfo::Omit {
@@ -1362,6 +1422,14 @@ impl Convert<'_> {
 
         o.write_str("\n} // impl Module\n\n");
 
+        let impl_output = o.into_inner()?;
+
+        // Done writing `impl` contents
+        if has_impl_out {
+            impl_output.flush()?;
+        }
+
+        let mut o = crate::write::IoWrite::new(output);
         o.write_str("impl Instance {\n");
 
         // Write function to instantiate the module.
@@ -1721,15 +1789,14 @@ impl Convert<'_> {
     /// If this information is not needed, use [`convert_from_buffer_with_allocations()`] instead.
     ///
     /// [`convert_from_buffer_with_allocations()`]: Convert::convert_from_buffer_with_allocations()
-    pub fn convert_from_buffer_with_intermediate<'wasm, O, F>(
+    pub fn convert_from_buffer_with_intermediate<'wasm, 'out, F>(
         &self,
         wasm: &'wasm [u8],
         allocations: &Allocations,
         intermediate: F,
-    ) -> crate::Result<O>
+    ) -> crate::Result<Output<'out>>
     where
-        F: FnOnce(Intermediate<'_, 'wasm>) -> crate::Result<O>,
-        O: std::io::Write,
+        F: FnOnce(Intermediate<'_, 'wasm>) -> crate::Result<Output<'out>>,
     {
         use anyhow::Context;
 
@@ -1741,11 +1808,26 @@ impl Convert<'_> {
             .context("could not construct AST of WebAssembly module")?;
 
         let mut output = intermediate(Intermediate { context: &context })
-            .context("could not get output writere")?;
+            .context("could not get output writer")?;
 
-        self.print_ast(allocations, &context, function_definitions, &mut output)
-            .context("could not print Rust source code")?;
+        let result = match &mut output {
+            Output::SingleFile(writer) => {
+                self.print_ast(allocations, &context, function_definitions, writer, None)
+            }
+            Output::Split {
+                macro_file,
+                impl_file_path,
+                impl_file,
+            } => self.print_ast(
+                allocations,
+                &context,
+                function_definitions,
+                macro_file,
+                Some((impl_file, impl_file_path.as_str())),
+            ),
+        };
 
+        result.context("could not print Rust source code")?;
         context.finish(allocations);
 
         Ok(output)
@@ -1755,13 +1837,13 @@ impl Convert<'_> {
     /// useful if multiple WebAssembly modules are being converted.
     ///
     /// [`convert_from_buffer()`]: Self::convert_from_buffer
-    pub fn convert_from_buffer_with_allocations(
+    pub fn convert_from_buffer_with_allocations<'out, O: Into<Output<'out>>>(
         &self,
         wasm: &[u8],
-        output: &mut dyn std::io::Write,
+        output: O,
         allocations: &Allocations,
     ) -> crate::Result<()> {
-        self.convert_from_buffer_with_intermediate(wasm, allocations, |_| Ok(output))?;
+        self.convert_from_buffer_with_intermediate(wasm, allocations, |_| Ok(output.into()))?;
         Ok(())
     }
 
@@ -1779,10 +1861,10 @@ impl Convert<'_> {
     /// [`Write`]: std::io::Write
     /// [`convert_from_buffer_with_allocations()`]: Convert::convert_from_buffer_with_allocations()
     /// [could not be validated]: https://webassembly.github.io/spec/core/valid/index.html
-    pub fn convert_from_buffer(
+    pub fn convert_from_buffer<'out, O: Into<Output<'out>>>(
         &self,
         wasm: &[u8],
-        output: &mut dyn std::io::Write,
+        output: O,
     ) -> crate::Result<()> {
         Self::convert_from_buffer_with_allocations(self, wasm, output, &Allocations::default())
     }

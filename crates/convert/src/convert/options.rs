@@ -14,7 +14,7 @@
 ///
 /// [`Convert::data_segment_writer()`]: crate::Convert::data_segment_writer()
 pub type DataSegmentWriter<'a> =
-    &'a (dyn Fn(u32, &[u8]) -> std::io::Result<Option<String>> + Send + Sync);
+    &'a (dyn Fn(u32, &[u8]) -> crate::Result<Option<String>> + Send + Sync);
 
 /// Used to specify what debug information is included in the generated Rust code.
 ///

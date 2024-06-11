@@ -32,5 +32,5 @@ pub use anyhow::{Error, Result};
 
 pub use ast::print::Indentation;
 pub use convert::{
-    Allocations, Convert, DataSegmentWriter, DebugInfo, Intermediate, StackOverflowChecks,
+    Allocations, Convert, DataSegmentWriter, DebugInfo, Intermediate, Output, StackOverflowChecks,
 };
