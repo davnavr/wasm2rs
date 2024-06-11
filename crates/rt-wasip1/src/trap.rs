@@ -16,6 +16,12 @@ pub enum Trap<E: trap::TrapInfo> {
     ProcRaise(api::Signal),
 }
 
+impl<E: trap::TrapInfo> From<E> for Trap<E> {
+    fn from(trap: E) -> Self {
+        Self::Abort(trap)
+    }
+}
+
 impl<E: trap::TrapInfo> wasm2rs_rt_core::trace::Trace for Trap<E> {
     fn push_wasm_frame(self, frame: &'static wasm2rs_rt_core::trace::WasmFrame) -> Self {
         if let Self::Abort(trap) = self {

@@ -8,7 +8,7 @@ repository = "https://github.com/davnavr/wasm2rs"
 resolver = "2"
 members = [
     "crates/*",
-    # "demo/python3" # Crashes rust-analyzer, might require a separate workspace
+    "demo/python3" # Crashes rust-analyzer, might require a separate workspace
 ]
 default-members = [
     "crates/convert*",

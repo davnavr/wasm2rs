@@ -52,6 +52,12 @@ enum Command {
         /// Indicates what debug information from the WebAssembly module is included.
         #[arg(long, value_enum, default_value_t)]
         debug_info: ConvertDebugInfo,
+        /// Splits the generated Rust `impl`s into a separate output file.
+        ///
+        /// This is useful for avoiding excessive memory usage when compiling the generated Rust
+        /// source.
+        #[arg(long)]
+        split_impls: bool, // Option<Option<std::path::PathBuf>>,
         /// Specifies that large data segments should be written to the same directory as the
         /// generated Rust code.
         ///
@@ -90,6 +96,7 @@ pub fn main() -> anyhow::Result<std::process::ExitCode> {
             output,
             indentation,
             debug_info,
+            split_impls,
             data_segments_path,
         } => {
             let wasm =
@@ -119,17 +126,42 @@ pub fn main() -> anyhow::Result<std::process::ExitCode> {
 
                 writer = move |index, contents: &[u8]| {
                     let file_name = format!("data_segment_{index}.bin");
-                    std::fs::write(output_dir.join(&file_name), contents)?;
+                    let file_path = output_dir.join(&file_name);
+
+                    std::fs::write(&file_path, contents)
+                        .with_context(|| format!("could not create file {file_path:?}"))?;
+
                     Ok(Some(file_name))
                 };
 
                 convert_options.data_segment_writer(&writer);
             }
 
+            let mut main_writer = std::io::BufWriter::with_capacity(4096, out);
+            let mut impl_file_writer;
+
+            let output = if split_impls {
+                let impl_file_path = output_path.with_file_name("impls.wasm.rs");
+                impl_file_writer = std::io::BufWriter::with_capacity(
+                    4096,
+                    std::fs::File::create(&impl_file_path).with_context(|| {
+                        format!("could not create output file {impl_file_path:?}")
+                    })?,
+                );
+
+                wasm2rs_convert::Output::Split {
+                    macro_file: &mut main_writer,
+                    impl_file_path: "generated/impls.wasm.rs".into(), // TODO: Fix, this is just a temporary workaround to get python compiling
+                    impl_file: &mut impl_file_writer,
+                }
+            } else {
+                wasm2rs_convert::Output::SingleFile(&mut main_writer)
+            };
+
             convert_options
                 .indentation(indentation)
                 .debug_info(debug_info)
-                .convert_from_buffer(&wasm, &mut std::io::BufWriter::with_capacity(4096, out))?;
+                .convert_from_buffer(&wasm, output)?;
 
             std::process::ExitCode::SUCCESS
         }

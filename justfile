@@ -71,6 +71,7 @@ build_demo_python3:
     cargo run --package wasm2rs-cli -- convert \
         -i ./demo/python3/wasm/python3-opt.wasm \
         -o ./demo/python3/src/generated/python3.wasm2.rs \
+        --split-impls \
         --data-segments-path \
         --indentation omit \
         --debug-info omit
