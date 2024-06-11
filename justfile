@@ -22,14 +22,14 @@ fmt *FLAGS='':
     cargo fmt {{FLAGS}}
 
 test_compiler: clippy_rt
-    cargo run -p wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/simple.wat
-    cargo run -p wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/memory.wat
-    cargo run -p wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/imports.wat
-    cargo run -p wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/ref_func.wat
+    cargo run --package wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/simple.wat
+    cargo run --package wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/memory.wat
+    cargo run --package wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/imports.wat
+    cargo run --package wasm2rs-cli -- convert -i ./crates/rt-umbrella/tests/wat/ref_func.wat
     cargo test --package wasm2rs-rt --test wat
 
 test_spec run_flags='': && test_spec_run
-    cargo run --features test-utils {{run_flags}} -- \
+    cargo run --package wasm2rs-cli --features test-utils {{run_flags}} -- \
         test \
         -i ./crates/rt-spectest/tests/spec/testsuite/address.wast \
         -i ./crates/rt-spectest/tests/spec/testsuite/align.wast \
@@ -68,8 +68,9 @@ opt_demo_python3 wasm_opt='wasm-opt':
         -O4
 
 build_demo_python3:
-    cargo run -p wasm2rs-cli -- convert \
+    cargo run --package wasm2rs-cli -- convert \
         -i ./demo/python3/wasm/python3-opt.wasm \
-        -o ./demo/python3/src/python3.wasm2.rs \
+        -o ./demo/python3/src/generated/python3.wasm2.rs \
+        --data-segments-path \
         --indentation omit \
         --debug-info omit

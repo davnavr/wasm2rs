@@ -7,3 +7,4 @@ publish = false
 
 [dependencies]
 wasm2rs-rt = { path = "../../crates/rt-umbrella" }
+wasm2rs-rt-wasip1 = { path = "../../crates/rt-wasip1" }

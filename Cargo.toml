@@ -8,7 +8,7 @@ repository = "https://github.com/davnavr/wasm2rs"
 resolver = "2"
 members = [
     "crates/*",
-    "demo/python3"
+    # "demo/python3" # Crashes rust-analyzer, might require a separate workspace
 ]
 default-members = [
     "crates/convert*",
@@ -35,6 +35,10 @@ wast = "=208.0.1"
 [profile.dev]
 debug = "line-tables-only"
 codegen-units = 512
+
+[profile.dev.package.wasm2rs-python3]
+debug = "none"
+codegen-units = 8192
 
 [profile.dev.package]
 insta.opt-level = 3
