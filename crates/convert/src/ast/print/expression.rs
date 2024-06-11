@@ -173,12 +173,12 @@ pub(in crate::ast::print) fn print_expression(
                 },
                 UnOp::F32ReinterpretI32 => {
                     out.write_str("f32::from_bits(");
-                    c_1.print(out, false, context, function);
+                    c_1.print(out, true, context, function);
                     out.write_str(" as u32)");
                 }
                 UnOp::F64ReinterpretI64 => {
                     out.write_str("f64::from_bits(");
-                    c_1.print(out, false, context, function);
+                    c_1.print(out, true, context, function);
                     out.write_str(" as u64)");
                 }
                 UnOp::I32Extend8S => double_cast!(i8 as i32),
