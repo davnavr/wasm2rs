@@ -5,7 +5,9 @@
 mod allocate_memory;
 mod allocate_table;
 
-pub use allocate_memory::{AllocateHeapMemory, AllocateMemory, AllocateMemoryError};
+pub use allocate_memory::{
+    AllocateHeapMemory, AllocateMemory, AllocateMemoryError, ReuseExistingMemory,
+};
 pub use allocate_table::{AllocateHeapTable, AllocateTable, AllocateTableError};
 
 /// Represents a WebAssembly [module instance].
