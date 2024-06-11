@@ -280,9 +280,14 @@ fn print_trap_with(
     instruction_offset: u32,
     debug_info: crate::DebugInfo,
 ) {
+    out.write_str(".trap_with::<embedder::Trap>(");
     if let Some(frame) = FrameRef::try_new(function, instruction_offset, debug_info) {
-        write!(out, ".trap_with(Some({frame}))");
+        write!(out, "Some({frame})");
+    } else {
+        out.write_str("None");
     }
+
+    out.write_str(")");
 }
 
 fn print_frame(
