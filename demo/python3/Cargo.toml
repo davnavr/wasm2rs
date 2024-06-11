@@ -1,10 +1,13 @@
 [package]
 name = "wasm2rs-python3"
 description = "WASI port of the CPython 3 interpreter translated by wasm2rs"
-edition.workspace = true
-repository.workspace = true
+edition = "2021"
 publish = false
 
 [dependencies]
 wasm2rs-rt = { path = "../../crates/rt-umbrella" }
 wasm2rs-rt-wasip1 = { path = "../../crates/rt-wasip1" }
+
+[profile.dev]
+debug = "none"
+codegen-units = 8192
