@@ -494,15 +494,15 @@ impl<A: Api> Wasi<A> {
     ///     (result i32)
     /// ))
     /// ```
-    pub fn fd_prestat_dir_name(&self, fd: i32, path: i32, path_len: i32) -> api::Result<()> {
-        self.api.fd_prestat_dir_name(
+    pub fn fd_prestat_dir_name(&self, fd: i32, path: i32, path_len: i32) -> Result<A> {
+        Ok(result_to_error_code(self.api.fd_prestat_dir_name(
             &self.memory,
             Fd::from_i32(fd),
             wasm2rs_rt_memory_typed::slice::MutSlice {
                 items: path.into(),
                 count: path_len as u32,
             },
-        )
+        )))
     }
 
     fn fd_pwrite_impl(

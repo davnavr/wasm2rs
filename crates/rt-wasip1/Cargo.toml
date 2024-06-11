@@ -10,7 +10,7 @@ doctest = false
 
 [features]
 default = ["std"]
-std = ["alloc"]
+std = ["alloc", "wasm2rs-rt-core/std"]
 alloc = []
 
 [dependencies]
