@@ -5,14 +5,17 @@
 //! [VMware Labs WLR]: https://github.com/vmware-labs/webassembly-language-runtimes
 
 mod embedder {
-    pub use wasm2rs_rt::embedder::self_contained::{rt, Module, Table0};
+    pub use wasm2rs_rt::embedder::self_contained::{rt, Module};
 
     pub type Trap = wasm2rs_rt_wasip1::Trap<wasm2rs_rt::trap::TrapError>;
 
+    pub type FuncRef = wasm2rs_rt::func_ref::FuncRef<'static, Trap>;
+
     pub type Memory0 = std::rc::Rc<wasm2rs_rt::memory::HeapMemory>;
 
-    pub type WasiApi =
-        wasm2rs_rt_wasip1::StdApi<Memory0, wasm2rs_rt::trap::TrapError>;
+    pub type Table0 = wasm2rs_rt::table::HeapTable<FuncRef>;
+
+    pub type WasiApi = wasm2rs_rt_wasip1::StdApi<Memory0, wasm2rs_rt::trap::TrapError>;
 
     #[derive(Debug)]
     pub struct Imports {
@@ -29,8 +32,7 @@ mod embedder {
     pub struct Store {
         pub imports: Imports,
         pub instance: wasm2rs_rt::store::AllocateModuleRc,
-        pub table0:
-            wasm2rs_rt::store::AllocateHeapTable<wasm2rs_rt::func_ref::FuncRef<'static, Trap>>,
+        pub table0: wasm2rs_rt::store::AllocateHeapTable<FuncRef>,
         pub memory0: wasm2rs_rt::store::ReuseExistingMemory<Memory0>,
     }
 }
