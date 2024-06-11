@@ -22,12 +22,24 @@ pub(crate) struct FuncId(pub(crate) u32);
 #[repr(transparent)]
 pub(crate) struct TableId(pub(crate) u32);
 
+impl std::fmt::Display for TableId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Table{}", self.0)
+    }
+}
+
 /// Represents a WebAssembly [*memidx*], an index to a linear memory.
 ///
 /// [*memidx*]: https://webassembly.github.io/spec/core/syntax/modules.html#indices
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
 pub(crate) struct MemoryId(pub(crate) u32);
+
+impl std::fmt::Display for MemoryId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Memory{}", self.0)
+    }
+}
 
 /// Represents a WebAssembly [*globalidx*], an index to a global variable.
 ///

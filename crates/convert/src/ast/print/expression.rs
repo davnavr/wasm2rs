@@ -378,7 +378,11 @@ pub(in crate::ast::print) fn print_expression(
             instruction_offset,
         } => {
             out.write_str(paths::RT_TABLE);
-            write!(out, "::get::<{}, _, >(", table.0);
+            write!(
+                out,
+                "::get::<{}, embedder::{table}, embedder::Trap>(",
+                table.0
+            );
             print::print_table(out, *table, context.wasm);
             out.write_str(", ");
             index.print(out, false, context, function);
@@ -449,7 +453,7 @@ pub(in crate::ast::print) fn print_expression(
             let memory64 = context.wasm.types.memory_at(memory.0).memory64;
             write!(out, "_load::<{}, ", memory.0);
             out.write_str(if memory64 { "u64" } else { "u32" });
-            out.write_str(", _, _>(");
+            write!(out, ", embedder::{memory}, embedder::Trap>(");
             let memory_ident = context.wasm.memory_ident(*memory);
 
             if matches!(memory_ident, crate::context::MemoryIdent::Id(_)) {

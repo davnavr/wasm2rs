@@ -648,7 +648,11 @@ pub(crate) fn print_statements(
                 instruction_offset,
             } => {
                 out.write_str(paths::RT_TABLE);
-                write!(out, "::set::<{}, _, _>(", table.0);
+                write!(
+                    out,
+                    "::set::<{}, embedder::{table}, embedder::Trap>(",
+                    table.0
+                );
                 print::print_table(out, table, context.wasm);
                 out.write_str(", ");
                 index.print(out, false, context, Some(function));
@@ -699,7 +703,7 @@ pub(crate) fn print_statements(
                 write!(out, "_store::<{}, ", memory.0);
                 let memory64 = context.wasm.types.memory_at(memory.0).memory64;
                 out.write_str(if memory64 { "u64" } else { "u32" });
-                out.write_str(", _, _>(");
+                write!(out, ", embedder::{memory}, embedder::Trap>(");
                 print::print_memory(out, memory, context.wasm);
                 write!(out, ", {offset}, ",);
                 address.print(out, false, context, Some(function));

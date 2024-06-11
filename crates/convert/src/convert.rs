@@ -1040,9 +1040,8 @@ impl Convert<'_> {
         for memory_id in defined_memories.clone() {
             writeln!(
                 o,
-                "{sp}{}: embedder::Memory{},",
+                "{sp}{}: embedder::{memory_id},",
                 crate::context::MemoryIdent::Id(memory_id),
-                memory_id.0
             );
         }
 
@@ -1236,9 +1235,8 @@ impl Convert<'_> {
         for (export, memory_id) in exported_memories {
             write!(
                 o,
-                "\n{sp}pub fn {}(&self) -> &embedder::Memory{} {{\n{sp}{sp}",
+                "\n{sp}pub fn {}(&self) -> &embedder::{memory_id} {{\n{sp}{sp}",
                 crate::ident::SafeIdent::from(*export),
-                memory_id.0
             );
 
             let identifier = context.memory_ident(memory_id);
