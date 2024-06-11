@@ -1672,7 +1672,11 @@ impl Convert<'_> {
                 crate::context::FuncElements::Expressions(expressions) => expressions.len(),
             };
 
-            writeln!(o, "{len}, &inst.{}(), None)?;", element_segment.id);
+            writeln!(
+                o,
+                "{len}, inst.{}().as_slice(), None)?;",
+                element_segment.id
+            );
         }
 
         // Copy active data segments.
