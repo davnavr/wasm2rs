@@ -1131,7 +1131,7 @@ impl Convert<'_> {
             if data.len() <= PREFER_LITERAL_LENGTH {
                 write_byte_string(&mut o, data);
             } else if let Some(path) = self.call_data_segment_writer(data, data_id)? {
-                write!(o, "::core::include_bytes!({});", path.escape_default());
+                write!(o, "::core::include_bytes!(\"{}\")", path.escape_default());
             } else {
                 write_byte_string(&mut o, data);
             }

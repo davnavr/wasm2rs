@@ -46,12 +46,18 @@ enum Command {
         /// If not specified, defaults to the name of the input file with the extension changed.
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
-        /// The indentation to use in the generated Rust code
+        /// The indentation to use in the generated Rust code.
         #[arg(long, value_enum, default_value_t)]
         indentation: ConvertIndentation,
         /// Indicates what debug information from the WebAssembly module is included.
         #[arg(long, value_enum, default_value_t)]
         debug_info: ConvertDebugInfo,
+        /// Specifies that large data segments should be written to the same directory as the
+        /// generated Rust code.
+        ///
+        /// If not specified, data segments contents are written inline in the generated Rust code.
+        #[arg(long)]
+        data_segments_path: bool, // Option<Option<std::path::PathBuf>>,
     },
     /// Translates WebAssembly specification tests.
     #[cfg(feature = "test-utils")]
@@ -84,6 +90,7 @@ pub fn main() -> anyhow::Result<std::process::ExitCode> {
             output,
             indentation,
             debug_info,
+            data_segments_path,
         } => {
             let wasm =
                 wat::parse_file(&input).with_context(|| format!("could not parse {input:?}"))?;
@@ -102,7 +109,24 @@ pub fn main() -> anyhow::Result<std::process::ExitCode> {
                 ConvertDebugInfo::Full => wasm2rs_convert::DebugInfo::Full,
             };
 
-            wasm2rs_convert::Convert::new()
+            let mut convert_options = wasm2rs_convert::Convert::new();
+
+            let writer;
+            if data_segments_path {
+                let output_dir = output_path.parent().ok_or_else(|| {
+                    anyhow::anyhow!("could not determine parent directory of path {output_path:?}")
+                })?;
+
+                writer = move |index, contents: &[u8]| {
+                    let file_name = format!("data_segment_{index}.bin");
+                    std::fs::write(output_dir.join(&file_name), contents)?;
+                    Ok(Some(file_name))
+                };
+
+                convert_options.data_segment_writer(&writer);
+            }
+
+            convert_options
                 .indentation(indentation)
                 .debug_info(debug_info)
                 .convert_from_buffer(&wasm, &mut std::io::BufWriter::with_capacity(4096, out))?;
